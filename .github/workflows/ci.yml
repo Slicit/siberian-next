@@ -23,6 +23,14 @@ jobs:
       - name: Architecture and convention checks
         run: ./bin/check
 
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      # The shared library has no Rails app to hang a suite on, so it runs here.
+      - name: Shared library suite
+        run: ./bin/test-lib
+
   manifest:
     name: Module manifest schema
     runs-on: ubuntu-latest

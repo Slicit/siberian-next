@@ -31,10 +31,10 @@ Out of scope for this feature:
 6. ~~Write the Router config: core origins, per-module origins, frame-ancestors policy.~~
 7. ~~Write the development stack: compose, shared Rails Dockerfile, core SQL init.~~
 8. ~~Write the development entry points: `bin/setup`, `bin/up`, `bin/new-rails-app`, `bin/check`.~~
-9. Install a container engine on the development machine.
-10. Generate the four Rails services with `bin/new-rails-app`.
-11. Implement the Docker driver against a live daemon, with tests.
-12. Wire `bin/check` into CI.
+9. ~~Install a container engine on the development machine.~~
+10. ~~Generate the core Rails services.~~ Five, not four: Storage joined the core.
+11. ~~Implement the Docker driver against a live daemon, with tests.~~
+12. ~~Wire `bin/check` into CI.~~
 
 ## Decisions
 
