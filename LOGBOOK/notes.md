@@ -59,6 +59,8 @@ Rules:
 
 - A menu built from conditionals in a template drifts from the pages it links to, and the drift is invisible: a link that asks for more than its page requires simply is not there. `lib/navigation.rb` holds the entries as data and `test/navigation_test.rb` reads the controllers and asserts each entry asks for exactly what its page requires.
 
+- A full disk does not announce itself as one. When the box reached 100 percent, Postgres refused writes and several services failed in ways that pointed at them rather than at the filesystem; the cause was build workspaces nobody was deleting. `df -h /` is worth being the first thing checked when several unrelated things break at once.
+
 ## Glossary
 
 <!-- Project-specific terms an outside reader would not know. -->
