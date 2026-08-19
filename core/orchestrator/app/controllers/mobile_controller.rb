@@ -87,7 +87,7 @@ class MobileController < ApplicationController
   private
 
   def mobile
-    @mobile ||= MobileClient.new
+    @mobile ||= Siberian::MobileClient.new(logger: Rails.logger)
   end
 
   def notice_for(result, success)

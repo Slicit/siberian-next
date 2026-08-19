@@ -9,6 +9,7 @@ require_relative "contracts/manifest"
 require_relative "permissions"
 require_relative "mobile_capabilities"
 require_relative "auth_client"
+require_relative "mobile_client"
 
 module Siberian
   module Contracts

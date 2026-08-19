@@ -1,0 +1,187 @@
+<% content_for :title, "Phone app" %>
+<% helper = ActiveSupport::NumberHelper %>
+
+<div style="margin-bottom:1.2rem">
+  <h1>Phone app</h1>
+  <p class="muted" style="margin:0">
+    One app for <span class="mono"><%= current_domain %></span>, built from the
+    modules installed here and the native capabilities switched on below.
+  </p>
+</div>
+
+<div class="card">
+  <header>
+    <h2>Describe it</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      Say what the app is for and the assistant proposes a configuration. It
+      proposes only: nothing changes until you accept it, capability by
+      capability.
+    </p>
+  </header>
+
+  <%= form_with url: suggest_phone_app_path, method: :post, class: "stack" do %>
+    <div class="field">
+      <%= text_area_tag :description, @description, rows: 4,
+            placeholder: "A field service app for our engineers. They need to find the next job on a map, take photos of what they fixed, and work in basements with no signal." %>
+    </div>
+    <button type="submit" class="primary">Ask</button>
+  <% end %>
+</div>
+
+<% if @proposal %>
+  <div class="card">
+    <header>
+      <h2>What it suggests</h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem"><%= @proposal["summary"] %></p>
+    </header>
+
+    <%= form_with url: apply_phone_app_path, method: :patch, class: "stack" do %>
+      <div class="row" style="gap:.6rem; align-items:flex-end; flex-wrap:wrap">
+        <div class="field" style="max-width:14rem">
+          <%= label_tag :name, "Name" %>
+          <%= text_field_tag :name, @proposal["name"] %>
+        </div>
+        <div class="field" style="max-width:16rem">
+          <%= label_tag :bundle_identifier, "Bundle identifier" %>
+          <%= text_field_tag :bundle_identifier, @proposal["bundle_identifier"] %>
+        </div>
+        <div class="field" style="max-width:9rem">
+          <%= label_tag :primary_color, "Accent" %>
+          <%= text_field_tag :primary_color, @proposal["primary_color"] %>
+        </div>
+      </div>
+
+      <% proposed = Array(@proposal["capabilities"]) %>
+      <% if proposed.any? %>
+        <div class="stack" style="--gap:.5rem">
+          <div class="label">Capabilities it would switch on</div>
+          <% proposed.each do |capability| %>
+            <label class="row" style="align-items:flex-start; gap:.6rem; padding:.6rem; border:1px solid var(--line); border-radius:8px">
+              <%= check_box_tag "capabilities[]", capability["id"], true, style: "width:auto; margin-top:.25rem" %>
+              <span>
+                <strong><%= capability["label"] %></strong>
+                <% if capability["severity"] == "high" %>
+                  <span class="badge warn" style="margin-left:.3rem">asks a lot</span>
+                <% end %>
+                <div class="muted" style="font-size:.84rem"><%= capability["reason"] %></div>
+                <div class="faint mono" style="font-size:.72rem"><%= capability["package"] %></div>
+                <% if Array(capability["settings"]).any? %>
+                  <div class="faint" style="font-size:.78rem">
+                    Will not work until <%= Array(capability["settings"]).map { |s| s["label"] }.to_sentence %> are supplied.
+                  </div>
+                <% end %>
+              </span>
+            </label>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="muted" style="margin:0">It proposes no native capabilities for this.</p>
+      <% end %>
+
+      <button type="submit" class="primary">Accept what is ticked</button>
+    <% end %>
+  </div>
+<% end %>
+
+<% if @app %>
+  <div class="card">
+    <header>
+      <h2><%= @app["name"] %></h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        <span class="mono"><%= @app["bundle_identifier"] %></span> ·
+        version <%= @app["version"] %> · build <%= @app["build_number"] %>
+      </p>
+    </header>
+
+    <% configured = Array(@app["capabilities"]).index_by { |row| row["capability"] } %>
+    <% @catalogue.each do |capability| %>
+      <% row = configured[capability["id"]] %>
+      <% on = row && row["enabled"] %>
+      <div class="spread" style="padding:.6rem 0; border-bottom:1px solid var(--line)">
+        <div>
+          <strong><%= capability["label"] %></strong>
+          <% if on %><span class="badge" style="margin-left:.3rem">on</span><% end %>
+          <% if capability["severity"] == "high" %>
+            <span class="badge warn" style="margin-left:.3rem">asks a lot</span>
+          <% end %>
+          <div class="muted" style="font-size:.82rem"><%= capability["summary"] %></div>
+        </div>
+        <%= button_to on ? "Turn off" : "Turn on",
+              phone_app_capability_path(capability["id"]), method: :patch, class: "button",
+              params: { enabled: on ? "false" : "true" } %>
+      </div>
+    <% end %>
+
+    <% if Array(@app["misconfigured"]).any? %>
+      <div class="alert" style="margin-top:.8rem">
+        <% @app["misconfigured"].each do |entry| %>
+          <div>
+            <%= entry["capability"] %> is on but has no
+            <%= Array(entry["missing"]).to_sentence %>. Somebody with access to the
+            Backoffice has to supply those before a build will run.
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="card">
+    <header>
+      <div class="spread">
+        <div>
+          <h2>Builds</h2>
+          <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+            One builder is shared by every domain, so asking for a build is
+            asking to be next.
+          </p>
+        </div>
+        <div class="row" style="gap:.4rem">
+          <%= button_to "Build for Android", build_phone_app_path, class: "button primary",
+                params: { platform: "android" } %>
+          <%= button_to "iOS project", build_phone_app_path, class: "button",
+                params: { platform: "ios" },
+                form: { data: { turbo_confirm: "iOS cannot be compiled on Linux. This produces the configured Xcode project, which is what a macOS runner needs. Continue?" } } %>
+        </div>
+      </div>
+    </header>
+
+    <% if @builds.any? %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>Platform</th><th>State</th><th>Artifact</th></tr></thead>
+          <tbody>
+            <% @builds.each do |build| %>
+              <tr>
+                <td class="faint" style="font-size:.78rem"><%= build["created_at"] %></td>
+                <td><%= build["platform"] %></td>
+                <td>
+                  <span class="badge <%= build["state"] == "succeeded" ? "" : build["state"] == "dead" ? "danger" : "warn" %>">
+                    <%= build["state"] %>
+                  </span>
+                  <% if build["last_error"].present? %>
+                    <div class="faint" style="font-size:.72rem"><%= truncate(build["last_error"], length: 70) %></div>
+                  <% end %>
+                </td>
+                <td class="mono" style="font-size:.75rem">
+                  <%= build["artifact_path"].presence || "none" %>
+                  <% if build["artifact_bytes"].to_i.positive? %>
+                    <div class="faint"><%= helper.number_to_human_size(build["artifact_bytes"].to_i) %></div>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <div class="empty">Nothing built yet.</div>
+    <% end %>
+  </div>
+<% else %>
+  <div class="card">
+    <div class="empty">
+      No app for this domain yet. Describe what it is for above, or fill the
+      form in by hand once a proposal has given you a starting point.
+    </div>
+  </div>
+<% end %>

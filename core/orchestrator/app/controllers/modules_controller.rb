@@ -14,7 +14,7 @@ class ModulesController < ApplicationController
     @registry = InterfaceRegistry.new
     # How this module appears in each domain's phone app, which is a question
     # about this module and belongs on its page rather than only on the app's.
-    @mobile = MobileClient.new.apps
+    @mobile = Siberian::MobileClient.new(logger: Rails.logger).apps
   end
 
   # Asks the engine what is actually running, rather than trusting what we
