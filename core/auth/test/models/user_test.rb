@@ -24,7 +24,12 @@ class UserTest < ActiveSupport::TestCase
 
     identity = user.to_identity
 
-    assert_equal %i[id email name operator].sort, identity.keys.sort
+    # The shape grew when access control arrived. This asserts what must never
+    # appear rather than an exact key list, which changes with every feature and
+    # fails for reasons nobody cares about.
+    assert_equal %i[id email name active operator permissions denied].sort, identity.keys.sort
+    refute identity.key?(:password_digest)
+    refute identity.key?(:otp_secret)
     refute identity.values.any? { |value| value.to_s.include?("$2a$") }
   end
 
