@@ -225,11 +225,91 @@ class ManifestTest < Minitest::Test
 
   # Capabilities ---------------------------------------------------------
 
+  def relay_manifest
+    Contracts::Manifest.load(File.expand_path("../modules/example-relay/module.yml", __dir__))
+  end
+
+  def test_system_and_feature_capabilities_are_read_separately
+    assert_empty reference_manifest.system_capabilities, "example-notes extends the product, not the core"
+    assert_equal 2, reference_manifest.feature_capabilities.length
+
+    assert_equal 1, relay_manifest.system_capabilities.length
+    assert_empty relay_manifest.feature_capabilities, "a transport has no page"
+  end
+
+  def test_implemented_interfaces_are_listed_for_conflict_detection
+    assert_equal ["mail.transport.v1"], relay_manifest.implemented_interfaces
+    assert_empty reference_manifest.implemented_interfaces
+  end
+
+  def test_the_relay_reference_module_is_valid
+    assert relay_manifest.valid?, relay_manifest.structural_errors.join("; ")
+  end
+
+  def test_a_system_capability_with_an_area_is_rejected
+    bad = manifest(<<~YAML)
+      capabilities:
+        system:
+          - id: x.mail.transport
+            interface: mail.transport.v1
+            endpoint: /internal/mail
+            area: sidebar.entities
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "system capabilities have no UI"
+  end
+
+  def test_a_feature_capability_with_an_interface_is_rejected
+    bad = manifest(<<~YAML)
+      capabilities:
+        features:
+          - id: x.note.viewer
+            area: sidebar.entities
+            title: Notes
+            path: /notes
+            interface: mail.transport.v1
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "that makes it a system capability"
+  end
+
+  def test_a_system_capability_without_an_endpoint_is_rejected
+    bad = manifest(<<~YAML)
+      capabilities:
+        system:
+          - id: x.mail.transport
+            interface: mail.transport.v1
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "needs an endpoint"
+  end
+
+  def test_one_module_cannot_declare_the_same_capability_id_twice
+    bad = manifest(<<~YAML)
+      capabilities:
+        features:
+          - id: x.note.viewer
+            area: a
+            title: A
+            path: /a
+          - id: x.note.viewer
+            area: b
+            title: B
+            path: /b
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "duplicate capability ids"
+  end
+
   def test_capabilities_are_read_from_the_reference_module
-    ids = reference_manifest.provided_capabilities.map { |c| c["id"] }
+    ids = reference_manifest.feature_capabilities.map { |c| c["id"] }
 
     assert_includes ids, "example_notes.note.viewer"
-    assert_equal "sidebar.entities", reference_manifest.provided_capabilities.first["area"]
+    assert_equal "sidebar.entities", reference_manifest.feature_capabilities.first["area"]
   end
 
   def test_consumed_capabilities_are_read_so_discovery_can_match_them

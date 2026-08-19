@@ -1,0 +1,45 @@
+# Reference module for the other kind of capability. Where example-notes
+# extends the product, this extends the core: it offers a mail transport the
+# core can route through instead of its own.
+#
+# It has no area and no page. The core reaches it over the internal network by
+# module short name and never learns that a module answered.
+schema_version: 1
+name: example-relay
+version: 0.1.0
+title: Example Mail Relay
+description: Reference module implementing a core interface rather than a product feature.
+
+containers:
+  - service: web
+    image: nginx:1.27-alpine
+    role: http
+    internal_port: 80
+    health:
+      path: /up
+      interval_seconds: 30
+
+routes:
+  base: /example-relay
+  entry: web
+  origin: example-relay
+
+permissions:
+  # A transport keeps its own delivery log, so it owns a database. Nothing
+  # else: it has no reason to read the configuration store or send mail
+  # through the very service it is replacing.
+  databases:
+    - name: deliveries
+      access: owner
+      scope: per_domain
+
+capabilities:
+  system:
+    - id: example_relay.mail.transport
+      interface: mail.transport.v1
+      endpoint: /internal/mail
+      title: Example Mail Relay
+      # Lower than the core's 1000, so this wins once installed. Not exclusive:
+      # another transport may sit alongside it and the core picks by priority.
+      priority: 50
+      exclusive: false
