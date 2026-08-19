@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Signs in the way a browser does: fetch the form, carry the CSRF token and the
+# cookie jar, then post. Checks the cookie lands scoped to the parent domain,
+# which is the whole mechanism behind module frames knowing who you are.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-auth.sh
