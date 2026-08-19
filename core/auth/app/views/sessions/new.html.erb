@@ -1,0 +1,48 @@
+<% content_for :title, "Sign in" %>
+
+<div class="centred">
+  <div class="card stack">
+    <div class="brand" style="margin-bottom:.6rem">
+      <span class="mark">S</span>
+      <span>Siberian</span>
+    </div>
+
+    <div>
+      <h1 style="font-size:1.25rem">Sign in</h1>
+      <p class="muted" style="margin:0">
+        One account for the Backoffice, the app, and every installed module.
+      </p>
+    </div>
+
+    <% if flash[:alert] %>
+      <div class="alert"><%= flash[:alert] %></div>
+    <% end %>
+    <% if flash[:notice] %>
+      <div class="notice"><%= flash[:notice] %></div>
+    <% end %>
+
+    <%= form_with url: login_path, method: :post, class: "stack", data: { turbo: false } do |form| %>
+      <%= hidden_field_tag :return_to, params[:return_to] %>
+
+      <div class="field">
+        <%= form.label :email, "Email" %>
+        <%= form.email_field :email, value: params[:email], autofocus: true,
+              autocomplete: "username", required: true, placeholder: "you@example.com" %>
+      </div>
+
+      <div class="field">
+        <%= form.label :password, "Password" %>
+        <%= form.password_field :password, autocomplete: "current-password", required: true %>
+      </div>
+
+      <button type="submit" class="primary" style="width:100%; justify-content:center">
+        Sign in
+      </button>
+    <% end %>
+
+    <p class="hint" style="margin:0">
+      Sessions are revocable and scoped to this domain. Signing in here signs you
+      in to every module frame on it.
+    </p>
+  </div>
+</div>

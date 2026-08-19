@@ -8,5 +8,6 @@ COPY core/router/nginx/templates/00-core.conf.template /etc/nginx/templates/00-c
 # The module template is not rendered at start. The Orchestrator renders it per
 # module and drops the result into conf.d/modules, then reloads.
 COPY lib/router/module.conf.template /etc/nginx/siberian/module.conf.template
+COPY core/router/nginx/siberian/internal_headers.conf /etc/nginx/siberian/internal_headers.conf
 
 EXPOSE 80

@@ -13,6 +13,11 @@ class RouterConfig
 
   class ReloadFailed < StandardError; end
 
+  # The names the Router answers to on a module network. "core" is how a module
+  # addresses auth, storage, and the mailer: it has no route to them otherwise,
+  # which is exactly the isolation we want, so the Router is the door.
+  INTERNAL_ALIASES = %w[router core].freeze
+
   def initialize(driver: Siberian::Engine.driver,
                  config_dir: ENV.fetch("SIBERIAN_ROUTER_CONFIG_DIR", "/var/lib/siberian/router"),
                  router_container: ENV.fetch("SIBERIAN_ROUTER_CONTAINER", "siberian-router-1"))
@@ -40,7 +45,7 @@ class RouterConfig
   # modules on one shared network is what keeps module A from reaching module B
   # directly: traffic between modules goes through the Router, by construction.
   def join_network(network_name)
-    @driver.attach(@router_container, network: network_name)
+    @driver.attach(@router_container, network: network_name, aliases: INTERNAL_ALIASES)
     true
   rescue Siberian::Engine::Driver::AlreadyExists
     true

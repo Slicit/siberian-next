@@ -1,0 +1,225 @@
+/*
+ * One stylesheet for every core interface: the Backoffice, the Base App, and
+ * the login screen. Copied into each app by bin/wire-shared-lib rather than
+ * duplicated by hand, so the three never drift apart visually.
+ *
+ * Tokens first, components second. Anything a module renders lives in its own
+ * frame and inherits none of this, which is the point of the iframe boundary.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --border: #dfe3e8;
+  --border-strong: #c6ccd4;
+
+  --text: #16191d;
+  --text-muted: #5c6570;
+  --text-faint: #8a929c;
+
+  --accent: #1f6feb;
+  --accent-hover: #1a5fd0;
+  --accent-soft: #e8f0fe;
+  --on-accent: #ffffff;
+
+  --ok: #1a7f47;
+  --ok-soft: #e6f4ec;
+  --warn: #9a6200;
+  --warn-soft: #fdf3e2;
+  --danger: #b3261e;
+  --danger-soft: #fbeae9;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 4px 12px rgb(16 24 40 / 6%);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101317;
+    --surface: #171b21;
+    --surface-2: #1e242c;
+    --border: #2a313a;
+    --border-strong: #3a434e;
+
+    --text: #e8ecf1;
+    --text-muted: #9aa4b1;
+    --text-faint: #6f7987;
+
+    --accent: #4c8dff;
+    --accent-hover: #6ba0ff;
+    --accent-soft: #16233a;
+    --on-accent: #0b1017;
+
+    --ok: #4ac07d;
+    --ok-soft: #12251a;
+    --warn: #e0a44a;
+    --warn-soft: #2a2113;
+    --danger: #ef6b62;
+    --danger-soft: #2c1614;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 14px rgb(0 0 0 / 30%);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3 { margin: 0 0 .4em; line-height: 1.25; font-weight: 620; letter-spacing: -0.01em; }
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 1rem; }
+p { margin: 0 0 1em; }
+code, kbd, pre { font-family: var(--mono); font-size: .86em; }
+
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
+.mono { font-family: var(--mono); }
+.right { text-align: right; }
+.stack > * + * { margin-top: var(--gap, 1rem); }
+.row { display: flex; align-items: center; gap: .6rem; }
+.row.wrap { flex-wrap: wrap; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.grow { flex: 1; }
+
+/* Layout ------------------------------------------------------------------ */
+
+.shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+.shell > aside {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1.1rem .85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.shell > main { padding: 1.6rem 2rem 4rem; max-width: 1180px; }
+
+@media (max-width: 820px) {
+  .shell { grid-template-columns: 1fr; }
+  .shell > aside { border-right: 0; border-bottom: 1px solid var(--border); }
+  .shell > main { padding: 1.2rem 1rem 3rem; }
+}
+
+.brand { display: flex; align-items: center; gap: .55rem; font-weight: 660; letter-spacing: -0.02em; }
+.brand .mark {
+  width: 26px; height: 26px; border-radius: 7px; flex: none;
+  background: linear-gradient(140deg, var(--accent), #7aa8ff);
+  display: grid; place-items: center; color: var(--on-accent); font-size: 13px; font-weight: 700;
+}
+
+.nav-group > .label {
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--text-faint); font-weight: 650; padding: 0 .5rem .35rem;
+}
+.nav a {
+  display: flex; align-items: center; gap: .55rem;
+  padding: .42rem .55rem; border-radius: var(--radius-sm);
+  color: var(--text); text-decoration: none;
+}
+.nav a:hover { background: var(--surface-2); text-decoration: none; }
+.nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* Cards and tables -------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  box-shadow: var(--shadow);
+}
+.card + .card { margin-top: 1rem; }
+.card > header { margin: -.2rem 0 .9rem; }
+.card > header h2 { margin: 0; }
+
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--border); }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); font-weight: 650; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+.table-wrap { overflow-x: auto; }
+
+/* Bits -------------------------------------------------------------------- */
+
+.badge {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .12rem .5rem; border-radius: 999px;
+  font-size: .74rem; font-weight: 620; letter-spacing: .01em;
+  background: var(--surface-2); color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.badge.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.badge.danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.badge.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+.dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--text-faint); flex: none; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.danger { background: var(--danger); }
+
+button, .button {
+  font: inherit; font-weight: 600;
+  padding: .46rem .9rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+  cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: .4rem;
+}
+button:hover, .button:hover { background: var(--surface-2); text-decoration: none; }
+button.primary, .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.primary:hover, .button.primary:hover { background: var(--accent-hover); }
+button.danger, .button.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+button.danger:hover, .button.danger:hover { background: var(--danger-soft); }
+button:disabled { opacity: .55; cursor: not-allowed; }
+
+label { display: block; font-weight: 600; margin-bottom: .3rem; }
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
+  width: 100%; font: inherit; color: var(--text);
+  padding: .5rem .65rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); background: var(--surface);
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent);
+}
+.field + .field { margin-top: .9rem; }
+.hint { font-size: .8rem; color: var(--text-muted); margin-top: .3rem; }
+
+.notice, .alert {
+  padding: .6rem .8rem; border-radius: var(--radius-sm);
+  border: 1px solid transparent; margin-bottom: 1rem;
+}
+.notice { background: var(--ok-soft); color: var(--ok); }
+.alert { background: var(--danger-soft); color: var(--danger); }
+
+.empty {
+  text-align: center; padding: 2.4rem 1rem; color: var(--text-muted);
+  border: 1px dashed var(--border-strong); border-radius: var(--radius);
+}
+
+/* Centred single-purpose pages, like signing in ---------------------------- */
+
+.centred { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
+.centred .card { width: 100%; max-width: 380px; }
+
+/* The frame a module renders in. No chrome of ours leaks through it. */
+.frame-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.frame-wrap iframe { display: block; width: 100%; height: min(76vh, 900px); border: 0; }

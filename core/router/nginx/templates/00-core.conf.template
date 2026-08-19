@@ -54,3 +54,46 @@ server {
     add_header Content-Security-Policy "frame-ancestors 'none'" always;
   }
 }
+
+# The internal entry point for modules.
+#
+# A module sits on its own network with only the Router attached, so it cannot
+# address auth or storage directly. It reaches them here, at http://core/...,
+# which is the same rule LOGBOOK.md states for module to module traffic: it
+# goes through the Router, by construction rather than by convention.
+#
+# Not reachable from outside: this block answers only to the internal name
+# "core", which no public DNS resolves and no browser sends.
+server {
+  listen 80;
+  server_name core;
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+
+  location /auth/ {
+    set $upstream_auth "http://auth:3000/";
+    proxy_pass $upstream_auth;
+    include /etc/nginx/siberian/internal_headers.conf;
+  }
+
+  location /storage/ {
+    set $upstream_storage "http://storage:3000/";
+    proxy_pass $upstream_storage;
+    include /etc/nginx/siberian/internal_headers.conf;
+  }
+
+  location /mailer/ {
+    set $upstream_mailer "http://mailer:3000/";
+    proxy_pass $upstream_mailer;
+    include /etc/nginx/siberian/internal_headers.conf;
+  }
+
+  location /orchestrator/ {
+    set $upstream_orchestrator "http://orchestrator:3000/";
+    proxy_pass $upstream_orchestrator;
+    include /etc/nginx/siberian/internal_headers.conf;
+  }
+
+  location / {
+    return 404 "no such core service\n";
+  }
+}

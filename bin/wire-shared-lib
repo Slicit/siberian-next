@@ -64,6 +64,13 @@ Rails.application.configure do
   config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end
 RUBYEOF
+  # One stylesheet for the three core interfaces. Copied rather than
+  # duplicated by hand, so the Backoffice, the Base App, and the login screen
+  # cannot drift apart visually.
+  if [ -d "$app/app/assets/stylesheets" ]; then
+    cp lib/ui/siberian.css "$app/app/assets/stylesheets/siberian.css"
+  fi
+
   echo "  $service: wired"
 done
 
