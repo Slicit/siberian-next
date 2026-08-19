@@ -6,7 +6,9 @@ Rails.application.routes.draw do
   scope "/v1" do
     get ":space", to: "files#index"
     get ":space/*path", to: "files#show", format: false
-    head ":space/*path", to: "files#describe", format: false
+    # The router has no head DSL method; it would collide with the controller
+    # helper of the same name. via: :head is the supported spelling.
+    match ":space/*path", to: "files#describe", via: :head, format: false
     put ":space/*path", to: "files#create", format: false
     delete ":space/*path", to: "files#destroy", format: false
   end
