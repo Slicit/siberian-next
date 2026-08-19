@@ -10,17 +10,22 @@ import path from "node:path";
 // built from.
 const CATALOGUE = process.env.BUILDER_MODULE_CATALOGUE || "/modules";
 
-// Packages the shell always needs, whatever an operator switched on.
+// Packages the shell always needs, whatever an operator switched on. Only the
+// ones whose version is not tied to the Expo SDK are pinned here.
 const BASE_DEPENDENCIES = {
   expo: "~51.0.0",
   react: "18.2.0",
   "react-native": "0.74.5",
-  "react-native-webview": "13.8.6",
-  "react-native-safe-area-context": "4.10.5",
-  "react-native-screens": "3.31.1",
   "@react-navigation/native": "^6.1.17",
   "@react-navigation/native-stack": "^6.9.26"
 };
+
+// Installed with `expo install` rather than pinned, because their version is
+// decided by the SDK. Writing "*" here installs whatever is newest, which for
+// an expo-* package means one built against a newer SDK: the build then fails
+// deep in Gradle with a missing plugin, which reads as a toolchain problem
+// rather than as a version mismatch.
+const SDK_MANAGED = ["react-native-webview", "react-native-safe-area-context", "react-native-screens"];
 
 // A capability is a package plus, for some of them, a config plugin entry that
 // carries the sentence the operating system shows. Apple rejects a build that
@@ -40,10 +45,11 @@ export async function assemble(plan, workspace) {
   await cp(path.join(process.cwd(), "template"), workspace, { recursive: true });
 
   const dependencies = { ...BASE_DEPENDENCIES };
-  const plugins = ["expo-router"].filter(() => false); // no router plugin yet; kept explicit
+  const plugins = [];
+  const sdkManaged = [...SDK_MANAGED];
 
   for (const capability of plan.capabilities) {
-    dependencies[capability.package] = "*";
+    sdkManaged.push(capability.package);
 
     const plugin = PLUGIN_FOR[capability.id];
     if (plugin && capability.usage) plugins.push(plugin(capability.usage));
@@ -119,7 +125,7 @@ export async function assemble(plan, workspace) {
     )};\n`
   );
 
-  return workspace;
+  return { workspace, sdkManaged };
 }
 
 function renderRegistry(plan) {

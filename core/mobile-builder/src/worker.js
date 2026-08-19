@@ -55,10 +55,18 @@ async function build({ build_id: id, plan }) {
   };
 
   await rm(workspace, { recursive: true, force: true });
-  await assemble(plan, workspace);
+  const { sdkManaged } = await assemble(plan, workspace);
   log.push(`assembled ${plan.modules.length} module(s), ${plan.capabilities.length} capability(ies)`);
 
   await step("npm install", "npm", ["install", "--no-audit", "--no-fund"]);
+
+  // `expo install` rather than a version in package.json. The SDK decides what
+  // version of an expo-* package belongs with it, and installing the newest
+  // instead fails much later, in Gradle, looking like a broken toolchain.
+  if (sdkManaged.length > 0) {
+    await step("expo install", "npx", ["expo", "install", ...sdkManaged]);
+  }
+
   await step("expo prebuild", "npx", ["expo", "prebuild", "--platform", plan.platform, "--no-install"]);
 
   if (plan.platform === "ios") {
