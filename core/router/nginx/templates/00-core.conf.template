@@ -77,6 +77,11 @@ server {
 # Not reachable from outside: this block answers only to the internal name
 # "core", which no public DNS resolves and no browser sends.
 #
+# Each location sets its upstream and then rewrites the prefix away. The order
+# matters: `rewrite ... break` ends the rewrite phase, and `set` belongs to the
+# same module, so a `set` written after the rewrite never runs and nginx answers
+# 500 with "invalid URL prefix in ''".
+#
 # Each location rewrites the prefix away before proxying. proxy_pass does not
 # strip a location prefix when its argument is a variable, and the variable is
 # needed so nginx resolves the upstream per request rather than pinning it at
@@ -88,36 +93,36 @@ server {
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
 
   location /auth/ {
-    rewrite ^/auth/(.*)$ /$1 break;
     set $upstream_auth "http://auth:3000";
+    rewrite ^/auth/(.*)$ /$1 break;
     proxy_pass $upstream_auth;
     include /etc/nginx/siberian/internal_headers.conf;
   }
 
   location /storage/ {
-    rewrite ^/storage/(.*)$ /$1 break;
     set $upstream_storage "http://storage:3000";
+    rewrite ^/storage/(.*)$ /$1 break;
     proxy_pass $upstream_storage;
     include /etc/nginx/siberian/internal_headers.conf;
   }
 
   location /database/ {
-    rewrite ^/database/(.*)$ /$1 break;
     set $upstream_database "http://database:3000";
+    rewrite ^/database/(.*)$ /$1 break;
     proxy_pass $upstream_database;
     include /etc/nginx/siberian/internal_headers.conf;
   }
 
   location /mailer/ {
-    rewrite ^/mailer/(.*)$ /$1 break;
     set $upstream_mailer "http://mailer:3000";
+    rewrite ^/mailer/(.*)$ /$1 break;
     proxy_pass $upstream_mailer;
     include /etc/nginx/siberian/internal_headers.conf;
   }
 
   location /orchestrator/ {
-    rewrite ^/orchestrator/(.*)$ /$1 break;
     set $upstream_orchestrator "http://orchestrator:3000";
+    rewrite ^/orchestrator/(.*)$ /$1 break;
     proxy_pass $upstream_orchestrator;
     include /etc/nginx/siberian/internal_headers.conf;
   }
