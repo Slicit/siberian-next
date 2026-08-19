@@ -1,0 +1,29 @@
+# Garage, development configuration.
+#
+# Reachable only by the Storage service: it sits on the `storage` network and
+# nothing else joins it. Modules address the Storage service over HTTP and never
+# learn that an object store is involved.
+#
+# replication_factor 1 is a single-node development setting. A real deployment
+# raises it and adds nodes; nothing above this file changes when it does.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir     = "/var/lib/garage/data"
+db_engine    = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+# Development value. Generate per install with `openssl rand -hex 32` and inject
+# it; never ship this one.
+rpc_secret = "0000000000000000000000000000000000000000000000000000000000000001"
+
+[s3_api]
+s3_region      = "garage"
+api_bind_addr  = "[::]:3900"
+root_domain    = ".s3.garage"
+
+[admin]
+api_bind_addr = "[::]:3903"
+# Same rule as rpc_secret: development only.
+admin_token   = "storage_service_dev_only"

@@ -15,3 +15,7 @@ Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 - Per-language module SDKs for ruby, php, python, and node. (trigger: out-of-scope, source: feat-monorepo-skeleton Intent, agent: claude-code)
 - Module install, update, and removal in the Backoffice UI. (trigger: out-of-scope, source: feat-monorepo-skeleton Intent, agent: claude-code)
 - Capability auto-discovery and workflow composition across modules. (trigger: out-of-scope, source: feat-monorepo-skeleton Intent, agent: claude-code)
+- Serve public storage objects through a CDN rather than through the Router. (trigger: out-of-scope, source: feat-core-storage Intent, agent: claude-code)
+- Direct-to-storage uploads via pre-signed URLs, for large files that should not transit the Storage service. (trigger: out-of-scope, source: feat-core-storage Intent, agent: claude-code)
+- Multi-node Garage layout and replication tuning for production. (trigger: out-of-scope, source: feat-core-storage Intent, agent: claude-code)
+- SeaweedFS as an alternative object store backend if Garage's feature gaps bite. (trigger: alternative, source: feat-core-storage backing store decision 2026-08-19, agent: claude-code)
