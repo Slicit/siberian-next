@@ -60,3 +60,14 @@ J=/tmp/bo_user_jar.txt
 sign_in $J user@siberian.localhost
 echo "   GET / -> $(fetch "https://core.$DOMAIN/")   (expect 403)"
 grep -oE 'You cannot do that' /tmp/bo_page | head -1 | sed 's/^/   says: /'
+
+echo
+echo "the menu, as rendered rather than as intended:"
+get "https://core.$DOMAIN/" > /dev/null
+# The unit tests check the menu data against the controllers. This checks that
+# the data reached the page at all, which is a different failure and one that
+# has happened: a nav entry that exists and is never rendered.
+grep -oE '>(Overview|Modules|Catalogue|People|Roles|Domains|Storage|Phone apps|Interfaces|Activity)</a>' $P \
+  | sed 's/>//; s|</a>||' | sort | tr '\n' ' ' | sed 's/^/   operator sees: /'
+echo
+echo "   breadcrumb: $(grep -c 'class="breadcrumb"' $P) on the page"
