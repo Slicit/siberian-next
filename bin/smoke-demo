@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Drives the demo module through the Router with a real session, end to end.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-demo.sh
