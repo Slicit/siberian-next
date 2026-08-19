@@ -46,7 +46,7 @@ done
 echo
 echo "catalogue entries visible:"
 fetch "https://admin.$DOMAIN/catalog" > /dev/null
-grep -oE 'Example (Notes|Mail Relay)' /tmp/bo_page | sort -u | sed 's/^/   /'
+grep -oE '>(Tasks|Notes|Example Mail Relay)<' /tmp/bo_page | tr -d '<>' | sort -u | sed 's/^/   /'
 
 echo
 echo "review screen for example-relay:"
@@ -59,4 +59,4 @@ echo "a non-operator:"
 J=/tmp/bo_user_jar.txt
 sign_in $J user@siberian.localhost
 echo "   GET / -> $(fetch "https://admin.$DOMAIN/")   (expect 403)"
-grep -oE 'not as an operator' /tmp/bo_page | head -1 | sed 's/^/   says: /'
+grep -oE 'You cannot do that' /tmp/bo_page | head -1 | sed 's/^/   says: /'
