@@ -43,4 +43,4 @@ end
 # The assistant that proposes a phone app configuration from a description.
 # Nothing else in the core talks to a model, so the dependency lives with the
 # one service that does.
-gem "anthropic", "~> 2.0"
+gem "anthropic", "~> 1.64"
