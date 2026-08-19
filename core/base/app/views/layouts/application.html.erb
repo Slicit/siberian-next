@@ -21,6 +21,9 @@
           <div class="nav-group">
             <div class="label">Home</div>
             <%= link_to "Overview", root_path, "aria-current": ("page" if current_page?(root_path)) %>
+            <% if allow?("core.mobile.manage") %>
+              <%= link_to "Phone app", phone_app_path, "aria-current": ("page" if controller_name == "phone_app") %>
+            <% end %>
           </div>
 
           <%# Every group here came from an installed module. Nothing in this

@@ -39,3 +39,8 @@ group :development, :test do
   # Static analysis for security vulnerabilities [https://brakemanscanner.org/]
   gem "brakeman", require: false
 end
+
+# The assistant that proposes a phone app configuration from a description.
+# Nothing else in the core talks to a model, so the dependency lives with the
+# one service that does.
+gem "anthropic", "~> 1.64"

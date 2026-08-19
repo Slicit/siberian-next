@@ -6,5 +6,13 @@ Rails.application.routes.draw do
   get "m/:id", to: "modules#show", as: :module_frame
   get "m/:id/*rest", to: "modules#show", format: false
 
+  # The phone app for this domain. One app, one domain, and the domain is the
+  # one the Router put on the request rather than one anybody names.
+  get "app", to: "phone_app#show", as: :phone_app
+  post "app/suggest", to: "phone_app#suggest", as: :suggest_phone_app
+  patch "app", to: "phone_app#apply", as: :apply_phone_app
+  patch "app/capabilities/:capability", to: "phone_app#update_capability", as: :phone_app_capability
+  post "app/build", to: "phone_app#build", as: :build_phone_app
+
   get "up", to: "rails/health#show", as: :rails_health_check
 end
