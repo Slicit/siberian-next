@@ -1,4 +1,6 @@
 <% content_for :title, "Domains" %>
+<% helper = ActiveSupport::NumberHelper %>
+<% may_set_storage = allow?("core.storage.manage") %>
 
 <div style="margin-bottom:1.2rem">
   <h1>Domains</h1>
@@ -14,16 +16,61 @@
   <% if @domains.any? %>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Hostname</th><th>Label</th><th>Data fingerprint</th><th></th></tr></thead>
+        <thead><tr><th>Hostname</th><th>Label</th><th>Storage</th><th></th></tr></thead>
         <tbody>
           <% @domains.each do |domain| %>
+            <% quota = @usage[domain.hostname] %>
             <tr>
               <td>
                 <span class="mono"><%= domain.hostname %></span>
                 <% if domain.primary? %><span class="badge accent" style="margin-left:.4rem">primary</span><% end %>
+                <div class="faint mono" style="font-size:.72rem"><%= domain.fingerprint %></div>
               </td>
               <td class="muted"><%= domain.label %></td>
-              <td class="faint mono" style="font-size:.78rem"><%= domain.fingerprint %></td>
+              <td style="min-width:19rem">
+                <% if @quotas.nil? %>
+                  <span class="faint">Storage did not answer</span>
+                <% else %>
+                  <div class="muted mono" style="font-size:.8rem">
+                    <% if quota.nil? %>
+                      nothing stored yet<%= may_set_storage ? ", and no allowance set" : "" %>
+                    <% elsif quota["unlimited"] %>
+                      <%= helper.number_to_human_size(quota["bytes_used"]) %> of no ceiling
+                    <% else %>
+                      <%= helper.number_to_human_size(quota["bytes_used"]) %>
+                      of <%= quota["quota_mb"] %> MB · <%= quota["percent_used"] %>%
+                    <% end %>
+                    <% if quota && quota["bucket_count"].to_i.positive? %>
+                      <span class="faint">· <%= pluralize(quota["bucket_count"], "bucket") %></span>
+                    <% end %>
+                  </div>
+
+                  <% if quota && !quota["unlimited"] %>
+                    <%# A bar rather than a number alone: the same fact, but only
+                        one of the two is noticed in a list. %>
+                    <div style="height:5px; background:var(--surface-2); border-radius:99px; margin-top:.35rem; overflow:hidden; max-width:17rem">
+                      <div style="height:100%; width:<%= [quota['percent_used'].to_f, 100].min %>%;
+                                  background:<%= quota['percent_used'].to_f > 90 ? 'var(--danger)' : quota['percent_used'].to_f > 75 ? 'var(--warn)' : 'var(--ok)' %>"></div>
+                    </div>
+                  <% end %>
+
+                  <% if may_set_storage %>
+                    <%= form_with url: domain_storage_path(domain), method: :patch, class: "row",
+                                  style: "margin-top:.5rem; gap:.4rem; align-items:flex-end" do %>
+                      <div style="max-width:8.5rem">
+                        <label style="font-size:.72rem">Domain total (MB)</label>
+                        <%= number_field_tag :quota_mb, quota && quota["quota_mb"], min: 1, placeholder: "no ceiling" %>
+                      </div>
+                      <div style="max-width:9.5rem">
+                        <label style="font-size:.72rem">New bucket (MB)</label>
+                        <%= number_field_tag :default_bucket_quota_mb, quota && quota["default_bucket_quota_mb"],
+                              min: 1, placeholder: @quotas["default_bucket_quota_mb"] %>
+                      </div>
+                      <button type="submit">Save</button>
+                    <% end %>
+                  <% end %>
+                <% end %>
+              </td>
               <td class="right">
                 <div class="row" style="justify-content:flex-end">
                   <% unless domain.primary? %>
@@ -38,6 +85,16 @@
         </tbody>
       </table>
     </div>
+
+    <% if may_set_storage && @quotas %>
+      <p class="faint" style="margin:.7rem 0 0; font-size:.8rem">
+        Every module bucket on a domain draws from its total, so one module
+        filling it stops the others too. Left empty, the domain has no ceiling
+        and a new bucket falls back to the global default of
+        <%= @quotas["default_bucket_quota_mb"] %> MB. Existing buckets keep the
+        allowance they were given.
+      </p>
+    <% end %>
   <% else %>
     <div class="empty">No domains yet. Modules cannot be routed until there is one.</div>
   <% end %>
@@ -63,6 +120,26 @@
       <%= form.label :label, "Label" %>
       <%= form.text_field :label, placeholder: "Production" %>
     </div>
+
+    <% if may_set_storage %>
+      <%# Asked here because this is the one moment an operator knows what the
+          domain is for. Left empty it behaves exactly as before. %>
+      <div class="row" style="gap:.6rem; align-items:flex-end">
+        <div class="field" style="max-width:11rem">
+          <%= label_tag :quota_mb, "Storage total (MB)" %>
+          <%= number_field_tag :quota_mb, nil, min: 1, placeholder: "no ceiling" %>
+        </div>
+        <div class="field" style="max-width:12rem">
+          <%= label_tag :default_bucket_quota_mb, "New bucket (MB)" %>
+          <%= number_field_tag :default_bucket_quota_mb, nil, min: 1,
+                placeholder: @quotas && @quotas["default_bucket_quota_mb"] %>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:-.4rem">
+        Optional. Both can be changed later, and neither affects a bucket that
+        already exists.
+      </div>
+    <% end %>
 
     <label class="row" style="font-weight:500">
       <%= form.check_box :primary, style: "width:auto" %>
