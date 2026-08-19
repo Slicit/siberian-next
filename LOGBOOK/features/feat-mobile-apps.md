@@ -1,5 +1,5 @@
 ---
-status: active
+status: shipped
 branch: feat-mobile-apps
 ---
 
@@ -138,3 +138,43 @@ device. It can only be enforced where it was always enforced, at the door.
 - **Impact:** changing a capability does not change a queued build. Asking again is how you get the new configuration, which is also what an operator expects from a queue.
 
 ## Outcome
+
+Shipped 2026-08-19. A domain has an app, an operator decides what it may do
+natively, and a build is a place in a queue.
+
+Proven on the box rather than argued: build 7 produced a 67 MB
+`app-release.apk`, stored at `files/apps/android/test.siberian-7.apk`, with
+`demo-tasks` compiled in as a native screen. Its code is in the JavaScript
+bundle inside the APK, which is the claim that mattered: a third party ships
+React Native source and it ends up in that domain's binary. The two modules
+that ship nothing native appear as WebViews on the same UI the product shell
+frames.
+
+Four things the build itself taught, all now in `notes.md`:
+
+- An `expo-*` package installed as `"*"` is built for whichever SDK is newest,
+  not the one in `package.json`, and Gradle then fails on a missing plugin.
+  `expo install` exists for exactly this.
+- Expo modules compile native code, so the NDK is not optional, and Gradle
+  installs into `ANDROID_HOME` while configuring: the build user has to own it.
+  The failure reads as a permissions problem and cascades into a second,
+  unrelated-looking error.
+- `expo prebuild` writes a splash drawable referring to a colour it only emits
+  when `splash` is configured.
+- A `.gitignore` pattern with no leading slash matches at every depth, which is
+  how the builder shipped without its own `package.json`.
+
+The most useful failure was not a bug. Build 6 compiled and then died with
+"the artifact could not be stored: bucket_full", because the Mobile service
+registers with Storage the way a module does, asked for 2048 MB, and the
+operator default capped it at 15 MB. The rule from the storage quota feature
+applied to the core service that wrote it, the refusal named the level that
+stopped it, and raising the bucket then met the domain pool at the second
+level. That is three levels of quota working on a case none of them were
+written for.
+
+Found and not fixed here: nothing re-registers a module with a core service
+that did not exist when the module was installed. `example-notes` and
+`example-relay` were invisible to every phone app until they were reinstalled.
+`RouteReconciler` solves the same class of drift for routing and there is no
+equivalent for service registrations. Raised in `LOGBOOK/candidates.md`.
