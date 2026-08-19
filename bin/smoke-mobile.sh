@@ -93,8 +93,10 @@ grep -oE 'image: (set|none)|Android animation: (set|none)|centre [0-9]+ pixels' 
 # header is enough to be recognised and refused by name.
 printf 'GIF89a' > /tmp/mob_fake.gif
 head -c 64 /dev/zero >> /tmp/mob_fake.gif
+# Multipart, so the token goes as a form field: curl cannot mix
+# --data-urlencode with -F, and sending only one of them would test nothing.
 echo "   a GIF as the animation -> $(c -o $P -w '%{http_code}' -X POST \
-  --data-urlencode "authenticity_token=$(token)" \
+  -F "authenticity_token=$(token)" \
   -F "animation=@/tmp/mob_fake.gif" "https://core.$DOMAIN/mobile/$ID/splash")   (expect 302, refused)"
 get "https://core.$DOMAIN/mobile/$ID" > /dev/null
 grep -oE 'cannot play a GIF there' $P | head -1 | sed 's/^/   said: /'
