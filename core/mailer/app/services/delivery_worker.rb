@@ -19,10 +19,19 @@ class DeliveryWorker
     @logger.info("mail worker started, polling every #{@interval}s")
 
     while @running
-      delivered = drain
-      # Only sleep when there was nothing to do. A busy queue should not wait
-      # five seconds between messages.
-      sleep(@interval) if delivered.zero? && @running
+      begin
+        delivered = drain
+        # Only sleep when there was nothing to do. A busy queue should not wait
+        # five seconds between messages.
+        sleep(@interval) if delivered.zero? && @running
+      rescue StandardError => e
+        # The database being briefly unreachable, or a migration running, should
+        # not end the worker. Exiting looks like a crash loop to whoever is
+        # watching and stops the queue moving for as long as it takes somebody
+        # to notice; waiting and trying again is what a queue is for.
+        @logger.error("worker loop error: #{e.class}: #{e.message}")
+        sleep(@interval)
+      end
     end
 
     @logger.info("mail worker stopped")

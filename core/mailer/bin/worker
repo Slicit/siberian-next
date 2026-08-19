@@ -1,8 +1,16 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# The mail worker. Its own process, and in production its own container: a
-# stuck delivery should not be able to take the API down with it.
+# The mail worker. Its own process, and in production its own container: a stuck
+# delivery should not be able to take the queue endpoints down with it.
 require_relative "../config/environment"
 
-DeliveryWorker.new.run
+# To stdout, not to a file inside the container. A worker whose only record of
+# what it did is a log nobody can reach is a worker nobody can debug, and
+# `docker logs` is where anybody will look first.
+logger = ActiveSupport::Logger.new($stdout)
+logger.formatter = proc { |severity, time, _program, message| "[#{time.utc.iso8601}] #{severity} #{message}\n" }
+Rails.logger = ActiveSupport::TaggedLogging.new(logger)
+$stdout.sync = true
+
+DeliveryWorker.new(logger: Rails.logger).run
