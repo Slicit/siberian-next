@@ -1,0 +1,53 @@
+# The demo module. A to-do list, which is the least interesting thing about it.
+#
+# What it demonstrates is the contract: it is written in Python, it uses auth,
+# its own database, a granted read of a core table, and file storage, and it
+# does all of that over plain HTTP with no SDK and no S3 client.
+schema_version: 1
+name: demo-tasks
+version: 1.0.0
+title: Tasks
+description: A to-do list that uses every core service, written in Python to show the contract does not care.
+
+containers:
+  - service: web
+    image: siberian/demo-tasks:1.0.0
+    role: http
+    internal_port: 8080
+    health:
+      path: /up
+      interval_seconds: 30
+
+routes:
+  base: /demo-tasks
+  entry: web
+  origin: tasks
+
+permissions:
+  databases:
+    # Its own tables, one database per domain.
+    - name: primary
+      access: owner
+      scope: per_domain
+
+    # A granted read of a table it does not own, named table by table with the
+    # reason an operator will see. Every read of this lands in the audit trail.
+    - target: core.configuration
+      access: read
+      scope: global
+      tables:
+        - settings
+      reason: Reads the product name and date format so the module looks like part of the product rather than a bolt-on.
+
+  storage:
+    # One attachment per task. No tmp space: it has no use for one.
+    spaces: [files]
+    quota_mb: 128
+
+capabilities:
+  features:
+    - id: demo_tasks.task.list
+      area: sidebar.entities
+      title: Tasks
+      path: /
+      icon: check

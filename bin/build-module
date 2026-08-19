@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Builds a module image from the catalogue.
+#
+# The Orchestrator installs by image name and does not pull an image that is
+# already present, so a locally built image is enough. That is what makes a
+# module developable without a registry standing in the way.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+name="${1:-}"
+if [ -z "$name" ]; then
+  echo "usage: bin/build-module <module-directory>" >&2
+  exit 1
+fi
+
+dir="modules/$name"
+[ -f "$dir/Dockerfile" ] || { echo "No Dockerfile in $dir" >&2; exit 1; }
+[ -f "$dir/module.yml" ] || { echo "No module.yml in $dir" >&2; exit 1; }
+
+# The tag has to match what the manifest asks for, or the Orchestrator will try
+# to pull it from a registry that has never heard of it.
+image=$(grep -m1 "image:" "$dir/module.yml" | sed 's/.*image: *//; s/ *$//')
+echo "Building $image from $dir"
+
+docker build -t "$image" "$dir"
+echo "Built $image"
