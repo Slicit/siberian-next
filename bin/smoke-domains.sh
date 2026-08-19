@@ -57,12 +57,12 @@ echo "   -> $(c -o /tmp/dom_add -w '%{http_code}' -X POST \
   --data-urlencode "default_bucket_quota_mb=8" "https://admin.$DOMAIN/domains")   (expect 302)"
 
 echo "2. the Domains page reads it back -> $(get "https://admin.$DOMAIN/domains")"
-grep -oE "$HOST: [^<]{0,60}" $P | head -1 | sed 's/^/   said: /'
+grep -oE "$HOST [^<]{0,80}" $P | head -1 | sed 's/^/   said: /'
 grep -A25 ">$HOST<" $P | grep -oE 'of 64 MB|value="64"|value="8"' | sort -u | sed 's/^/   /'
 ID=$(domain_id)
 
 echo "3. Storage lists it with nothing stored on it -> $(get "https://admin.$DOMAIN/storage")"
-grep -A6 ">$HOST<" $P | grep -oE '0 Bytes|of 64 MB|no ceiling' | head -2 | sed 's/^/   /'
+grep -A10 ">$HOST<" $P | grep -oE '0 Bytes|of 64 MB|no ceiling' | head -2 | sed 's/^/   /'
 
 echo "4. clear the ceiling"
 get "https://admin.$DOMAIN/domains" > /dev/null
