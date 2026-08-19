@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Generates every core Rails service, in containers. Ruby is never required on
+# the host.
+#
+# Builds one generator image with Rails already installed, then runs it once per
+# service. Installing Rails five times instead would be five times the wait for
+# the same result.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+RUBY_VERSION="${RUBY_VERSION:-3.3}"
+IMAGE=siberian-railsgen:local
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "Building the generator image once..."
+  docker build -t "$IMAGE" -f - . <<DOCKEREOF
+FROM ruby:${RUBY_VERSION}-slim
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+      build-essential git libpq-dev libyaml-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+RUN gem install rails --no-document
+DOCKEREOF
+fi
+
+# service:extra flags. The two API services serve no HTML of their own.
+SERVICES=(
+  "orchestrator:"
+  "base:"
+  "auth:"
+  "mailer:--api"
+  "storage:--api"
+)
+
+COMMON="--database=postgresql --skip-kamal --skip-solid --skip-docker --skip-ci --skip-rubocop --skip-git"
+
+for entry in "${SERVICES[@]}"; do
+  service="${entry%%:*}"
+  extra="${entry#*:}"
+  target="core/$service"
+
+  if [ -f "$target/config/application.rb" ]; then
+    echo "core/$service already generated, skipping."
+    continue
+  fi
+
+  echo "Generating core/$service ..."
+  mkdir -p "$target"
+
+  # Runs as root inside the container: rails new writes to GEM_HOME, which a
+  # mapped host user cannot do.
+  docker run --rm -v "$PWD/$target:/app" -w /app "$IMAGE" \
+    bash -c "rails new . --force $COMMON $extra"
+
+  # Root-created files on a bind mount are root-owned on the host. Hand them back.
+  docker run --rm -v "$PWD/$target:/app" "$IMAGE" \
+    chown -R "$(id -u):$(id -g)" /app
+
+  rm -f "$target/.gitkeep"
+  echo "Generated core/$service"
+done
+
+echo "ALL_SERVICES_GENERATED"
