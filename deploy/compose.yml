@@ -104,9 +104,43 @@ services:
         condition: service_healthy
     networks: [core]
 
+  storage:
+    build:
+      <<: *rails_build
+      args:
+        SERVICE: storage
+    environment:
+      <<: *rails_env
+      GARAGE_ENDPOINT: http://garage:3900
+      GARAGE_ADMIN_ENDPOINT: http://garage:3903
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-storage_service_dev_only}
+    volumes:
+      - ../core/storage:/app
+      - ../lib:/app/lib
+    depends_on:
+      configuration:
+        condition: service_healthy
+    # The only service on both networks. This is what keeps the object store
+    # unreachable from anything else, modules included.
+    networks: [core, storage]
+
+  garage:
+    image: dxflrs/garage:v2.1.0
+    volumes:
+      - ../core/storage/garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    # No ports published. Nothing outside the storage network reaches this.
+    networks: [storage]
+
 volumes:
   configuration_data:
+  garage_meta:
+  garage_data:
 
 networks:
   core:
     name: siberian_core
+  storage:
+    name: siberian_storage
+    internal: true

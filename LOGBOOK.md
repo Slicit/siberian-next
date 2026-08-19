@@ -15,6 +15,7 @@ Two classes of containers.
 - **Auth**: out-of-the-box authentication exposed over API (OAuth, JWT, 2FA, and the rest of the modern set).
 - **Mailer**: out-of-the-box mail delivery exposed over API.
 - **Database**: PostgreSQL handler with an internal API that provisions and isolates databases. A module declares the access it needs at install or update time and the core mints scoped credentials automatically, on the Android permission model. A module may also request access to an existing database; default is read-only, with write granted deliberately.
+- **Storage**: file storage for every module, over a plain HTTP API (`PUT`, `GET`, `DELETE` on `/v1/{space}/{path}`). Modules never see S3, never hold an object store credential, and never need an S3 SDK. Spaces are `files`, `tmp`, and `public`. One bucket per `(module, domain)` pair, same isolation rule as the Database service.
 
 **Third-party modules**: any number of containers per module (for example a Redis, a php-fpm runner, and a small Nginx to serve the app). Install registers the module, mounts its files, and assigns a UUID. Every container of that module is prefixed: `<uuid>-<module_name>-<service>`.
 
@@ -36,6 +37,7 @@ Two classes of containers.
 - Ruby on Rails for the Mailer and the Auth service, API first
 - Nginx for the Router
 - PostgreSQL for Configuration, for the Database service, and one isolated database per domain
+- Garage for object storage, reachable only by the Storage service
 - Container engine behind a driver interface: Docker first, Kubernetes or equivalent later
 - Monorepo: every core service, shared library, and SDK lives in this repository
 

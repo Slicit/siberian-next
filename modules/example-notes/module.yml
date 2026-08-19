@@ -43,6 +43,13 @@ permissions:
       access: read
       scope: global
 
+  storage:
+    # Private durable files, plus a public space for assets the Router serves
+    # directly at /-/public/<path>. No tmp space: this module has no use for one,
+    # so it does not get one.
+    spaces: [files, public]
+    quota_mb: 256
+
   mail:
     send: true
 
