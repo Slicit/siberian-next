@@ -1,0 +1,67 @@
+# A small CMS, in Python.
+#
+# What it demonstrates beyond the other reference modules is a module with two
+# faces over one set of data: a web UI the Base App frames, and native screens
+# compiled into the domain's phone app, both reading the same pages through the
+# same API. Nothing about a block is described twice.
+schema_version: 1
+name: example-cms
+version: 1.0.0
+title: Pages
+description: Pages assembled from blocks, with navigation. The same content renders in the browser and natively in the phone app.
+
+containers:
+  - service: web
+    image: siberian/example-cms:1.0.0
+    role: http
+    internal_port: 8080
+    health:
+      path: /up
+      interval_seconds: 30
+
+routes:
+  base: /example-cms
+  entry: web
+  origin: cms
+
+permissions:
+  databases:
+    # Its own pages and blocks, one database per domain.
+    - name: primary
+      access: owner
+      scope: per_domain
+
+    - target: core.configuration
+      access: read
+      scope: global
+      tables:
+        - settings
+      reason: Reads the product name so a page header reads as part of the product rather than a bolt-on.
+
+  storage:
+    # Images and video for the blocks. public as well as files, because a block
+    # rendered on a phone needs a URL the phone can fetch without a session.
+    spaces: [files, public]
+    quota_mb: 2048
+
+capabilities:
+  features:
+    - id: example_cms.page.list
+      area: sidebar.entities
+      title: Pages
+      path: /
+      icon: page
+
+# The native half. The same blocks, as React Native components rather than as
+# HTML, reading the same API the web UI writes to.
+native:
+  entry: native/index.js
+  fallback: webview
+  # Nothing native is required to render a page. Video plays in a WebView, which
+  # the shell already carries, so no capability has to be switched on for this
+  # module to work.
+  requires: []
+  screens:
+    - capability: example_cms.page.list
+      component: PageNavigator
+      title: Pages
