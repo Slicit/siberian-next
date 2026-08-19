@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Everything that can be checked without a running stack.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+./bin/check-engine-leak
+
+if command -v node >/dev/null 2>&1; then
+  node -e "JSON.parse(require('fs').readFileSync('lib/contracts/module_manifest.schema.json','utf8'))" \
+    && echo "Module manifest schema parses."
+fi
+
+if grep -rn --include='*.md' --include='*.rb' --include='*.yml' -e $'—' LOGBOOK.md LOGBOOK core lib >/dev/null 2>&1; then
+  echo "Em-dash found. See LOGBOOK.md, Conventions." >&2
+  exit 1
+fi
+echo "No em-dashes."

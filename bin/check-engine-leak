@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Fails if anything outside lib/siberian_engine names a container engine.
+#
+# The engine abstraction is only real if something checks it. This is that
+# something, and it is cheap enough to run on every commit. See LOGBOOK.md,
+# Conventions: "Engine-specific code lives only in the driver."
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+PATTERN='docker|Docker|DOCKER|kubernetes|Kubernetes|kubectl|podman'
+SEARCH_PATHS=(core lib)
+EXCLUDES=(
+  --exclude-dir=siberian_engine
+  --exclude=siberian_engine.rb
+  --exclude-dir=node_modules
+  --exclude-dir=tmp
+  --exclude-dir=log
+  --exclude=Dockerfile
+  --exclude=*.dockerfile
+  --exclude=.dockerignore
+  --exclude=README.md
+)
+
+if hits=$(grep -rInE "$PATTERN" "${SEARCH_PATHS[@]}" "${EXCLUDES[@]}" 2>/dev/null); then
+  echo "Engine leak: container engine named outside lib/siberian_engine." >&2
+  echo >&2
+  echo "$hits" >&2
+  echo >&2
+  echo "Route it through Siberian::Engine::Driver, or grow the interface." >&2
+  exit 1
+fi
+
+echo "No engine leak: core/ and lib/ name no container engine outside the driver."

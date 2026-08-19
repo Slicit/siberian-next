@@ -17,6 +17,9 @@ Rules:
 
 <!-- Conventions and approaches that have proven useful in this codebase. -->
 
+- Enforce architecture with a check, not a comment: `bin/check-engine-leak` greps `core/` and `lib/` for engine names outside the driver. It found a real leak within minutes of being written.
+- One Dockerfile per language, service passed as a build arg: `deploy/rails.Dockerfile` covers all four Rails services. Four near-identical Dockerfiles drift; one does not.
+
 ## Anti-patterns
 
 <!-- Things that have caused bugs, regressions, or maintenance pain. Avoid these. -->
@@ -25,6 +28,21 @@ Rules:
 
 <!-- Surprising behavior in dependencies, frameworks, or our own code. -->
 
+- Same-origin iframes are not a boundary: a frame served from the parent's own origin can reach `window.parent`, its DOM, and its storage. Module frames are served from `<module>.apps.<domain>` precisely so the boundary is browser-enforced. Never "simplify" a module back onto the parent origin.
+- Core images build from the repository root, not from their own directory, because `lib/` has to be copied in. A Dockerfile that assumes its own directory is the build context will fail to find `lib/`. See `deploy/rails.Dockerfile`.
+- `resolver 127.0.0.11` is the Docker embedded DNS address, not a general one. Anything engine-specific in Router config has to be rendered from environment, or it silently breaks under a different engine. Caught by `bin/check-engine-leak`.
+
 ## Glossary
 
 <!-- Project-specific terms an outside reader would not know. -->
+
+- **Module**: the packaged unit a third party ships. A manifest plus one or more containers. Never called a plugin (see `LOGBOOK.md`, Conventions).
+- **Core**: the containers required for the system to run at all: Orchestrator, Base App, Router, Configuration, Auth, Mailer, Database.
+- **Orchestrator / Backoffice**: the operator-facing app. Installs modules, drives container CRUD, handles maintenance.
+- **Base App / Admin**: the product shell end users see. Wraps installed modules in iframes.
+- **Capability**: something a module declares it offers, identified as `<module>.<subject>.<role>`. Auto-discovery composes workflows out of these without either module hardcoding the other.
+- **Area**: a named region of the Base App where capabilities are listed or linked, for example `sidebar.entities`.
+- **Grant**: an access right a module declares in its manifest and an operator approves at install or update time. Nothing outside the grants is reachable.
+- **Domain**: one of the several domains the system serves. Each has its own database; containers are shared across all of them.
+- **Engine driver**: the backend implementing `Siberian::Engine::Driver`. Docker today, Kubernetes later.
+- **Entry container**: the `http` container in a module that the Router points its origin at.

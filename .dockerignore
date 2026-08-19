@@ -1,0 +1,12 @@
+.git
+.gitattributes
+LOGBOOK
+LOGBOOK.md
+CLAUDE.md
+AGENTS.md
+docs
+**/tmp
+**/log
+**/node_modules
+**/.bundle
+**/storage

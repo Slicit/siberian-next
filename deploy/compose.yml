@@ -1,0 +1,112 @@
+# Development stack. Production topology is deliberately not this file: the
+# Orchestrator creates module containers at runtime through the engine driver,
+# it does not write compose files.
+#
+# What lives here is only the core. Modules never appear in this file.
+
+name: siberian
+
+services:
+  configuration:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_only}
+      POSTGRES_DB: postgres
+    volumes:
+      - configuration_data:/var/lib/postgresql/data
+      - ../core/configuration/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [core]
+
+  router:
+    build:
+      context: ..
+      dockerfile: core/router/Dockerfile
+    environment:
+      SIBERIAN_DOMAIN: ${SIBERIAN_DOMAIN:-siberian.localhost}
+      SIBERIAN_RESOLVER: ${SIBERIAN_RESOLVER:-127.0.0.11}
+    ports:
+      - "${SIBERIAN_HTTP_PORT:-8080}:80"
+    depends_on:
+      base:
+        condition: service_started
+    networks:
+      core:
+        # Module containers join this network with their short name as alias.
+        # The Router resolves them by that alias and never learns the
+        # uuid-prefixed container name.
+        aliases: [router]
+
+  orchestrator:
+    build: &rails_build
+      context: ..
+      dockerfile: deploy/rails.Dockerfile
+      args:
+        SERVICE: orchestrator
+    environment: &rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432
+      SIBERIAN_DOMAIN: ${SIBERIAN_DOMAIN:-siberian.localhost}
+      SIBERIAN_ENGINE: docker
+    volumes:
+      - ../core/orchestrator:/app
+      - ../lib:/app/lib
+      # The Orchestrator drives the engine, so it is the one core service that
+      # reaches the daemon. Nothing else gets the socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      configuration:
+        condition: service_healthy
+    networks: [core]
+
+  base:
+    build:
+      <<: *rails_build
+      args:
+        SERVICE: base
+    environment: *rails_env
+    volumes:
+      - ../core/base:/app
+      - ../lib:/app/lib
+    depends_on:
+      configuration:
+        condition: service_healthy
+    networks: [core]
+
+  auth:
+    build:
+      <<: *rails_build
+      args:
+        SERVICE: auth
+    environment: *rails_env
+    volumes:
+      - ../core/auth:/app
+      - ../lib:/app/lib
+    depends_on:
+      configuration:
+        condition: service_healthy
+    networks: [core]
+
+  mailer:
+    build:
+      <<: *rails_build
+      args:
+        SERVICE: mailer
+    environment: *rails_env
+    volumes:
+      - ../core/mailer:/app
+      - ../lib:/app/lib
+    depends_on:
+      configuration:
+        condition: service_healthy
+    networks: [core]
+
+volumes:
+  configuration_data:
+
+networks:
+  core:
+    name: siberian_core

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Brings up the core. Modules are not started here; the Orchestrator creates
+# them at runtime through the engine driver.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec docker compose --env-file .env -f deploy/compose.yml up "$@"

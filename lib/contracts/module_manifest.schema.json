@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siberian-next.dev/schemas/module_manifest/v1.json",
+  "title": "Siberian Next module manifest",
+  "description": "Declared at the root of a module as module.yml. Read by the Orchestrator at install and update time. Everything the core grants a module is granted from this file, never inferred at runtime.",
+  "type": "object",
+  "required": ["schema_version", "name", "version", "title", "containers", "routes"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,38}[a-z0-9]$",
+      "description": "Stable identifier. Becomes the internal DNS short name and the container name segment. Never changes across versions."
+    },
+    "version": { "type": "string", "pattern": "^[0-9]+[.][0-9]+[.][0-9]+" },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+
+    "containers": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Containers the Orchestrator creates for this module. Each is named <uuid>-<module_name>-<service>.",
+      "items": {
+        "type": "object",
+        "required": ["service", "image", "role"],
+        "additionalProperties": false,
+        "properties": {
+          "service": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "image": { "type": "string", "minLength": 1 },
+          "role": {
+            "enum": ["http", "worker", "datastore"],
+            "description": "http containers can be routed to. datastore containers are never reachable from outside the module network."
+          },
+          "internal_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+          "env": { "type": "object", "additionalProperties": { "type": "string" } },
+          "mounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path"],
+              "additionalProperties": false,
+              "properties": {
+                "path": { "type": "string" },
+                "access": { "enum": ["read", "write"], "default": "read" }
+              }
+            }
+          },
+          "health": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string" },
+              "interval_seconds": { "type": "integer", "minimum": 1, "default": 30 }
+            }
+          }
+        }
+      }
+    },
+
+    "routes": {
+      "type": "object",
+      "required": ["base", "entry"],
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "string",
+          "pattern": "^/[a-z0-9-]+$",
+          "description": "Base path the Router mounts this module at."
+        },
+        "entry": {
+          "type": "string",
+          "description": "Name of the http container that serves this module's UI."
+        },
+        "origin": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Subdomain label for the module's own origin (<origin>.apps.<domain>). Defaults to name. The separate origin is what makes the Base App iframe a browser-enforced boundary rather than a convention."
+        }
+      }
+    },
+
+    "permissions": {
+      "type": "object",
+      "description": "Everything the module is allowed to reach. Granted at install or update time on the Android model: the operator sees this list and approves it. Nothing outside this list is reachable.",
+      "additionalProperties": false,
+      "properties": {
+        "databases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["access"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Provision a database owned by this module under this logical name."
+              },
+              "target": {
+                "type": "string",
+                "description": "Reach an existing database instead of provisioning one. Mutually exclusive with name."
+              },
+              "access": {
+                "enum": ["owner", "read", "write"],
+                "description": "owner applies to provisioned databases. read is the default grant on an existing target; write is granted deliberately."
+              },
+              "scope": {
+                "enum": ["per_domain", "global"],
+                "default": "per_domain",
+                "description": "per_domain gives one database per domain, which is how domain isolation works. global is a single shared database and needs justification."
+              }
+            },
+            "oneOf": [{ "required": ["name"] }, { "required": ["target"] }]
+          }
+        },
+        "mail": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "send": { "type": "boolean", "default": false } }
+        },
+        "modules": {
+          "type": "array",
+          "description": "Other modules this one may call over the internal API.",
+          "items": {
+            "type": "object",
+            "required": ["name", "access"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "access": { "enum": ["read", "write"] },
+              "optional": { "type": "boolean", "default": false }
+            }
+          }
+        }
+      }
+    },
+
+    "capabilities": {
+      "type": "object",
+      "description": "What the module offers the rest of the system, and what it can make use of. Auto-discovery reads both sides, which is what lets workflows be composed without either module hardcoding the other.",
+      "additionalProperties": false,
+      "properties": {
+        "provides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "area", "title", "path"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*([.][a-z][a-z0-9_]*)+$",
+                "description": "Globally unique, dotted. Convention: <module>.<subject>.<role>, for example crm.contact.viewer."
+              },
+              "area": {
+                "type": "string",
+                "description": "Named area of the Base App where this capability is listed or linked."
+              },
+              "title": { "type": "string" },
+              "path": { "type": "string", "pattern": "^/" },
+              "icon": { "type": "string" },
+              "accepts": {
+                "type": "array",
+                "description": "Capability ids or subject types this endpoint can be handed.",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "consumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "optional": { "type": "boolean", "default": true }
+            }
+          }
+        }
+      }
+    }
+  }
+}

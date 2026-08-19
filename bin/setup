@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Checks that this machine can run the stack, and reports exactly what is
+# missing rather than failing halfway through a build.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+missing=0
+need() {
+  if command -v "$1" >/dev/null 2>&1; then
+    printf '  ok      %-10s %s\n' "$1" "$(command -v "$1")"
+  else
+    printf '  MISSING %-10s %s\n' "$1" "$2"
+    missing=1
+  fi
+}
+
+echo "Prerequisites:"
+need docker "a container engine is required; the Orchestrator drives it"
+need git    "install git"
+
+if command -v docker >/dev/null 2>&1; then
+  if docker info >/dev/null 2>&1; then
+    echo "  ok      daemon     reachable"
+  else
+    echo "  MISSING daemon     docker is installed but the daemon is not reachable"
+    missing=1
+  fi
+fi
+
+echo
+if [ "$missing" -ne 0 ]; then
+  echo "Set the above up first. Ruby is deliberately not required on the host:"
+  echo "the Rails services are generated and run inside containers."
+  exit 1
+fi
+
+if [ ! -f .env ]; then
+  cat > .env <<'ENVEOF'
+SIBERIAN_DOMAIN=siberian.localhost
+SIBERIAN_HTTP_PORT=8080
+SIBERIAN_RESOLVER=127.0.0.11
+POSTGRES_PASSWORD=postgres_dev_only
+ENVEOF
+  echo "Wrote .env with development defaults."
+fi
+
+echo "Ready. Generate the Rails services with bin/new-rails-app, then bin/up."
