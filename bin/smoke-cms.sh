@@ -70,3 +70,32 @@ echo "   serves      -> $(c -o /dev/null -w '%{http_code}' "$(grep -oE 'https://
 
 echo
 echo "8. tidy up                -> $(c -o /dev/null -w '%{http_code}' -X POST $MODULE/$SLUG/delete)   (expect 302)"
+
+echo
+echo "9. linking pages"
+OTHER="${SLUG}-b"
+c -o /dev/null -X POST --data-urlencode "title=$OTHER" $MODULE/pages > /dev/null
+c -o /dev/null -X POST --data-urlencode "next_slug=$OTHER" --data-urlencode "prev_slug=" $MODULE/$SLUG/neighbours
+
+# The picker is an input bound to a datalist, so it filters as somebody types
+# and still submits a slug. A page never offers itself.
+c -o /tmp/cms_edit2 $MODULE/$SLUG/edit
+echo "   the picker offers: $(grep -oE "<option value=\"$OTHER\"" /tmp/cms_edit2 | head -1 | sed 's/<option value=//')"
+echo "   and never itself:  $(grep -c "<option value=\"$SLUG\"" /tmp/cms_edit2)   (expect 0)"
+
+c -o /dev/null -X POST --data-urlencode "kind=nav" $MODULE/$SLUG/blocks
+c -o /tmp/cms_edit3 $MODULE/$SLUG/edit
+NAV=$(grep -oE "blocks/[0-9]+/links\"" /tmp/cms_edit3 | grep -oE '[0-9]+' | head -1)
+c -o /dev/null -X POST --data-urlencode "slug=$OTHER" $MODULE/$SLUG/blocks/$NAV/links
+c -o /dev/null -X POST --data-urlencode "slug=$SLUG" $MODULE/$SLUG/blocks/$NAV/links
+
+c "https://$DOMAIN/m/example-cms/api/pages/$SLUG" > /tmp/cms_api3
+python3 - <<PYEOF
+import json
+payload = json.load(open("/tmp/cms_api3"))
+links = [l["slug"] for b in payload["blocks"] if b["kind"] == "nav" for l in b["links"]]
+print("   nav block links:  ", links, "(a page cannot link to itself)")
+print("   next:             ", (payload.get("next") or {}).get("slug"))
+PYEOF
+
+c -o /dev/null -X POST $MODULE/$OTHER/delete
