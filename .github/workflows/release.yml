@@ -42,6 +42,9 @@ jobs:
           - service: storage
             dockerfile: deploy/rails.Dockerfile
             build_args: 'SERVICE=storage'
+          - service: database
+            dockerfile: deploy/rails.Dockerfile
+            build_args: 'SERVICE=database'
     steps:
       - uses: actions/checkout@v4
 
