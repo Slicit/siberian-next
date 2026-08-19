@@ -147,6 +147,54 @@
   <% end %>
 </div>
 
+<% entries = Array(@mobile && @mobile["apps"]).filter_map do |app|
+     found = Array(app["modules"]).find { |mod| mod["name"] == @module.name }
+     found && found.merge("domain" => app["domain"])
+   end %>
+<% if entries.any? %>
+  <div class="card">
+    <header>
+      <h2>In the phone apps</h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        How this module appears in each domain's app. A native screen needs
+        every capability it requires to be switched on for that domain; without
+        them it appears as its web UI, which is the same UI the product shell
+        frames.
+      </p>
+    </header>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Domain</th><th>Appears as</th><th>Requires</th><th></th></tr></thead>
+        <tbody>
+          <% entries.each do |entry| %>
+            <tr>
+              <td class="mono" style="font-size:.82rem"><%= entry["domain"] %></td>
+              <td>
+                <span class="badge <%= entry["kind"] == "native" ? "" : entry["kind"] == "none" ? "danger" : "warn" %>">
+                  <%= entry["kind"] == "webview" ? "its web UI" : entry["kind"] %>
+                </span>
+                <% if entry["reason"].present? %>
+                  <div class="faint" style="font-size:.72rem"><%= entry["reason"] %></div>
+                <% end %>
+              </td>
+              <td class="faint" style="font-size:.78rem">
+                <%= Array(entry["requires"]).join(", ").presence || "nothing" %>
+              </td>
+              <td class="right">
+                <% domain = Domain.find_by(hostname: entry["domain"]) %>
+                <% if domain && allow?("core.modules.read") %>
+                  <%= link_to "Configure", mobile_app_path(domain), class: "button" %>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% end %>
+
 <div class="card">
   <header><h2>Routing</h2></header>
   <div class="stack" style="--gap:.5rem">
