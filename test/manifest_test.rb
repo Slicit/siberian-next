@@ -195,7 +195,7 @@ class ManifestTest < Minitest::Test
   # Permissions ----------------------------------------------------------
 
   def test_requested_permissions_flatten_into_one_operator_facing_list
-    requests = reference_manifest.requested_permissions
+    requests = rich_manifest.requested_permissions
     kinds = requests.map { |r| r[:kind] }
 
     assert_includes kinds, "database"
@@ -204,7 +204,7 @@ class ManifestTest < Minitest::Test
   end
 
   def test_reading_another_databases_tables_is_never_a_routine_request
-    requests = reference_manifest.requested_permissions
+    requests = rich_manifest.requested_permissions
     owner = requests.find { |r| r[:summary].include?("owner") }
     reader = requests.find { |r| r[:summary].start_with?("read") }
 
@@ -215,7 +215,7 @@ class ManifestTest < Minitest::Test
   end
 
   def test_a_cross_database_request_names_the_tables_and_the_reason
-    reader = reference_manifest.requested_permissions.find { |r| r[:summary].start_with?("read") }
+    reader = rich_manifest.requested_permissions.find { |r| r[:summary].start_with?("read") }
 
     assert_includes reader[:detail], "settings"
     assert_includes reader[:detail], "feature_flags"
@@ -263,12 +263,12 @@ class ManifestTest < Minitest::Test
   end
 
   def test_owned_and_cross_database_grants_are_told_apart
-    assert_equal ["primary"], reference_manifest.owned_database_grants.map { |g| g["name"] }
-    assert_equal ["core.configuration"], reference_manifest.cross_database_grants.map { |g| g["target"] }
+    assert_equal ["primary"], rich_manifest.owned_database_grants.map { |g| g["name"] }
+    assert_equal ["core.configuration"], rich_manifest.cross_database_grants.map { |g| g["target"] }
   end
 
   def test_a_public_storage_space_is_flagged_above_a_private_one
-    public_request = reference_manifest.requested_permissions.find { |r| r[:kind] == "storage" }
+    public_request = rich_manifest.requested_permissions.find { |r| r[:kind] == "storage" }
 
     assert_equal :medium, public_request[:severity], "public assets leave the module boundary"
   end
@@ -280,13 +280,66 @@ class ManifestTest < Minitest::Test
 
   # Capabilities ---------------------------------------------------------
 
+  # Every shape the contract can express, in one manifest. The reference modules
+  # are real products and change as they improve; these assertions are about the
+  # contract, so they get a fixture rather than following a demo around.
+  def rich_manifest
+    Contracts::Manifest.parse(<<~YAML)
+      schema_version: 1
+      name: rich-example
+      version: 2.0.0
+      title: Rich Example
+      containers:
+        - service: web
+          image: nginx:1.27-alpine
+          role: http
+          internal_port: 80
+        - service: cache
+          image: redis:7-alpine
+          role: datastore
+      routes:
+        base: /rich-example
+        entry: web
+      permissions:
+        databases:
+          - name: primary
+            access: owner
+            scope: per_domain
+          - target: core.configuration
+            access: read
+            scope: global
+            tables:
+              - settings
+              - feature_flags
+            reason: Reads the locale and date format so it renders like the product.
+        storage:
+          spaces: [files, public]
+          quota_mb: 256
+        mail:
+          send: true
+      capabilities:
+        features:
+          - id: rich_example.thing.viewer
+            area: sidebar.entities
+            title: Things
+            path: /things
+          - id: rich_example.thing.attacher
+            area: embed.attachment
+            title: Attach a thing
+            path: /embeds/attach
+        consumes:
+          - id: core.user.picker
+            optional: true
+    YAML
+  end
+
   def relay_manifest
     Contracts::Manifest.load(File.expand_path("../modules/example-relay/module.yml", __dir__))
   end
 
   def test_system_and_feature_capabilities_are_read_separately
-    assert_empty reference_manifest.system_capabilities, "example-notes extends the product, not the core"
-    assert_equal 2, reference_manifest.feature_capabilities.length
+    assert_empty rich_manifest.system_capabilities, "this one extends the product, not the core"
+    assert_equal 2, rich_manifest.feature_capabilities.length
 
     assert_equal 1, relay_manifest.system_capabilities.length
     assert_empty relay_manifest.feature_capabilities, "a transport has no page"
@@ -361,14 +414,14 @@ class ManifestTest < Minitest::Test
   end
 
   def test_capabilities_are_read_from_the_reference_module
-    ids = reference_manifest.feature_capabilities.map { |c| c["id"] }
+    ids = rich_manifest.feature_capabilities.map { |c| c["id"] }
 
-    assert_includes ids, "example_notes.note.viewer"
-    assert_equal "sidebar.entities", reference_manifest.feature_capabilities.first["area"]
+    assert_includes ids, "rich_example.thing.viewer"
+    assert_equal "sidebar.entities", rich_manifest.feature_capabilities.first["area"]
   end
 
   def test_consumed_capabilities_are_read_so_discovery_can_match_them
-    assert_equal ["core.user.picker"], reference_manifest.consumed_capabilities.map { |c| c["id"] }
+    assert_equal ["core.user.picker"], rich_manifest.consumed_capabilities.map { |c| c["id"] }
   end
 
   def test_origin_defaults_to_the_module_name
