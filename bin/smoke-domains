@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Adds a domain with a storage allowance, changes it, and removes it, through
+# the Backoffice. The case that matters is a domain with no bucket yet.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-domains.sh
