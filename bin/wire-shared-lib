@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Wires the shared lib/ into every core Rails service, the same way in each.
+#
+# Two things have to be true:
+#
+#   1. Zeitwerk must not try to autoload the shared code. Rails 8 turns on
+#      autoload_lib by default, and lib/siberian_engine.rb defines
+#      Siberian::Engine, not SiberianEngine, so Zeitwerk would reject it.
+#   2. The code has to be findable from both places it legitimately lives:
+#      /app/lib inside a container, and ../../lib in the monorepo.
+#
+# Idempotent. Safe to rerun after regenerating a service.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+for service in orchestrator base auth mailer storage; do
+  app="core/$service"
+  [ -f "$app/config/application.rb" ] || continue
+
+  # 1. Stop Zeitwerk from walking the shared code.
+  if grep -q "autoload_lib" "$app/config/application.rb"; then
+    perl -i -pe 's{^(\s*)config\.autoload_lib.*$}{$1# Shared code is required explicitly in config/initializers/siberian.rb.\n$1# Zeitwerk cannot autoload it: lib/siberian_engine.rb defines\n$1# Siberian::Engine, not SiberianEngine.}' "$app/config/application.rb"
+    echo "  $service: disabled autoload_lib"
+  fi
+
+  # 2. Put the shared code on the load path, wherever it happens to be.
+  cat > "$app/config/initializers/siberian.rb" <<'RUBYEOF'
+# frozen_string_literal: true
+
+# Loads the shared library from wherever it is: /app/lib inside a container,
+# or ../../lib when running from the monorepo. Explicit require rather than
+# autoload, because these files define Siberian::* and Zeitwerk would expect
+# names derived from their paths.
+shared_lib = [
+  Rails.root.join("lib"),
+  Rails.root.join("..", "..", "lib")
+].find { |path| File.exist?(File.join(path.to_s, "contracts.rb")) }
+
+if shared_lib
+  $LOAD_PATH.unshift(File.expand_path(shared_lib.to_s))
+  require "contracts"
+else
+  Rails.logger&.warn("Shared lib/ not found. Manifest parsing and the engine driver are unavailable.")
+end
+RUBYEOF
+  echo "  $service: wired"
+done
+
+echo "Shared lib wired into every generated service."
