@@ -10,8 +10,13 @@ FROM node:20-bookworm-slim
 ARG ANDROID_SDK_VERSION=11076708
 ARG ANDROID_PLATFORM=34
 ARG ANDROID_BUILD_TOOLS=34.0.0
+# Expo modules compile native code, so the NDK is not optional. Gradle will
+# otherwise try to install it itself, at build time, into a directory it cannot
+# write, and the failure reads as an SDK permissions problem.
+ARG ANDROID_NDK=26.1.10909125
 
 ENV ANDROID_HOME=/opt/android \
+    ANDROID_NDK_HOME=/opt/android/ndk/26.1.10909125 \
     JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
     GRADLE_USER_HOME=/home/builder/.gradle
 
@@ -35,12 +40,19 @@ ENV PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$P
 RUN yes | sdkmanager --licenses >/dev/null \
  && sdkmanager --install "platforms;android-${ANDROID_PLATFORM}" \
                          "build-tools;${ANDROID_BUILD_TOOLS}" \
-                         "platform-tools" >/dev/null
+                         "platform-tools" \
+                         "ndk;${ANDROID_NDK}" \
+                         "cmake;3.22.1" >/dev/null
 
-# A home the worker can write to. Gradle and Metro both assume one, and running
-# as root inside a container that compiles third-party code is not a thing to
-# do casually.
-RUN useradd -m -u 1001 builder && mkdir -p /workspace && chown builder /workspace
+# A home the worker can write to, and an SDK it can write into: Gradle installs
+# into ANDROID_HOME while configuring, and the failure when it cannot reads as
+# "the SDK directory is not writable", which sounds like a missing mount rather
+# than a user. Running as root would also fix it and is exactly the wrong answer
+# in a container that compiles code somebody else wrote.
+RUN useradd -m -u 1001 builder \
+ && mkdir -p /workspace \
+ && chown builder /workspace \
+ && chown -R builder "$ANDROID_HOME"
 
 WORKDIR /builder
 COPY core/mobile-builder/package.json /builder/package.json

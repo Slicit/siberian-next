@@ -18,7 +18,7 @@ convenience.
 | SSH | `ssh siberian` (alias in `~/.ssh/config`, key `~/.ssh/siberian_debian`) |
 | Repo | `~/siberian-next`, remote over SSH, pushes as `Slicit` |
 | Engine | Docker 29.7.2 |
-| Services | 14 containers: 7 Rails apps, a mail worker, a build worker, the Router, two Postgres clusters, and Garage |
+| Services | 13 containers: 7 Rails apps, a mail worker, a build worker, the Router, two Postgres clusters, and Garage |
 | Domain | `siberian.test` over HTTPS, behind a local CA |
 
 The laptop is for authoring. The loop is edit locally, commit, push, pull on the
