@@ -139,7 +139,7 @@ class ModuleInstallerTest < ActiveSupport::TestCase
 
     capability = installed.capabilities.system.first
     assert_equal "cache.store.v1", capability.interface
-    assert_equal "http://demo-tasks/internal/cache", capability.internal_url
+    assert_equal "http://modules/demo-tasks/internal/cache", capability.internal_url
   end
 
   test "two modules claiming one interface exclusively is refused" do

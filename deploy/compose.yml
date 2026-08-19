@@ -52,7 +52,10 @@ services:
         # Module containers join this network with their short name as alias.
         # The Router resolves them by that alias and never learns the
         # uuid-prefixed container name.
-        aliases: [router]
+        # The Router answers to three names on the core network: itself, the door
+        # modules use to reach the core, and the door core services use to reach
+        # a module. It is the only container on both sides, which is why.
+        aliases: [router, core, modules]
 
   orchestrator:
     build:

@@ -42,7 +42,7 @@ class CapabilityTest < ActiveSupport::TestCase
       title: "Transport", endpoint: "/internal/mail"
     )
 
-    assert_equal "http://demo-tasks/internal/mail", capability.internal_url
+    assert_equal "http://modules/demo-tasks/internal/mail", capability.internal_url
     assert_raises(RuntimeError) { capability.url_for("example.test") }
   end
 

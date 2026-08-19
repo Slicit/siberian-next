@@ -57,7 +57,12 @@ class Capability < ApplicationRecord
   def internal_url
     raise "feature capabilities are not called by the core" if feature?
 
-    "http://#{installed_module.name}#{endpoint}"
+    # Through the Router, not straight at the module. A core service sits on the
+    # core network and has no route onto a module network; the Router is on
+    # both, which is the whole reason this address exists. Addressing the module
+    # directly resolves to nothing and presents as a DNS failure rather than as
+    # a missing door.
+    "http://modules/#{installed_module.name}#{endpoint}"
   end
 
   # Two modules claiming the same interface exclusively is a conflict an
