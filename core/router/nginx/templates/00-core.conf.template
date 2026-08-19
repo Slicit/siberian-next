@@ -11,6 +11,16 @@
 # looks like an app, and the session cookie has to be Secure to travel into a
 # module frame on another origin, so TLS is not a production-only concern here.
 
+# Module name to upstream, for the app's door at /m/<module>/. The block lives
+# here and its entries are written by the Orchestrator, because nginx refuses to
+# start on a variable no map defines and a module can be installed at any time.
+# An include that matches nothing is not an error, which is what makes an empty
+# installation start.
+map $module_name $module_upstream {
+  default "";
+  include /etc/nginx/conf.d/modules/upstreams/*.map;
+}
+
 # Plain HTTP exists only to send people to HTTPS.
 server {
   listen 80 default_server;
