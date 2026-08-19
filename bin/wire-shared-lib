@@ -50,14 +50,20 @@ end
 # page rather than a refusal, which a JSON client happily parses as data: the
 # first symptom is not "blocked host" but a bearer token full of markup.
 Rails.application.configure do
-  config.hosts += %w[orchestrator base auth mailer storage router]
+  # Only ever EXTEND an existing allowlist, never create one. An empty
+  # config.hosts means "allow every host", which is what the test environment
+  # relies on, and `+=` would quietly turn that into a restrictive list: every
+  # integration test then fails with "Blocked hosts: www.example.com".
+  if config.hosts.any?
+    config.hosts += %w[orchestrator base auth mailer storage router]
 
-  domain = ENV["SIBERIAN_DOMAIN"].presence
-  if domain
-    config.hosts << domain
-    # Leading dot matches every subdomain, which is how module origins arrive:
-    # <module>.apps.<domain>.
-    config.hosts << ".#{domain}"
+    domain = ENV["SIBERIAN_DOMAIN"].presence
+    if domain
+      config.hosts << domain
+      # Leading dot matches every subdomain, which is how module origins
+      # arrive: <module>.apps.<domain>.
+      config.hosts << ".#{domain}"
+    end
   end
 
   # Health checks come from the engine with whatever Host it feels like using.
