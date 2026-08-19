@@ -1,5 +1,5 @@
 ---
-status: active
+status: shipped
 branch: feat-access-control
 ---
 
@@ -27,15 +27,15 @@ Out of scope for this feature:
 
 ## Plan
 
-1. Permission vocabulary and matching rules.
-2. Roles, direct grants, and deny.
-3. Resolution into a flat set, stored with the session.
-4. Version stamping so a change invalidates without a broadcast.
-5. Shared checking code, so both interfaces answer identically.
-6. Auth admin API for users, roles, and grants.
-7. Backoffice: people, roles, and who can do what.
-8. Base App: product-side people and module access.
-9. Tests, and a smoke that proves a revoked permission actually stops working.
+1. ~~Permission vocabulary and matching rules.~~
+2. ~~Roles, direct grants, and deny.~~
+3. ~~Resolution into a flat set, stored with the session.~~
+4. ~~Version stamping so a change invalidates without a broadcast.~~
+5. ~~Shared checking code, so both interfaces answer identically.~~
+6. ~~Auth admin API for users, roles, and grants.~~
+7. ~~Backoffice: people, roles, and who can do what.~~
+8. ~~Base App: product-side people and module access.~~
+9. ~~Tests, and a smoke that proves a revoked permission actually stops working.~~
 
 ## Decisions
 
@@ -57,8 +57,26 @@ Out of scope for this feature:
 - **Why:** the useful real-world shape is "an operator, except for this one thing", and expressing that by carefully not granting something is fragile: the next role that grants it silently undoes the intent.
 - **Impact:** an explicit deny cannot be overridden by any role, which also means it cannot be accidentally granted back.
 
+## Outcome
+
+Shipped 2026-08-19. The measured shape is what was designed: validating a
+session is one row read, every later check is a set lookup, and a page asking a
+dozen times costs nothing extra.
+
+One bug worth remembering came out of it, and it was not in the model. Rails
+deduplicates commit callbacks by filter name, so 
+followed by  registers one callback rather than two.
+Editing a role therefore invalidated nobody, silently, and the callback list
+looked correct.
+
+The Backoffice overview was also readable by anybody signed in, which the
+per-controller declarations missed because the dashboard declared nothing. Both
+are covered now.
+
 ## Links
 
 - Branch: `feat-access-control`
-- PR: TBD
+- PR: none, merged to main
+- Shipped: 2026-08-19
+- Verify with: `bin/smoke-access`
 - Related features: `feat-core-services`

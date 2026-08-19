@@ -90,6 +90,8 @@ Core images build with the repository root as build context, so `lib/` can be co
 - **Reaching into a database somebody else owns is granted table by table, with a stated reason.** A grant with no table list is a request for everything, and an operator cannot meaningfully approve that. Every use of such a grant is audited, refusals included.
 - **Development runs over HTTPS.** The session cookie must be `Secure` to reach a module frame, so plain HTTP is not a simpler version of the product, it is a broken one.
 - **Modules address the core at `http://core/...`**, never a service name directly. They have no route to one.
+- **Access is resolved once per session and checked in memory.** Permissions are dotted strings with wildcards, resolved into a flat set when a session starts and invalidated by a version stamp on the user. A page may ask a dozen times without a query or a round trip. The cost is a stated ceiling: a withdrawn permission can survive up to 30 seconds, and anything that cannot tolerate that asks Auth for a fresh answer.
+- **A hidden link is not access control.** Every page checks, not only the navigation that led to it.
 
 ## Non-goals
 
