@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Loads the shared library from wherever it is: /app/lib inside a container,
-# or ../../lib when running from the monorepo. Explicit require rather than
+# Loads the shared library from wherever it is: /app/lib inside a container, or
+# ../../lib when running from the monorepo. Explicit require rather than
 # autoload, because these files define Siberian::* and Zeitwerk would expect
 # names derived from their paths.
 shared_lib = [
@@ -14,4 +14,23 @@ if shared_lib
   require "contracts"
 else
   Rails.logger&.warn("Shared lib/ not found. Manifest parsing and the engine driver are unavailable.")
+end
+
+# Core services address each other by internal DNS short name, so those names
+# have to be allowed Hosts. Rails answers an unlisted Host with an HTML error
+# page rather than a refusal, which a JSON client happily parses as data: the
+# first symptom is not "blocked host" but a bearer token full of markup.
+Rails.application.configure do
+  config.hosts += %w[orchestrator base auth mailer storage router]
+
+  domain = ENV["SIBERIAN_DOMAIN"].presence
+  if domain
+    config.hosts << domain
+    # Leading dot matches every subdomain, which is how module origins arrive:
+    # <module>.apps.<domain>.
+    config.hosts << ".#{domain}"
+  end
+
+  # Health checks come from the engine with whatever Host it feels like using.
+  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end
