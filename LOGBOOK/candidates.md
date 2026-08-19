@@ -6,6 +6,7 @@ Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 
 ## 2026-08-19
 
+- Nothing re-registers a module with a core service that did not exist when the module was installed. example-notes and example-relay are absent from every phone app because they were installed before the Mobile service, and only a reinstall tells it they exist. `RouteReconciler` solves the same class of problem for routing; service registrations have no equivalent. (trigger: gap, source: feat-mobile-apps verification 2026-08-19, agent: claude-code)
 - A second `mobile-builder` replica. The claim query is already `FOR UPDATE SKIP LOCKED`, so two workers need no coordination, but nothing scales itself: it is a compose change plus a decision about how many builds a box should run at once. (trigger: out-of-scope, source: feat-mobile-apps Intent 2026-08-19, agent: claude-code)
 - iOS binaries, through a macOS runner or EAS Build. The builder produces the configured Xcode project today, which is what either of those takes as input. (trigger: out-of-scope, source: feat-mobile-apps Intent 2026-08-19, agent: claude-code)
 - Over the air updates for a phone app that is already installed, and store submission. Both are a different mechanism from producing an artifact. (trigger: out-of-scope, source: feat-mobile-apps Intent 2026-08-19, agent: claude-code)
