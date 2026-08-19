@@ -1,5 +1,5 @@
 ---
-status: active
+status: shipped
 branch: feat-mail-queue
 ---
 
@@ -24,13 +24,13 @@ Out of scope for this feature:
 
 ## Plan
 
-1. Queue: a message belongs to a (module, domain), with a state and a next attempt time.
-2. Delivery through the `mail.transport.v1` interface, so an installed module can be the transport.
-3. Retry with exponential backoff, a cap, and a terminal dead state.
-4. Acknowledgement, so a module has to have seen an outcome before it stops being reported.
-5. API: enqueue, list, fetch, cancel, retry, acknowledge, and counts.
-6. A worker that runs as its own container.
-7. Tests, and a smoke that fails a delivery on purpose and watches it retry.
+1. ~~Queue: a message belongs to a (module, domain), with a state and a next attempt time.~~
+2. ~~Delivery through the `mail.transport.v1` interface, so an installed module can be the transport.~~
+3. ~~Retry with exponential backoff, a cap, and a terminal dead state.~~
+4. ~~Acknowledgement, so a module has to have seen an outcome before it stops being reported.~~
+5. ~~API: enqueue, list, fetch, cancel, retry, acknowledge, and counts.~~
+6. ~~A worker that runs as its own container.~~
+7. ~~Tests, and a smoke that fails a delivery on purpose and watches it retry.~~
 
 ## Decisions
 
@@ -56,8 +56,28 @@ Out of scope for this feature:
 - **Why:** a message that will never send should stop consuming attempts and start being a visible problem. Jitter because a transport that just came back should not be hit by the whole backlog in the same second.
 - **Impact:** attempts are recorded individually, so "why did this take four hours" has an answer rather than a guess.
 
+## Outcome
+
+Shipped 2026-08-19. A message goes in, the worker takes it, the outcome waits to
+be acknowledged, and a rejection stops rather than burning five more attempts.
+Delivery routes through an installed transport module when one exists and falls
+back to the core otherwise, which is the capability split doing real work rather
+than demonstrating itself.
+
+The feature also found a hole in the architecture. Modules could reach the core
+and nothing could reach a module: the Mailer resolved a transport living in a
+module, saw its URL, and had no route to it. There is now a door in that
+direction too, , and the Router is the only container
+that could provide it because it is the only one on every module network.
+
+The sharpest bug was mine and not the design: attempt numbers derived from the
+retry budget collided after a manual retry, because reviving resets the budget
+and keeps the history.
+
 ## Links
 
 - Branch: `feat-mail-queue`
-- PR: TBD
+- PR: none, merged to main
+- Shipped: 2026-08-19
+- Verify with: `bin/smoke-mail`
 - Related features: `feat-core-services`

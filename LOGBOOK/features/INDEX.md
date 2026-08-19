@@ -1,6 +1,6 @@
 # Feature index
 
-_Generated: 2026-08-19, by hand. Five features, all shipped._
+_Generated: 2026-08-19, by hand. Six features, all shipped._
 
 ## Active
 
@@ -19,6 +19,7 @@ None.
 | [Core services](feat-core-services.md) | Auth, Database, and the system/feature capability split | `bin/smoke-auth` |
 | [Interfaces](feat-interfaces.md) | Backoffice, Base App, two reference modules, local TLS | `bin/smoke-backoffice`, `bin/smoke-modules` |
 | [Access control](feat-access-control.md) | Roles, grants, deny, and user management on both sides | `bin/smoke-access` |
+| [Mail queue](feat-mail-queue.md) | Queue, acknowledgement, retry, and a door into modules | `bin/smoke-mail` |
 
 ## Abandoned
 
