@@ -20,6 +20,7 @@ convenience.
 | Engine | Docker 29.7.2 |
 | Services | 13 containers: 7 Rails apps, a mail worker, a build worker, the Router, two Postgres clusters, and Garage |
 | Domain | `siberian.test` over HTTPS, behind a local CA |
+| Assistant | `ANTHROPIC_API_KEY` in `.env`, read by the Mobile service alone. Absent, the app studio says so and everything else works |
 
 The laptop is for authoring. The loop is edit locally, commit, push, pull on the
 box, run there. Two things about that loop have bitten already:
@@ -197,6 +198,9 @@ Deliberate, not forgotten:
 - **No per-space storage quotas.** A module's `public` and `files` share one
   allowance.
 - **No OAuth, SSO, or 2FA.** Auth is password sessions.
+- **No assistant on this box.** The app studio proposes a configuration from a
+  description, which needs an `ANTHROPIC_API_KEY` in `.env`. Without one the
+  page says the assistant is not configured and the rest of it still works.
 - **No iOS binary.** Apple's toolchain runs on macOS, so the builder produces
   the configured Xcode project and stops. Signing and an `.ipa` need a macOS
   runner or EAS.

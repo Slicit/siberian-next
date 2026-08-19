@@ -61,3 +61,24 @@ echo "7. the app door, which is where module isolation lives without origins"
 echo "   /m/demo-tasks/      -> $(c -o /dev/null -w '%{http_code}' "https://$DOMAIN/m/demo-tasks/")   (expect 200)"
 echo "   /m/no-such-module/x -> $(c -o /dev/null -w '%{http_code}' "https://$DOMAIN/m/no-such-module/x")   (expect 404, not a 502 at a name that is not there)"
 echo "   /m/<capability-id>  -> $(c -o /dev/null -w '%{http_code}' "https://$DOMAIN/m/demo_tasks-task-list")   (expect 200, still the Base App frame)"
+
+echo
+echo "8. the product side, where somebody configures their own domain's app"
+J=/tmp/mob_user_jar.txt
+rm -f $J
+T=$(c "https://$DOMAIN/login" | grep -o 'name="authenticity_token" value="[^"]*"' | head -1 | sed 's/.*value="//; s/"//')
+c -o /dev/null -X POST \
+  --data-urlencode "authenticity_token=$T" \
+  --data-urlencode "email=operator@siberian.localhost" \
+  --data-urlencode "password=$PASSWORD" "https://$DOMAIN/login"
+
+echo "   GET /app          -> $(get "https://$DOMAIN/app")"
+grep -oE 'Describe it|Build for Android' $P | sort -u | sed 's/^/   /'
+
+# Says so rather than failing when no key is configured, which is a normal
+# installation rather than a broken one.
+echo "   ask the assistant -> $(c -o $P -w '%{http_code}' -X POST \
+  --data-urlencode "authenticity_token=$(token)" \
+  --data-urlencode "description=A field service app for engineers who work where there is no signal." \
+  "https://$DOMAIN/app/suggest")"
+grep -oE 'assistant is not configured|What it suggests' $P | head -1 | sed 's/^/   /'
