@@ -6,14 +6,30 @@
 # One rendered copy per served domain. Multi-domain means several of these, all
 # pointing at the same containers: isolation is at the data layer, not the
 # runtime layer (LOGBOOK.md, Conventions).
+#
+# Everything user-facing is HTTPS. Browsers refuse plain HTTP for anything that
+# looks like an app, and the session cookie has to be Secure to travel into a
+# module frame on another origin, so TLS is not a production-only concern here.
+
+# Plain HTTP exists only to send people to HTTPS.
+server {
+  listen 80 default_server;
+  server_name _;
+  return 301 https://$host$request_uri;
+}
 
 # Base App. The product shell that wraps installed modules in iframes.
 server {
-  listen 80;
+  listen 443 ssl;
+  http2 on;
+  server_name ${SIBERIAN_DOMAIN};
+
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server-key.pem;
+
   # Container names resolve through the network's embedded DNS. Its address
   # differs by engine, so it is rendered rather than hardcoded.
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
-  server_name ${SIBERIAN_DOMAIN};
 
   # Sign in and out are served by Auth on the main domain, so the cookie it
   # sets is scoped to the domain every module frame sits under. The Base App
@@ -21,45 +37,32 @@ server {
   location ~ ^/(login|logout)$ {
     set $upstream_auth "http://auth:3000";
     proxy_pass $upstream_auth;
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Siberian-Domain $host;
+    include /etc/nginx/siberian/forwarded_headers.conf;
   }
 
   location / {
     set $upstream_base "http://base:3000";
     proxy_pass $upstream_base;
-
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-
-    # The domain travels with every request. Auth and the Database service use
-    # it to resolve the per-domain database; the SDKs read it so module authors
-    # never handle it by hand.
-    proxy_set_header X-Siberian-Domain $host;
+    include /etc/nginx/siberian/forwarded_headers.conf;
   }
 }
 
 # Orchestrator. Operator-facing, deliberately on its own origin so a compromised
 # module frame has no path to it.
 server {
-  listen 80;
-  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+  listen 443 ssl;
+  http2 on;
   server_name admin.${SIBERIAN_DOMAIN};
+
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server-key.pem;
+
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
 
   location / {
     set $upstream_admin "http://orchestrator:3000";
     proxy_pass $upstream_admin;
-
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Siberian-Domain $host;
+    include /etc/nginx/siberian/forwarded_headers.conf;
 
     # The Backoffice is never framed, by anything.
     add_header X-Frame-Options DENY always;
@@ -74,19 +77,17 @@ server {
 # which is the rule LOGBOOK.md states for module to module traffic: it goes
 # through the Router, by construction rather than by convention.
 #
-# Not reachable from outside: this block answers only to the internal name
-# "core", which no public DNS resolves and no browser sends.
+# Plain HTTP on purpose: this is container to container on a private network,
+# and it answers only to the internal name "core", which no public DNS resolves
+# and no browser sends.
 #
 # Each location sets its upstream and then rewrites the prefix away. The order
-# matters: `rewrite ... break` ends the rewrite phase, and `set` belongs to the
+# matters: `rewrite ... break` ends the rewrite phase and `set` belongs to the
 # same module, so a `set` written after the rewrite never runs and nginx answers
-# 500 with "invalid URL prefix in ''".
-#
-# Each location rewrites the prefix away before proxying. proxy_pass does not
-# strip a location prefix when its argument is a variable, and the variable is
-# needed so nginx resolves the upstream per request rather than pinning it at
-# startup. Without the rewrite every call lands on the upstream's root, which
-# presents as a cheerful welcome page rather than an error.
+# 500 with "invalid URL prefix in ''". The rewrite itself is needed because
+# proxy_pass does not strip a location prefix when its argument is a variable,
+# and the variable is needed so nginx resolves the upstream per request rather
+# than pinning it at startup.
 server {
   listen 80;
   server_name core;

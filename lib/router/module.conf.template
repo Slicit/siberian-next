@@ -6,15 +6,22 @@
 #   ${MODULE_NAME}      manifest name, also the network alias of the entry container
 #   ${MODULE_PORT}      internal_port of the entry container
 #   ${SIBERIAN_DOMAIN}  the domain being served
+#   ${SIBERIAN_RESOLVER} address of the container network's embedded DNS
 
 server {
-  listen 80;
-  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+  listen 443 ssl;
+  http2 on;
   server_name ${MODULE_ORIGIN}.apps.${SIBERIAN_DOMAIN};
 
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server-key.pem;
+
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+
   location / {
-    # Resolved per request through the network's embedded DNS. The alias is the module's short
-    # name, so this line never learns the uuid-prefixed container name.
+    # Resolved per request through the network's embedded DNS. The alias is the
+    # module's short name, so this line never learns the uuid-prefixed container
+    # name.
     set $upstream_module "http://${MODULE_NAME}:${MODULE_PORT}";
     proxy_pass $upstream_module;
 
@@ -22,10 +29,11 @@ server {
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+
     # The served domain, not $host. $host here is the module origin
-    # (<module>.apps.<domain>), and a module that reports that as its domain asks
-    # the core for a database nobody provisioned. The template is rendered once
-    # per domain, so the right answer is already known at render time.
+    # (<module>.apps.<domain>), and a module that reports that as its domain
+    # asks the core for a database nobody provisioned. The template is rendered
+    # once per domain, so the right answer is already known at render time.
     proxy_set_header X-Siberian-Domain ${SIBERIAN_DOMAIN};
 
     # Framed only by the Base App on the parent domain, never by another module

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Generates a local certificate authority and a wildcard certificate for
+# development.
+#
+# Two reasons this is not optional. Browsers hardcode .localhost to 127.0.0.1,
+# so a development domain on that TLD can never point at another machine; and
+# they increasingly refuse plain HTTP for anything that looks like an app. So
+# development uses a real-shaped domain over real TLS, signed by a CA you trust
+# once.
+#
+# The wildcards matter: certificates match one label at a time, so
+# *.siberian.test does NOT cover tasks.apps.siberian.test. Every level a module
+# origin can appear at needs its own entry, which is exactly the kind of thing
+# that is discovered at 2am rather than read in a spec.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+DOMAIN="${SIBERIAN_DOMAIN:-siberian.test}"
+OUT="deploy/certs"
+DAYS="${CERT_DAYS:-825}"
+
+mkdir -p "$OUT"
+
+if [ -f "$OUT/ca.pem" ] && [ -f "$OUT/server.pem" ] && [ "${FORCE:-}" != "true" ]; then
+  echo "Certificates already exist in $OUT. Set FORCE=true to regenerate."
+  openssl x509 -in "$OUT/server.pem" -noout -subject -enddate
+  exit 0
+fi
+
+echo "Generating a development CA..."
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+  -keyout "$OUT/ca-key.pem" -out "$OUT/ca.pem" \
+  -subj "/CN=Siberian Development CA/O=Siberian" 2>/dev/null
+
+cat > "$OUT/server.cnf" <<CNF
+[req]
+distinguished_name = dn
+req_extensions     = ext
+prompt             = no
+
+[dn]
+CN = ${DOMAIN}
+O  = Siberian Development
+
+[ext]
+subjectAltName   = @alt
+basicConstraints = CA:FALSE
+keyUsage         = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+
+[alt]
+DNS.1 = ${DOMAIN}
+DNS.2 = *.${DOMAIN}
+DNS.3 = *.apps.${DOMAIN}
+DNS.4 = localhost
+IP.1  = 127.0.0.1
+CNF
+
+echo "Generating a server certificate for ${DOMAIN}, *.${DOMAIN}, *.apps.${DOMAIN}..."
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout "$OUT/server-key.pem" -out "$OUT/server.csr" \
+  -config "$OUT/server.cnf" 2>/dev/null
+
+openssl x509 -req -in "$OUT/server.csr" -days "$DAYS" \
+  -CA "$OUT/ca.pem" -CAkey "$OUT/ca-key.pem" -CAcreateserial \
+  -out "$OUT/server.pem" \
+  -extfile "$OUT/server.cnf" -extensions ext 2>/dev/null
+
+rm -f "$OUT/server.csr" "$OUT/ca.pem.srl" "$OUT/.srl"
+chmod 600 "$OUT"/*-key.pem
+
+echo
+openssl x509 -in "$OUT/server.pem" -noout -subject -ext subjectAltName -enddate
+echo
+echo "Trust $OUT/ca.pem on any machine that will open the app."
