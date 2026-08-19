@@ -54,6 +54,9 @@ class ModuleUninstaller
 
   def withdraw_routes
     attempt("remove router config") { @router.remove(@installed) }
+    # Rewritten from what is still installed, so the removed module stops being
+    # addressable at /m/<name>/ at the same moment its origin stops answering.
+    attempt("refresh module upstreams") { @router.refresh_upstreams!(InstalledModule.live.where.not(id: @installed.id)) }
     attempt("reload router") { @router.reload }
     attempt("detach router from module network") { @router.leave_network(@installed.network_name) }
   end

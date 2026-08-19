@@ -48,8 +48,12 @@ server {
   location ~ "^/m/([a-z0-9][a-z0-9-]*)/(.*)$" {
     set $module_name $1;
     set $module_path $2;
-    set $upstream_module "http://$module_name";
+    # An unknown module maps to nothing. Answering 404 here is the difference
+    # between "no such module" and a 502 from proxying at a name that is not
+    # there.
+    if ($module_upstream = "") { return 404 "no such module\n"; }
 
+    set $upstream_module "http://$module_upstream";
     proxy_pass $upstream_module/$module_path$is_args$args;
     include /etc/nginx/siberian/forwarded_headers.conf;
 
