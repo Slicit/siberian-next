@@ -1,0 +1,42 @@
+<% content_for :title, "Overview" %>
+
+<div style="margin-bottom:1.4rem">
+  <h1>Good to see you, <%= current_user.name %></h1>
+  <p class="muted" style="margin:0">
+    Everything below arrived with a module. Nothing in this shell names one.
+  </p>
+</div>
+
+<% if @capabilities.any? %>
+  <div class="grid">
+    <% @capabilities.each do |capability| %>
+      <a class="card" href="<%= module_frame_path(capability.slug) %>" style="text-decoration:none; color:inherit">
+        <div class="spread" style="margin-bottom:.4rem">
+          <h2 style="margin:0"><%= capability.title %></h2>
+          <% unless capability.healthy? %>
+            <span class="badge warn"><%= capability.status %></span>
+          <% end %>
+        </div>
+        <div class="faint mono" style="font-size:.76rem"><%= capability.module_title || capability.module_name %></div>
+        <div class="muted" style="font-size:.85rem; margin-top:.5rem">
+          <%= CapabilityDirectory::AREAS.fetch(capability.area, capability.area) %>
+        </div>
+      </a>
+    <% end %>
+  </div>
+<% else %>
+  <div class="empty">
+    <strong>Nothing installed yet.</strong>
+    <p class="muted" style="margin:.6rem 0 0">
+      This is the product shell. Modules install into it and appear here and in
+      the sidebar, each in the area it declared.
+    </p>
+    <% if current_user.operator? %>
+      <div style="margin-top:1rem">
+        <a class="button primary" href="<%= request.scheme %>://admin.<%= current_domain %>/catalog">
+          Install a module
+        </a>
+      </div>
+    <% end %>
+  </div>
+<% end %>

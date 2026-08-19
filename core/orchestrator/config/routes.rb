@@ -18,5 +18,11 @@ Rails.application.routes.draw do
   get "interfaces", to: "interfaces#index", as: :interfaces
   get "activity", to: "activities#index", as: :activity
 
+  # What the Base App reads to build its shell. The shell never learns a
+  # container name, a uuid, or a network: a module is a title, an area, a URL.
+  namespace :internal do
+    get "capabilities", to: "capabilities#index"
+  end
+
   get "up", to: "rails/health#show", as: :rails_health_check
 end

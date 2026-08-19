@@ -1,0 +1,34 @@
+<% content_for :title, @capability.title %>
+
+<div class="spread" style="margin-bottom:1rem">
+  <div>
+    <h1 style="margin:0"><%= @capability.title %></h1>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      Served by <%= @capability.module_title || @capability.module_name %>
+      at <span class="mono"><%= URI.parse(@capability.url.to_s).host rescue @capability.module_name %></span>
+    </p>
+  </div>
+  <% unless @capability.healthy? %>
+    <span class="badge warn"><%= @capability.status %></span>
+  <% end %>
+</div>
+
+<%#
+  The module renders in a frame at its own origin. It shares no CSS, no
+  JavaScript, and no DOM with this page, and the browser enforces that rather
+  than a convention. sandbox is deliberately generous about what the module may
+  do inside its own frame and silent about reaching out of it: allow-same-origin
+  refers to the module's origin, not ours.
+%>
+<div class="frame-wrap">
+  <iframe
+    src="<%= @frame_url %>"
+    title="<%= @capability.title %>"
+    loading="lazy"
+    referrerpolicy="strict-origin"
+    sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-downloads"></iframe>
+</div>
+
+<p class="faint" style="font-size:.78rem; margin-top:.6rem">
+  <%= @capability.id %>
+</p>

@@ -95,6 +95,7 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_base
       SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
       SIBERIAN_AUTH_URL: http://auth:3000
+      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
     volumes:
       - ../core/base:/app
       - ../lib:/app/lib
