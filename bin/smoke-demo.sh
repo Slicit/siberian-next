@@ -52,3 +52,15 @@ echo "attach a file    -> $(c -b "$JAR" -o /dev/null -w '%{http_code}' -X POST \
 echo "read it back     -> $(c -b "$JAR" -o /tmp/sib_back -w '%{http_code}' \
   "https://tasks.apps.$DOMAIN/tasks/$ID/file")"
 echo "   content: $(cat /tmp/sib_back)"
+
+# The menu is on every page, and it was not: the phone app page loaded without
+# it and every module vanished from the shell with nothing reporting a thing.
+# Checked on a page that is not the overview, because the overview was always
+# the one that worked.
+echo
+echo "the shell menu, on a page that is not the overview:"
+for path in "/" "/app" "/m/demo_tasks-task-list"; do
+  c -b "$JAR" -o /tmp/sib_menu "https://$DOMAIN$path"
+  found=$(grep -oE '<span class="grow">[^<]+' /tmp/sib_menu | sed 's|<span class="grow">||' | sort | tr '\n' ' ')
+  printf "   %-26s %s\n" "$path" "${found:-NOTHING}"
+done

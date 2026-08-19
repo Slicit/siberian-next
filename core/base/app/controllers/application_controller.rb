@@ -6,6 +6,13 @@ class ApplicationController < ActionController::Base
 
   before_action :require_user!
 
+  # The menu is on every page, so it is loaded for every page rather than by
+  # each controller that happens to remember. It was the second: the phone app
+  # page did not set it, and the layout tolerated the absence with `@groups ||
+  # []`, so the modules simply disappeared from the menu on that one page and
+  # nothing anywhere reported a thing.
+  before_action :load_menu
+
   helper_method :current_user, :current_domain, :directory, :allow?
 
   private
@@ -38,6 +45,15 @@ class ApplicationController < ActionController::Base
   # rendering a sidebar of things that answer 403.
   def visible_capabilities(capabilities)
     capabilities.select { |capability| allow?("module.#{capability.module_name}.use") }
+  end
+
+  # Never fatal. A shell that will not render because the directory is briefly
+  # unreachable is worse than one with an empty menu and a page that works.
+  def load_menu
+    @groups = directory.grouped(domain: current_domain, only: method(:visible_capabilities)) || []
+  rescue StandardError => e
+    Rails.logger.warn("could not load the menu: #{e.message}")
+    @groups = []
   end
 
   def directory

@@ -61,6 +61,8 @@ Rules:
 
 - A full disk does not announce itself as one. When the box reached 100 percent, Postgres refused writes and several services failed in ways that pointed at them rather than at the filesystem; the cause was build workspaces nobody was deleting. `df -h /` is worth being the first thing checked when several unrelated things break at once.
 
+- A layout that tolerates missing data with `|| []` turns a controller that forgot into a menu that is quietly short. Two menu bugs in this codebase were the same shape: the entry existed, nothing raised, and the only symptom was one fewer link on some pages. Load what every page needs in a `before_action`, and keep the fallback only where a page genuinely halts before it (the refusal page), with a comment saying so.
+
 ## Glossary
 
 <!-- Project-specific terms an outside reader would not know. -->
