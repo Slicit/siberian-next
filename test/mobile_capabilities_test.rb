@@ -27,12 +27,24 @@ class MobileCapabilitiesTest < Minitest::Test
     end
   end
 
-  # Apple refuses a build that asks for a permission without a sentence
-  # explaining it, so anything that prompts somebody carries one.
-  def test_a_capability_that_interrupts_somebody_explains_itself
-    MobileCapabilities::CATALOGUE.select { |capability| capability[:severity] == :high }.each do |capability|
-      refute_nil capability[:usage], "#{capability[:id]} asks a lot and says nothing about why"
+  # Apple refuses a build that prompts for a permission without a sentence
+  # explaining it. Prompting is not the same as asking a lot: in-app purchases
+  # are serious and show no permission dialog, and the catalogue says which is
+  # which rather than leaving it to be inferred from severity.
+  def test_a_capability_that_stops_somebody_and_asks_explains_itself
+    prompting = MobileCapabilities::CATALOGUE.select { |capability| capability[:prompts] }
+
+    refute_empty prompting
+    prompting.each do |capability|
+      refute_nil capability[:usage], "#{capability[:id]} prompts and says nothing about why"
     end
+  end
+
+  def test_a_capability_that_never_prompts_needs_no_usage_string
+    silent = MobileCapabilities::CATALOGUE.reject { |capability| capability[:prompts] }
+
+    assert_includes silent.map { |capability| capability[:id] }, "purchases",
+                    "StoreKit shows its own system UI and asks for no permission"
   end
 
   def test_a_setting_that_is_optional_is_not_required
