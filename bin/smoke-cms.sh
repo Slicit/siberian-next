@@ -69,9 +69,6 @@ echo "   media URL: $(grep -oE 'https://[^"]*cms_shot.png' /tmp/cms_api2 | head 
 echo "   serves      -> $(c -o /dev/null -w '%{http_code}' "$(grep -oE 'https://[^"]*cms_shot.png' /tmp/cms_api2 | head -1)")   (expect 200)"
 
 echo
-echo "8. tidy up                -> $(c -o /dev/null -w '%{http_code}' -X POST $MODULE/$SLUG/delete)   (expect 302)"
-
-echo
 echo "9. linking pages"
 OTHER="${SLUG}-b"
 c -o /dev/null -X POST --data-urlencode "title=$OTHER" $MODULE/pages > /dev/null
@@ -99,3 +96,6 @@ print("   next:             ", (payload.get("next") or {}).get("slug"))
 PYEOF
 
 c -o /dev/null -X POST $MODULE/$OTHER/delete
+
+echo
+echo "10. tidy up               -> $(c -o /dev/null -w '%{http_code}' -X POST $MODULE/$SLUG/delete)   (expect 302, and the blocks go with it)"
