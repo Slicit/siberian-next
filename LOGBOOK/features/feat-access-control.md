@@ -64,8 +64,8 @@ session is one row read, every later check is a set lookup, and a page asking a
 dozen times costs nothing extra.
 
 One bug worth remembering came out of it, and it was not in the model. Rails
-deduplicates commit callbacks by filter name, so 
-followed by  registers one callback rather than two.
+deduplicates commit callbacks by filter name, so a second declaration naming the
+same method replaces the first rather than adding to it.
 Editing a role therefore invalidated nobody, silently, and the callback list
 looked correct.
 
