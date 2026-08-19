@@ -18,6 +18,7 @@ convenience.
 | SSH | `ssh siberian` (alias in `~/.ssh/config`, key `~/.ssh/siberian_debian`) |
 | Repo | `~/siberian-next`, remote over SSH, pushes as `Slicit` |
 | Engine | Docker 29.7.2 |
+| Services | 11 containers: 6 Rails apps, a mail worker, the Router, two Postgres clusters, and Garage |
 | Domain | `siberian.test` over HTTPS, behind a local CA |
 
 The laptop is for authoring. The loop is edit locally, commit, push, pull on the
@@ -81,9 +82,16 @@ CA exists on a laptop by default.
 | `https://admin.siberian.test` | the Backoffice, operators only |
 | `https://<module>.apps.siberian.test` | one module, its own origin |
 
-Demo accounts, seeded and deliberately obvious: `operator@siberian.localhost`
-and `user@siberian.localhost`, password `siberian-demo`. The email suffix is an
-identifier, not a hostname, which is why it did not change with the domain.
+Demo accounts, seeded and deliberately obvious, password `siberian-demo`:
+
+| Account | Role | Can |
+|---|---|---|
+| `owner@siberian.localhost` | owner | everything, including changing who else can do what |
+| `operator@siberian.localhost` | operator | run the system, but not rewrite access |
+| `user@siberian.localhost` | member | use the product and its modules, nothing in the Backoffice |
+
+The email suffix is an identifier, not a hostname, which is why it did not
+change when the domain did.
 
 ## Checking it works
 
@@ -95,11 +103,19 @@ Every one of these drives the real stack. They are the fastest way to answer
 ./bin/test-lib         the shared library suite
 ./bin/test-engine      the engine driver against a real daemon
 ./bin/smoke-auth       sign in, and the cookie lands scoped and Secure
+./bin/smoke-access     every page against three roles, and a surgical deny
 ./bin/smoke-storage    register, provision, and every verb and refusal
+./bin/smoke-quotas     all three quota levels, including a refusal from each
+./bin/smoke-mail       enqueue, deliver, acknowledge, and a permanent rejection
 ./bin/smoke-backoffice every Backoffice page, as an operator and as a plain user
 ./bin/smoke-demo       the demo module end to end over HTTPS
 ./bin/smoke-modules    both reference modules, PHP and Python
 ```
+
+Two of them are slow on purpose. `smoke-access` waits out the 30 second
+permission cache to prove a revocation actually bites, and `smoke-mail` waits
+for the worker to pick up a message. Shortening either would test a shorter
+window than the one that ships.
 
 Rails suites run per service:
 
@@ -129,14 +145,36 @@ resolved address for `valid=10s`. It recovers on its own.
 from a previous uninstall. Reinstalling reactivates it; if not, check
 `pg_roles.rolcanlogin` on `moduledb`.
 
+**A core service cannot reach a module.** It addresses it as
+`http://modules/<name>/<path>`, never by the module's own name: only the Router
+is on both networks. Addressing it directly fails DNS resolution, which reads as
+a broken module rather than as a missing door.
+
+**Mail is queued and never sends.** Check the worker is up, not just the mailer:
+they are separate containers. `docker compose ... logs mailer-worker` shows the
+claim query and every delivery.
+
+**A permission change has not taken effect.** It is cached for 30 seconds per
+session. Wait, or use the endpoint that never caches.
+
 `LOGBOOK/notes.md` has the full list, including the ones that cost the most time.
 
 ## What is not built
 
-- No Mailer beyond a health endpoint.
-- No SDKs. Modules hand-roll their HTTP, which is the point of the contract
-  being small but not an argument against helping.
-- No `tmp` sweeper in Storage, and no Router rule for `/-/public/<path>`.
-- No Backoffice view of the Database audit trail, which exists and nobody can
-  read without curl.
-- No wildcard DNS, so adding a module means editing a hosts file.
+Deliberate, not forgotten:
+
+- **No SDKs.** Modules hand-roll their HTTP, which is the point of the contract
+  being small, but not an argument against helping.
+- **No wildcard DNS.** Adding a module means editing a hosts file, which does
+  not scale past a handful and is the sharpest rough edge in the setup.
+- **No Backoffice view of the mail queue or the database audit trail.** Both
+  exist behind `/admin` endpoints and an operator currently needs curl to see
+  why mail is not arriving, which is the moment they would least want to.
+- **No alerting anywhere.** The Backoffice shows storage usage; a domain filling
+  up overnight tells nobody.
+- **No `tmp` sweeper in Storage**, and no Router rule for `/-/public/<path>`.
+  No module has needed either, and building them first would be guessing.
+- **No templates in the Mailer**, no inbound mail, no bounce handling.
+- **No per-space storage quotas.** A module's `public` and `files` share one
+  allowance.
+- **No OAuth, SSO, or 2FA.** Auth is password sessions.

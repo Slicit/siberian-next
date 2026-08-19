@@ -124,5 +124,5 @@ Do not read `LOGBOOK/ideas.md` unless the user explicitly asks; it is the human-
 
 - LOGBOOK adopted: 2026-08-19
 - Index regenerated: 2026-08-19
-- Last reviewed: 2026-08-19, after the beta. Architecture, Stack, Conventions, and Repo layout were all corrected against what had actually been built.
+- Last reviewed: 2026-08-19, after access control, the mail queue, and storage quotas. Architecture, Stack, Conventions, and Repo layout are checked against the tree rather than remembered.
 - Feature count: see `LOGBOOK/features/INDEX.md`
