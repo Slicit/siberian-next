@@ -38,10 +38,16 @@ permissions:
       access: owner
       scope: per_domain
 
-    # Read against a database this module does not own. Read is the default.
+    # Read against a database this module does not own. Granted table by table
+    # with a stated reason, because an operator cannot approve "read the
+    # configuration store" in the abstract. Every use is audited.
     - target: core.configuration
       access: read
       scope: global
+      tables:
+        - settings
+        - feature_flags
+      reason: Reads the locale and date format so notes render the way the rest of the product does.
 
   storage:
     # Private durable files, plus a public space for assets the Router serves

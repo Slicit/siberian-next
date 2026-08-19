@@ -61,6 +61,11 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_orchestrator
       SIBERIAN_ENGINE: docker
       SIBERIAN_AUTH_URL: http://auth:3000
+      SIBERIAN_DATABASE_URL_SERVICE: http://database:3000
+      SIBERIAN_STORAGE_URL: http://storage:3000
+      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      # Joined to every module network so modules can reach Postgres directly.
+      SIBERIAN_MODULEDB_CONTAINER: siberian-moduledb-1
       SIBERIAN_ROUTER_CONFIG_DIR: /var/lib/siberian/router
       SIBERIAN_ROUTER_CONTAINER: siberian-router-1
       # Where the Orchestrator looks for installable modules. A directory for
@@ -151,6 +156,44 @@ services:
     # unreachable from anything else, modules included.
     networks: [core, storage]
 
+  moduledb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${MODULEDB_PASSWORD:-moduledb_dev_only}
+      POSTGRES_DB: postgres
+    volumes:
+      - moduledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Joined to each module network at install time, under the alias "db", so a
+    # module connects directly with the credentials it was issued. Postgres
+    # roles are the isolation, which is what they are for.
+    networks: [core]
+
+  database:
+    build:
+      <<: *rails_build
+      args:
+        SERVICE: database
+    environment:
+      <<: *rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_database
+      MODULEDB_ADMIN_URL: postgres://postgres:${MODULEDB_PASSWORD:-moduledb_dev_only}@moduledb:5432/postgres
+      MODULEDB_HOST: db
+      MODULEDB_PORT: "5432"
+    volumes:
+      - ../core/database:/app
+      - ../lib:/app/lib
+    depends_on:
+      configuration:
+        condition: service_healthy
+      moduledb:
+        condition: service_healthy
+    networks: [core]
+
   garage:
     image: dxflrs/garage:v2.3.0
     volumes:
@@ -162,6 +205,7 @@ services:
 
 volumes:
   router_modules:
+  moduledb_data:
   configuration_data:
   garage_meta:
   garage_data:

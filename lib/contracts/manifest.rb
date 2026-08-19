@@ -127,19 +127,38 @@ module Siberian
 
       def storage_spaces = Array(storage_grant && storage_grant["spaces"])
 
+      # Databases this module owns, one per domain by default.
+      def owned_database_grants = database_grants.select { |grant| grant["name"] }
+
+      # Databases somebody else owns. Table by table, with a reason, and every
+      # use of one is audited.
+      def cross_database_grants = database_grants.select { |grant| grant["target"] }
+
       # Everything an operator has to approve at install time, flattened into
       # one list so the Backoffice can show it as one list.
       def requested_permissions
         requests = []
 
         database_grants.each do |grant|
-          target = grant["name"] ? "a new database (#{grant['name']})" : "the existing #{grant['target']} database"
-          requests << {
-            kind: "database",
-            summary: "#{grant['access']} access to #{target}",
-            detail: "scope: #{grant['scope'] || 'per_domain'}",
-            severity: grant["access"] == "read" ? :low : :high
-          }
+          if grant["name"]
+            requests << {
+              kind: "database",
+              summary: "#{grant['access']} access to a new database (#{grant['name']})",
+              detail: "scope: #{grant['scope'] || 'per_domain'}",
+              severity: grant["access"] == "read" ? :low : :high
+            }
+          else
+            tables = Array(grant["tables"])
+            requests << {
+              kind: "database",
+              summary: "#{grant['access']} access to #{tables.length} table(s) in #{grant['target']}",
+              detail: "tables: #{tables.join(', ')} · #{grant['reason']}",
+              # Reading somebody else's data is never routine, whatever the
+              # verb. Every use of this grant lands in the audit trail.
+              severity: grant["access"] == "read" ? :medium : :high,
+              audited: true
+            }
+          end
         end
 
         if storage_spaces.any?
@@ -217,6 +236,23 @@ module Siberian
             errors << "permissions.databases[#{index}] sets both name and target; it must set exactly one"
           elsif grant["name"].nil? && grant["target"].nil?
             errors << "permissions.databases[#{index}] must set either name or target"
+          end
+
+          next unless grant["target"]
+
+          # Reaching into a database somebody else owns is granted table by
+          # table. A grant with no table list is a request for everything, and
+          # an operator cannot meaningfully approve that.
+          if Array(grant["tables"]).empty?
+            errors << "permissions.databases[#{index}] targets #{grant['target']} but names no tables"
+          end
+
+          if grant["reason"].to_s.strip.empty?
+            errors << "permissions.databases[#{index}] targets #{grant['target']} but gives no reason"
+          end
+
+          if grant["access"] == "owner"
+            errors << "permissions.databases[#{index}] cannot own #{grant['target']}; it belongs to somebody else"
           end
         end
 

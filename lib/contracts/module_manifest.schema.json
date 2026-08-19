@@ -173,6 +173,19 @@
                 ],
                 "default": "per_domain",
                 "description": "per_domain gives one database per domain, which is how domain isolation works. global is a single shared database and needs justification."
+              },
+              "tables": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Named tables in the target database this module may read. Required when target is set: reaching into a database somebody else owns is granted table by table, never wholesale, and every grant is written to the audit trail."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why this module needs the access. Shown to the operator on the install review screen. Required for a target grant, because an operator cannot approve what nobody explained."
               }
             },
             "oneOf": [
@@ -185,6 +198,21 @@
                 "required": [
                   "target"
                 ]
+              }
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "target"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "tables",
+                    "reason"
+                  ]
+                }
               }
             ]
           }
