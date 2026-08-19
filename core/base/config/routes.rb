@@ -12,6 +12,8 @@ Rails.application.routes.draw do
   post "app/suggest", to: "phone_app#suggest", as: :suggest_phone_app
   patch "app", to: "phone_app#apply", as: :apply_phone_app
   patch "app/capabilities/:capability", to: "phone_app#update_capability", as: :phone_app_capability
+  post "app/splash", to: "phone_app#upload_splash", as: :phone_app_splash
+  delete "app/splash", to: "phone_app#remove_splash"
   post "app/build", to: "phone_app#build", as: :build_phone_app
 
   get "up", to: "rails/health#show", as: :rails_health_check

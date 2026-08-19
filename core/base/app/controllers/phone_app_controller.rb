@@ -65,6 +65,31 @@ class PhoneAppController < ApplicationController
     redirect_to phone_app_path, notice: describe(result, "Updated.")
   end
 
+  # Same two uploads as the Backoffice, on the domain this page is already
+  # scoped to. Which one is decided by the field the form used, never by
+  # sniffing the file.
+  def upload_splash
+    result = if params[:animation].present?
+               mobile.upload_splash_animation(current_domain, params[:animation].read,
+                                              duration_ms: params[:duration_ms])
+             elsif params[:image].present?
+               mobile.upload_splash(current_domain, params[:image].read, background: params[:background])
+             end
+
+    return redirect_to phone_app_path, alert: "Choose a file first." if result.nil? && params[:image].blank? && params[:animation].blank?
+
+    if result && result["ok"]
+      redirect_to phone_app_path, notice: ["Splash saved.", Array(result["warnings"]).join(" ")].join(" ").strip
+    else
+      redirect_to phone_app_path, alert: describe(result, nil)
+    end
+  end
+
+  def remove_splash
+    result = mobile.remove_splash(current_domain, kind: params[:kind].presence || "image")
+    redirect_to phone_app_path, notice: describe(result, "Splash removed.")
+  end
+
   def build
     result = mobile.queue_build(domain: current_domain,
                                 platform: params[:platform].presence || "android",
