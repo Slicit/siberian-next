@@ -8,6 +8,8 @@ Rails.application.routes.draw do
   post "modules/:name/refresh", to: "modules#refresh", as: :refresh_module
   delete "modules/:name", to: "modules#destroy"
 
+  post "routes/reconcile", to: "routes#reconcile", as: :reconcile_routes
+
   get "catalog", to: "catalog#index", as: :catalog
   get "catalog/:name", to: "catalog#show", as: :catalog_entry
   post "catalog/:name/install", to: "catalog#create", as: :install_catalog_entry

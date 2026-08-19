@@ -46,10 +46,10 @@ class DomainsController < ApplicationController
   # Every installed module needs a server block for the new domain, or the
   # domain exists in the database and nowhere else.
   def republish_routes
-    router = RouterConfig.new
-    domains = Domain.ordered.to_a
-    InstalledModule.live.find_each { |installed| router.write(installed, domains) }
-    router.reload
+    result = RouteReconciler.new.call
+    return if result.ok?
+
+    flash[:alert] = "Domain saved, but routing did not fully republish: #{result.errors.join('; ')}"
   rescue StandardError => e
     flash[:alert] = "Domain saved, but the router did not reload: #{e.message}"
   end

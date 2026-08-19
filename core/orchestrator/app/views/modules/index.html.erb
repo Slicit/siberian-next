@@ -5,7 +5,11 @@
     <h1>Modules</h1>
     <p class="muted" style="margin:0"><%= pluralize(@modules.size, "module") %> installed.</p>
   </div>
-  <%= link_to "Install a module", catalog_path, class: "button primary" %>
+  <div class="row">
+    <%= button_to "Repair routing", reconcile_routes_path, class: "button",
+          form: { data: { turbo_confirm: "Reattach the Router to every module network and rewrite its config?" } } %>
+    <%= link_to "Install a module", catalog_path, class: "button primary" %>
+  </div>
 </div>
 
 <% if @modules.any? %>
