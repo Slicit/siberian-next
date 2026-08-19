@@ -30,7 +30,7 @@ echo "signed in as operator"
 
 echo
 echo "1. the phone apps page -> $(get "https://core.$DOMAIN/mobile")"
-ID=$(grep -A6 ">$DOMAIN<" $P | grep -oE 'mobile/[0-9]+' | head -1 | grep -oE '[0-9]+')
+ID=$(grep -A30 ">$DOMAIN<" $P | grep -oE "mobile/[0-9]+" | head -1 | grep -oE "[0-9]+")
 echo "   $DOMAIN is domain $ID"
 
 echo "2. the app for it      -> $(get "https://core.$DOMAIN/mobile/$ID")"
