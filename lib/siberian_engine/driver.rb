@@ -48,6 +48,14 @@ module Siberian
       # @return [Array<Hash>] engine-neutral summaries: id, name, status, labels
       def list(labels: {}) = not_implemented(__method__)
 
+      # Runs a command inside a running container. The Router is reconfigured
+      # by writing files and then telling nginx to reload, and that second half
+      # needs this. Kubernetes has the same capability, so the interface can
+      # carry it honestly.
+      #
+      # @return [String] captured output, or "" when detached
+      def exec_in(id, command, detach: false) = not_implemented(__method__)
+
       # Images. A module declares images it does not ship, so fetching them is
       # an engine capability the Orchestrator needs. The interface grew for it
       # rather than letting the caller reach past the driver.

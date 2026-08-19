@@ -31,6 +31,10 @@ services:
       SIBERIAN_RESOLVER: ${SIBERIAN_RESOLVER:-127.0.0.11}
     ports:
       - "${SIBERIAN_HTTP_PORT:-8080}:80"
+    volumes:
+      # Written by the Orchestrator on install, read by nginx after a reload.
+      # A shared volume rather than an API, because nginx reads files.
+      - router_modules:/etc/nginx/conf.d/modules
     depends_on:
       base:
         condition: service_started
@@ -51,12 +55,15 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432
       SIBERIAN_DOMAIN: ${SIBERIAN_DOMAIN:-siberian.localhost}
       SIBERIAN_ENGINE: docker
+      SIBERIAN_ROUTER_CONFIG_DIR: /var/lib/siberian/router
+      SIBERIAN_ROUTER_CONTAINER: siberian-router-1
     volumes:
       - ../core/orchestrator:/app
       - ../lib:/app/lib
       # The Orchestrator drives the engine, so it is the one core service that
       # reaches the daemon. Nothing else gets the socket.
       - /var/run/docker.sock:/var/run/docker.sock
+      - router_modules:/var/lib/siberian/router
     depends_on:
       configuration:
         condition: service_healthy
@@ -134,6 +141,7 @@ services:
     networks: [storage]
 
 volumes:
+  router_modules:
   configuration_data:
   garage_meta:
   garage_data:

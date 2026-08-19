@@ -175,6 +175,27 @@ module Siberian
           end
         end
 
+        # Execution ----------------------------------------------------------
+
+        def exec_in(id, command, detach: false)
+          created = @http.post("/containers/#{id}/exec", body: {
+            "Cmd" => Array(command),
+            "AttachStdout" => !detach,
+            "AttachStderr" => !detach,
+            "Tty" => false
+          })
+          exec_id = created.json.fetch("Id")
+
+          output = +""
+          @http.stream("/exec/#{exec_id}/start", method: "POST",
+                                                 body: { "Detach" => detach, "Tty" => false }) do |chunk|
+            demultiplex(chunk) { |line| output << line } unless detach
+          end
+          output
+        rescue UnixHTTP::Error => e
+          raise translate(e, id)
+        end
+
         # Images -------------------------------------------------------------
 
         # Pulling is an engine capability the Orchestrator genuinely needs, so
