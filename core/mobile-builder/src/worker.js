@@ -71,10 +71,29 @@ async function build({ build_id: id, plan }) {
 
   if (plan.platform === "ios") {
     // No compile step exists here, and pretending otherwise would produce
-    // something that is not an app. The configured project is the artifact:
-    // it is what a macOS runner needs and all this container can honestly make.
-    await step("archive the iOS project", "zip", ["-qr", "../ios-project.zip", "ios"]);
-    return { file: path.join(WORKSPACES, "ios-project.zip"), type: "application/zip", log: log.join("\n\n"), started };
+    // something that is not an app. The configured project is the artifact: it
+    // is what a macOS runner needs and all this container can honestly make.
+    //
+    // The JavaScript side goes in with it. The generated Podfile resolves React
+    // Native pods through node_modules, so an ios/ directory on its own is not
+    // something `pod install` can complete: whoever opens this has to run npm
+    // install first, and cannot without the manifest saying what to install.
+    const archive = "ios-project.zip";
+    const contents = ["ios", "package.json", "app.json", "modules.generated.js", "siberian.config.js"];
+    if (plan.modules.some((module) => module.kind === "native")) contents.push("native");
+
+    // Inside the build's own workspace rather than beside it. A fixed path
+    // shared by every build is a file the second worker would overwrite while
+    // the first was still reading it, and the claim query is already written
+    // for a second worker.
+    await step("archive the iOS project", "zip", ["-qr", archive, ...contents]);
+
+    return {
+      file: path.join(workspace, archive),
+      type: "application/zip",
+      log: log.join("\n\n"),
+      started
+    };
   }
 
   await step("gradle assembleRelease", "./gradlew", ["assembleRelease", "--no-daemon"], {

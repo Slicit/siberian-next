@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Makes the running stack match the checkout, after a pull or a branch switch.
+#
+# Two things go stale in ways that do not look like staleness:
+#
+#   Shared code. Every Rails service requires lib/ once, at boot, from
+#   config/initializers/siberian.rb, because Zeitwerk cannot autoload files
+#   that define Siberian::Engine rather than SiberianEngine. app/ reloads per
+#   request and lib/ does not, so a constant added there is missing from a
+#   process that started before it existed. The symptom is a NameError naming a
+#   constant that is plainly in the file you are looking at.
+#
+#   Bind mounts. A container mounts a host directory by inode, and switching
+#   branches can delete and recreate that directory. The container then holds a
+#   mount of something that is gone: files vanish, and `docker exec` refuses
+#   with "current working directory is outside of container mount namespace
+#   root", which reads like a security error rather than a stale mount.
+#
+# Not covered, because it needs a rebuild rather than a restart: the Router's
+# core config is baked into its image. After changing
+# core/router/nginx/templates, run
+#
+#   docker compose --env-file .env -f deploy/compose.yml up -d --build router
+#
+# and then Repair routing, because a new Router container has none of the
+# network attachments the old one had.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+compose() { docker compose --env-file .env -f deploy/compose.yml "$@"; }
+
+RAILS_SERVICES="orchestrator base auth mailer mailer-worker storage database mobile"
+
+echo "Restarting the Rails services, which load lib/ at boot..."
+# shellcheck disable=SC2086
+compose restart $RAILS_SERVICES
+
+# Recreated rather than restarted: a restart keeps the old mount, and the old
+# mount is the problem.
+echo "Recreating the builder, whose /builder is a bind mount..."
+compose up -d --force-recreate mobile-builder
+
+echo
+compose ps --format "{{.Service}}\t{{.Status}}" 2>/dev/null | sort
+echo
+echo "Done. If you changed the Router template, rebuild it as above."

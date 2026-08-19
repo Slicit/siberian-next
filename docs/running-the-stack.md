@@ -23,7 +23,10 @@ convenience.
 | Assistant | `ANTHROPIC_API_KEY` in `.env`, read by the Mobile service alone. Absent, the app studio says so and everything else works |
 
 The laptop is for authoring. The loop is edit locally, commit, push, pull on the
-box, run there. Two things about that loop have bitten already:
+box, run there. Run `./bin/reload` after a pull or a branch switch: shared `lib/`
+code is required at boot rather than reloaded, and a branch switch can replace a
+bind-mounted directory underneath a running container. Two more things about
+that loop have bitten already:
 
 - Anything generated on the box (Rails apps, migrations, schema dumps) has to be
   committed **from** the box. CI once checked out five services with no
@@ -117,6 +120,7 @@ Every one of these drives the real stack. They are the fastest way to answer
 
 ```
 ./bin/check            architecture and convention checks, no stack needed
+./bin/reload           make the running stack match the checkout, after a pull
 ./bin/test-lib         the shared library suite
 ./bin/test-engine      the engine driver against a real daemon
 ./bin/smoke-auth       sign in, and the cookie lands scoped and Secure
@@ -202,8 +206,10 @@ Deliberate, not forgotten:
   description, which needs an `ANTHROPIC_API_KEY` in `.env`. Without one the
   page says the assistant is not configured and the rest of it still works.
 - **No iOS binary.** Apple's toolchain runs on macOS, so the builder produces
-  the configured Xcode project and stops. Signing and an `.ipa` need a macOS
-  runner or EAS.
+  the configured Xcode project and stops. The artifact is a zip of `ios/`, the
+  package manifest, the generated module registry, and any native module
+  source: on a Mac that is `npm install && cd ios && pod install`, then open the
+  workspace. Signing and an `.ipa` need a macOS runner or EAS.
 - **No over the air updates, and no store submission.** A build produces an
   artifact; getting one onto a phone that already has the app is a different
   mechanism.
