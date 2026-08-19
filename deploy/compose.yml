@@ -182,6 +182,8 @@ services:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_database
       MODULEDB_ADMIN_URL: postgres://postgres:${MODULEDB_PASSWORD:-moduledb_dev_only}@moduledb:5432/postgres
+      CORE_CONFIGURATION_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_configuration
+      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
       MODULEDB_HOST: db
       MODULEDB_PORT: "5432"
     volumes:
