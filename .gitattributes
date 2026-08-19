@@ -1,0 +1,13 @@
+# Normalize all text to LF in the repo and in the working tree.
+# Container entrypoints and shell scripts break with CRLF.
+* text=auto eol=lf
+
+# Binary assets, never touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
