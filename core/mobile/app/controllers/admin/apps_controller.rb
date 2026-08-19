@@ -58,7 +58,14 @@ module Admin
       row = app.app_capabilities.find_or_initialize_by(capability: params[:capability])
       row.enabled = ActiveModel::Type::Boolean.new.cast(params[:enabled]) != false
       row.source = params[:source].presence || row.source || AppCapability::OPERATOR
-      row.settings = row.settings.to_h.merge(params[:settings].to_h) if params[:settings].present?
+
+      # Only the keys this capability declares. A settings hash is a place
+      # somebody could otherwise put anything, and it is handed to a builder
+      # that runs third-party code.
+      if params[:settings].present?
+        allowed = Array(Siberian::MobileCapabilities.find(params[:capability])[:settings]).map { |setting| setting[:key] }
+        row.settings = row.settings.to_h.merge(params[:settings].permit(*allowed).to_h)
+      end
 
       if row.save
         render json: serialize(app)
