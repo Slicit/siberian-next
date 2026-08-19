@@ -1,6 +1,6 @@
 # Feature index
 
-_Generated: 2026-08-19, by hand. Six features, all shipped._
+_Generated: 2026-08-19, by hand. Seven features, all shipped._
 
 ## Active
 
@@ -20,6 +20,7 @@ None.
 | [Interfaces](feat-interfaces.md) | Backoffice, Base App, two reference modules, local TLS | `bin/smoke-backoffice`, `bin/smoke-modules` |
 | [Access control](feat-access-control.md) | Roles, grants, deny, and user management on both sides | `bin/smoke-access` |
 | [Mail queue](feat-mail-queue.md) | Queue, acknowledgement, retry, and a door into modules | `bin/smoke-mail` |
+| [Storage quotas](feat-storage-quotas.md) | Per bucket, per domain, and the default that caps a manifest | `bin/smoke-quotas` |
 
 ## Abandoned
 
