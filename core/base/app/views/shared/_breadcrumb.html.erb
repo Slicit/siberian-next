@@ -1,0 +1,31 @@
+<%# The product shell has three kinds of page: the overview, a module, and the
+    phone app. The middle level is what the shell calls that page, and the leaf
+    is set by whichever one is rendering. %>
+<% leaf = @breadcrumb_leaf.presence %>
+<% section = @breadcrumb_section.presence %>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <ol>
+    <li>
+      <% if section.nil? && leaf.nil? %>
+        <span class="here" aria-current="page">Home</span>
+      <% else %>
+        <%= link_to "Home", root_path %>
+      <% end %>
+    </li>
+
+    <% if section %>
+      <li>
+        <% if leaf %>
+          <span class="step"><%= section %></span>
+        <% else %>
+          <span class="here" aria-current="page"><%= section %></span>
+        <% end %>
+      </li>
+    <% end %>
+
+    <% if leaf %>
+      <li><span class="here" aria-current="page"><%= leaf %></span></li>
+    <% end %>
+  </ol>
+</nav>
