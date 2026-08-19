@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Assigns Garage a layout. A fresh node has no role and refuses every S3 call
+# until it does, which presents as a confusing 5xx rather than as "not
+# configured", so this runs once at setup and is idempotent afterwards.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+CONTAINER="${GARAGE_CONTAINER:-siberian-garage-1}"
+ZONE="${GARAGE_ZONE:-dc1}"
+CAPACITY="${GARAGE_CAPACITY:-10G}"
+
+if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+  echo "No running container named ${CONTAINER}." >&2
+  exit 1
+fi
+
+status=$(docker exec "$CONTAINER" /garage status 2>/dev/null)
+
+if ! echo "$status" | grep -q "NO ROLE ASSIGNED"; then
+  echo "Garage already has a layout. Nothing to do."
+  docker exec "$CONTAINER" /garage status 2>/dev/null | sed -n '/HEALTHY NODES/,$p'
+  exit 0
+fi
+
+node_id=$(echo "$status" | awk '/NO ROLE ASSIGNED/ {print $1}' | head -1)
+if [ -z "$node_id" ]; then
+  echo "Could not read a node id from garage status." >&2
+  exit 1
+fi
+
+echo "Assigning ${node_id} to zone ${ZONE} with capacity ${CAPACITY}..."
+docker exec "$CONTAINER" /garage layout assign -z "$ZONE" -c "$CAPACITY" "$node_id" >/dev/null
+
+# The version to apply is whatever the pending layout says, not always 1: a
+# second run after a failed apply would otherwise target the wrong version.
+version=$(docker exec "$CONTAINER" /garage layout show 2>/dev/null \
+  | awk '/apply.*--version/ {print $NF}' | tail -1)
+version="${version:-1}"
+
+docker exec "$CONTAINER" /garage layout apply --version "$version" >/dev/null
+echo "Layout version ${version} applied."
+docker exec "$CONTAINER" /garage status 2>/dev/null | sed -n '/HEALTHY NODES/,$p'
