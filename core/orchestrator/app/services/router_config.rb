@@ -92,6 +92,14 @@ class RouterConfig
     directory = File.join(@config_dir, UPSTREAMS_DIR)
     FileUtils.mkdir_p(directory)
 
+    # An earlier version of this wrote one file here instead of a directory of
+    # them. The volume outlives an image, so that file sat in conf.d/modules,
+    # was included by the *.conf glob as a second map for the same variable,
+    # and being frozen at whatever was installed the day it was written it
+    # shadowed the real one: a module installed afterwards answered 404 at
+    # /m/<name>/ with everything else about it working.
+    FileUtils.rm_f(File.join(@config_dir, "00-upstreams.conf"))
+
     # Rewritten whole rather than appended to, so a module that is gone leaves
     # nothing addressable behind.
     FileUtils.rm_f(Dir.glob(File.join(directory, "*.map")))
