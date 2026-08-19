@@ -1,9 +1,10 @@
 # Core routes. Rendered at container start from environment.
 #
 #   SIBERIAN_DOMAIN    the domain being served, for example example.com
+#   SIBERIAN_RESOLVER  address of the container network's embedded DNS
 #
-# One rendered copy per served domain. Multi-domain means several of these,
-# all pointing at the same containers: isolation is at the data layer, not the
+# One rendered copy per served domain. Multi-domain means several of these, all
+# pointing at the same containers: isolation is at the data layer, not the
 # runtime layer (LOGBOOK.md, Conventions).
 
 # Base App. The product shell that wraps installed modules in iframes.
@@ -27,12 +28,6 @@ server {
     proxy_set_header X-Siberian-Domain $host;
   }
 
-  location /assets/ {
-    set $upstream_assets "http://base:3000";
-    proxy_pass $upstream_assets;
-    proxy_set_header Host $host;
-  }
-
   location / {
     set $upstream_base "http://base:3000";
     proxy_pass $upstream_base;
@@ -53,8 +48,6 @@ server {
 # module frame has no path to it.
 server {
   listen 80;
-  # Container names resolve through the network's embedded DNS. Its address
-  # differs by engine, so it is rendered rather than hardcoded.
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
   server_name admin.${SIBERIAN_DOMAIN};
 
@@ -78,42 +71,53 @@ server {
 #
 # A module sits on its own network with only the Router attached, so it cannot
 # address auth or storage directly. It reaches them here, at http://core/...,
-# which is the same rule LOGBOOK.md states for module to module traffic: it
-# goes through the Router, by construction rather than by convention.
+# which is the rule LOGBOOK.md states for module to module traffic: it goes
+# through the Router, by construction rather than by convention.
 #
 # Not reachable from outside: this block answers only to the internal name
 # "core", which no public DNS resolves and no browser sends.
+#
+# Each location rewrites the prefix away before proxying. proxy_pass does not
+# strip a location prefix when its argument is a variable, and the variable is
+# needed so nginx resolves the upstream per request rather than pinning it at
+# startup. Without the rewrite every call lands on the upstream's root, which
+# presents as a cheerful welcome page rather than an error.
 server {
   listen 80;
   server_name core;
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
 
   location /auth/ {
-    set $upstream_auth "http://auth:3000/";
+    rewrite ^/auth/(.*)$ /$1 break;
+    set $upstream_auth "http://auth:3000";
     proxy_pass $upstream_auth;
     include /etc/nginx/siberian/internal_headers.conf;
   }
 
   location /storage/ {
-    set $upstream_storage "http://storage:3000/";
+    rewrite ^/storage/(.*)$ /$1 break;
+    set $upstream_storage "http://storage:3000";
     proxy_pass $upstream_storage;
     include /etc/nginx/siberian/internal_headers.conf;
   }
 
-  location /mailer/ {
-    set $upstream_mailer "http://mailer:3000/";
-    proxy_pass $upstream_mailer;
-    include /etc/nginx/siberian/internal_headers.conf;
-  }
-
   location /database/ {
-    set $upstream_database "http://database:3000/";
+    rewrite ^/database/(.*)$ /$1 break;
+    set $upstream_database "http://database:3000";
     proxy_pass $upstream_database;
     include /etc/nginx/siberian/internal_headers.conf;
   }
 
+  location /mailer/ {
+    rewrite ^/mailer/(.*)$ /$1 break;
+    set $upstream_mailer "http://mailer:3000";
+    proxy_pass $upstream_mailer;
+    include /etc/nginx/siberian/internal_headers.conf;
+  }
+
   location /orchestrator/ {
-    set $upstream_orchestrator "http://orchestrator:3000/";
+    rewrite ^/orchestrator/(.*)$ /$1 break;
+    set $upstream_orchestrator "http://orchestrator:3000";
     proxy_pass $upstream_orchestrator;
     include /etc/nginx/siberian/internal_headers.conf;
   }
