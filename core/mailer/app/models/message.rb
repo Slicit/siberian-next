@@ -65,7 +65,7 @@ class Message < ApplicationRecord
   def record_success!(transport:, duration_ms:, detail: nil)
     transaction do
       delivery_attempts.create!(
-        number: attempts + 1, outcome: "delivered", transport: transport,
+        number: next_attempt_number, outcome: "delivered", transport: transport,
         duration_ms: duration_ms, detail: detail, attempted_at: Time.current
       )
       update!(state: SENT, attempts: attempts + 1, sent_at: Time.current,
@@ -79,7 +79,7 @@ class Message < ApplicationRecord
   def record_failure!(transport:, error:, permanent: false, duration_ms: nil)
     transaction do
       delivery_attempts.create!(
-        number: attempts + 1, outcome: permanent ? "rejected" : "error",
+        number: next_attempt_number, outcome: permanent ? "rejected" : "error",
         transport: transport, duration_ms: duration_ms,
         detail: error.to_s[0, 2000], attempted_at: Time.current
       )
@@ -123,6 +123,14 @@ class Message < ApplicationRecord
     return false unless terminal?
 
     update!(acknowledged_at: Time.current)
+  end
+
+  # Attempt numbers are monotonic for the life of the message, and deliberately
+  # not derived from `attempts`. Reviving a dead message resets the retry budget
+  # but keeps the history, so a counter-derived number would collide with an
+  # attempt that already exists.
+  def next_attempt_number
+    delivery_attempts.maximum(:number).to_i + 1
   end
 
   # Exponential with jitter, capped. The jitter is up to a quarter of the

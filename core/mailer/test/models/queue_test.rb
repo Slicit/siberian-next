@@ -161,6 +161,19 @@ class QueueTest < ActiveSupport::TestCase
     assert_equal 1, message.delivery_attempts.count, "the history is the evidence, so it stays"
   end
 
+  test "attempt numbers keep going up across a revive" do
+    message = enqueue(max_attempts: 1)
+    message.record_failure!(transport: "t", error: "first")
+    message.revive!
+
+    # The retry budget resets and the history does not, so a number derived from
+    # the counter would collide with an attempt that already exists.
+    message.record_failure!(transport: "t", error: "second")
+
+    assert_equal [1, 2], message.delivery_attempts.ordered.pluck(:number)
+    assert_equal 1, message.attempts, "the budget still counts from the revive"
+  end
+
   # Cancelling ------------------------------------------------------------
 
   test "a queued message can be cancelled" do
