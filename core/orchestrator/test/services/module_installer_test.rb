@@ -38,11 +38,16 @@ class ModuleInstallerTest < ActiveSupport::TestCase
         mail:
           send: true
       capabilities:
-        provides:
+        features:
           - id: demo_tasks.task.viewer
             area: sidebar.entities
             title: Tasks
             path: /tasks
+        system:
+          - id: demo_tasks.cache.store
+            interface: cache.store.v1
+            endpoint: /internal/cache
+            title: Demo cache
         consumes:
           - id: core.user.picker
     YAML
@@ -68,7 +73,9 @@ class ModuleInstallerTest < ActiveSupport::TestCase
     assert_equal "demo-tasks", installed.name
     assert_equal "running", installed.status
     assert_equal 2, installed.module_containers.count
-    assert_equal 1, installed.capabilities.count
+    assert_equal 2, installed.capabilities.count
+    assert_equal 1, installed.capabilities.features.count
+    assert_equal 1, installed.capabilities.system.count
     assert_equal 1, installed.capability_requests.count
     assert_equal 3, installed.grants.count
     assert installed.installed_at.present?
@@ -125,6 +132,74 @@ class ModuleInstallerTest < ActiveSupport::TestCase
     refute result.success?
     assert_match(/already installed/, result.error)
     assert_equal 1, InstalledModule.count
+  end
+
+  test "a system capability is registered against its interface" do
+    installed = install.installed_module
+
+    capability = installed.capabilities.system.first
+    assert_equal "cache.store.v1", capability.interface
+    assert_equal "http://demo-tasks/internal/cache", capability.internal_url
+  end
+
+  test "two modules claiming one interface exclusively is refused" do
+    exclusive = <<~YAML
+      schema_version: 1
+      name: first-relay
+      version: 1.0.0
+      title: First
+      containers:
+        - service: web
+          image: nginx:1.27-alpine
+          role: http
+          internal_port: 80
+      routes:
+        base: /first-relay
+        entry: web
+      capabilities:
+        system:
+          - id: first_relay.mail.transport
+            interface: mail.transport.v1
+            endpoint: /internal/mail
+            exclusive: true
+    YAML
+    assert install(Siberian::Contracts::Manifest.parse(exclusive)).success?
+
+    second = exclusive.sub("first-relay", "second-relay").sub("first_relay", "second_relay").sub("/first-relay", "/second-relay")
+    result = install(Siberian::Contracts::Manifest.parse(second))
+
+    refute result.success?
+    assert_match(/already claims mail.transport.v1/, result.error)
+  end
+
+  test "a capability id already provided elsewhere is refused" do
+    install
+
+    clash = Siberian::Contracts::Manifest.parse(<<~YAML)
+      schema_version: 1
+      name: other-module
+      version: 1.0.0
+      title: Other
+      containers:
+        - service: web
+          image: nginx:1.27-alpine
+          role: http
+          internal_port: 80
+      routes:
+        base: /other-module
+        entry: web
+      capabilities:
+        features:
+          - id: demo_tasks.task.viewer
+            area: sidebar.entities
+            title: Clash
+            path: /clash
+    YAML
+
+    result = install(clash)
+
+    refute result.success?
+    assert_match(/already provided by demo-tasks/, result.error)
   end
 
   # Failure and rollback -------------------------------------------------
