@@ -1,0 +1,53 @@
+# Push notifications, in Python.
+#
+# What it demonstrates is a module that needs something from the phone the
+# browser cannot give it. It requires a native capability, so an operator has
+# to approve it before the module's native screen exists at all: unapproved,
+# this module still installs, still works, and still shows its inbox, in a
+# WebView, with no way to reach the notification tray.
+schema_version: 1
+name: example-push
+version: 1.0.0
+title: Notifications
+description: An inbox for push notifications, with read, archive, and delete. Requires the push capability to reach the notification tray.
+
+containers:
+  - service: web
+    image: siberian/example-push:1.0.0
+    role: http
+    internal_port: 8080
+    health:
+      path: /up
+      interval_seconds: 30
+
+routes:
+  base: /example-push
+  entry: web
+  origin: push
+
+permissions:
+  databases:
+    # Device tokens and the notifications themselves, one database per domain.
+    - name: primary
+      access: owner
+      scope: per_domain
+
+capabilities:
+  features:
+    - id: example_push.notification.inbox
+      area: sidebar.entities
+      title: Notifications
+      path: /
+      icon: bell
+
+native:
+  entry: native/index.js
+  # A WebView still shows the inbox. What it cannot do is register a device or
+  # raise anything in the tray, and the screen says so rather than appearing
+  # broken.
+  fallback: webview
+  requires: [push_notifications]
+  screens:
+    - capability: example_push.notification.inbox
+      component: NotificationInbox
+      title: Notifications

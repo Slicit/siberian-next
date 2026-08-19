@@ -14,9 +14,13 @@ module Siberian
   # native screen switched off, which is what an unmatched capability does
   # everywhere else in this system.
   module MobileCapabilities
-    # `usage` is the string the operating system shows when the app first asks.
-    # Apple rejects a build that requests a permission without one, so it is
-    # part of the capability rather than something to remember later.
+    # `prompts` is whether the operating system stops somebody and asks. That is
+    # not the same as asking a lot: in-app purchases are a serious capability
+    # and show no permission dialog, while the network state is a mild one that
+    # also shows none. Only a capability that prompts needs a `usage` string,
+    # and Apple rejects a build that prompts without one.
+    #
+    # `usage` is that string.
     #
     # `settings` are the values an operator has to supply for the capability to
     # work at all. A capability with settings and no values is not enabled, it
@@ -28,6 +32,7 @@ module Siberian
         label: "Location and GPS",
         summary: "Maps, geofencing, delivery tracking, local weather.",
         usage: "Shows you what is nearby and keeps deliveries accurate.",
+        prompts: true,
         severity: :high,
         settings: []
       },
@@ -37,6 +42,7 @@ module Siberian
         label: "Biometric sign in",
         summary: "Face ID, Touch ID, and fingerprint, to protect the app itself.",
         usage: "Unlocks the app without typing your password.",
+        prompts: true,
         severity: :medium,
         settings: []
       },
@@ -82,6 +88,7 @@ module Siberian
         label: "App tracking (iOS)",
         summary: "Asks for the iOS advertising identifier, for analytics and advertising.",
         usage: "Lets us measure which campaigns brought you here.",
+        prompts: true,
         # The only capability here whose whole purpose is to follow somebody
         # between apps. An operator should have to mean it.
         severity: :high,
@@ -107,6 +114,20 @@ module Siberian
         usage: nil,
         severity: :low,
         settings: []
+      },
+      {
+        id: "push_notifications",
+        package: "expo-notifications",
+        label: "Push notifications",
+        summary: "Sending a message to somebody when the app is closed, and the badge on the icon.",
+        usage: "Lets us tell you when something needs you, without you having to look.",
+        prompts: true,
+        # An app that can interrupt somebody is asking for something different
+        # from an app that can read the network state.
+        severity: :high,
+        settings: [
+          { key: "expo_access_token", label: "Expo access token", secret: true, optional: true }
+        ]
       },
       {
         id: "network_state",

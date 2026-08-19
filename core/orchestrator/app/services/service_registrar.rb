@@ -120,10 +120,16 @@ class ServiceRegistrar
       requires: manifest.required_native_capabilities
     })
     body["token"]
-  rescue Error
+  rescue Error => e
     # A module still installs when the Mobile service is down. Phone apps are
     # not a reason a module cannot be installed, and the next build reads this
     # from the manifest again.
+    #
+    # Said out loud, though. Swallowed in silence this covers a refusal as well
+    # as an outage, and a module that installs and is then absent from every
+    # phone app looks like a phone app problem from every angle except this one.
+    Rails.logger.warn("the Mobile service would not register #{installed_module.name}: #{e.message}")
+    Activity.record("mobile.registration.skipped", installed_module: installed_module, reason: e.message)
     nil
   end
 
