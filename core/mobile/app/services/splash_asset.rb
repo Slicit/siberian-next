@@ -44,6 +44,12 @@ class SplashAsset
 
     width, height = bytes.byteslice(16, 8).unpack("N2")
 
+    # A header is not an image. A truncated PNG measures fine and then gets
+    # silently ignored by the build, which falls back to its stock artwork and
+    # says nothing: the app ships with the wrong splash and nothing anywhere
+    # reports a problem. Walking the chunks is cheap and catches it.
+    problems << "the PNG has a header but no image data. It is truncated or was not finished being written" unless complete_png?(bytes)
+
     problems << "the image is #{width} by #{height}. It has to be square, because it is centred on screens of every shape" if width != height
     problems << "the image is #{width} pixels square, which is below the #{MINIMUM} minimum" if width == height && width < MINIMUM
 
@@ -78,6 +84,27 @@ class SplashAsset
 
     Result.new(ok: true, width: nil, height: nil, problems: [],
                warnings: ["Android stops the splash animation after one second whatever the drawable says."])
+  end
+
+  # Walks the chunk list rather than decoding: every PNG is IHDR, then chunks,
+  # then IEND, and a file that never reaches IEND or carries no IDAT is not one
+  # anything will draw.
+  def self.complete_png?(bytes)
+    offset = 8
+    seen_data = false
+
+    while offset + 8 <= bytes.bytesize
+      length = bytes.byteslice(offset, 4).unpack1("N")
+      type = bytes.byteslice(offset + 4, 4)
+      return false if length.nil? || type.nil?
+
+      seen_data = true if type == "IDAT"
+      return seen_data if type == "IEND"
+
+      offset += 12 + length
+    end
+
+    false
   end
 
   def self.refusal(message)
