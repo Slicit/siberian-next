@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Runs the shared library suite. Uses the host's Ruby when there is one, and a
+# container otherwise, so this works on a machine with no Ruby installed.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if command -v ruby >/dev/null 2>&1; then
+  exec ruby -Itest -e 'Dir.glob("test/**/*_test.rb").each { |f| require File.expand_path(f) }'
+fi
+
+IMAGE="${RUBY_IMAGE:-ruby:3.3-slim}"
+echo "No host Ruby. Running the suite in ${IMAGE}."
+exec docker run --rm -v "$PWD:/repo" -w /repo "$IMAGE" \
+  ruby -Itest -e 'Dir.glob("test/**/*_test.rb").each { |f| require File.expand_path(f) }'

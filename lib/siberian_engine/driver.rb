@@ -48,6 +48,13 @@ module Siberian
       # @return [Array<Hash>] engine-neutral summaries: id, name, status, labels
       def list(labels: {}) = not_implemented(__method__)
 
+      # Images. A module declares images it does not ship, so fetching them is
+      # an engine capability the Orchestrator needs. The interface grew for it
+      # rather than letting the caller reach past the driver.
+
+      def pull(image) = not_implemented(__method__)
+      def image_present?(image) = not_implemented(__method__)
+
       # Backend identity, for the Backoffice to display and for tests to skip on.
       def name    = self.class.name.split("::").last.downcase
       def version = not_implemented(__method__)

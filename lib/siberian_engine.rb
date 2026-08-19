@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "siberian_engine/container_spec"
+require_relative "siberian_engine/unix_http"
 require_relative "siberian_engine/driver"
 
 module Siberian
