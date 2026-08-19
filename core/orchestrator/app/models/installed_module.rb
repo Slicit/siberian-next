@@ -14,7 +14,10 @@ class InstalledModule < ApplicationRecord
   has_many :provisions, dependent: :destroy
   has_many :activities, dependent: :nullify
 
-  validates :uuid, :name, :version, presence: true, uniqueness: { case_sensitive: false }
+  validates :uuid, :name, :version, presence: true
+  # Only identity is unique. Applying this to version as well meant the second
+  # module to ship 0.1.0 could never be installed, which is most of them.
+  validates :uuid, :name, uniqueness: { case_sensitive: false }
   validates :status, inclusion: { in: STATUSES }
 
   scope :ordered, -> { order(:name) }

@@ -44,6 +44,14 @@ class InstalledModuleTest < ActiveSupport::TestCase
     assert_equal "failed", installed.reload.derived_status
   end
 
+  test "two modules can share a version, because most of them do" do
+    build_module(name: "first", version: "0.1.0")
+
+    second = build_module(name: "second", version: "0.1.0", uuid: SecureRandom.hex(6))
+
+    assert second.persisted?, "version is not an identity, and treating it as one blocks every second module"
+  end
+
   test "two modules cannot share a name" do
     build_module
 
