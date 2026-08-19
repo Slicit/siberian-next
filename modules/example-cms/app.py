@@ -209,7 +209,17 @@ def public_media_url(path):
     # while the page it is building is https: an http image URL on an https
     # page is mixed content, and the browser drops it without drawing anything.
     scheme = request.headers.get("X-Forwarded-Proto") or request.scheme
-    return f"{scheme}://{request.host}/media/{path.lstrip(chr(47))}"
+
+    # Which door this request came through decides the prefix. Framed in a
+    # browser the module is its own origin and the path is bare; from the phone
+    # app it is reached at /m/<module>/, and a URL without that prefix points at
+    # the product shell, which has no idea what /media means. The Router sets
+    # the module name on the app door and nowhere else, which is what makes the
+    # difference knowable here.
+    module = request.headers.get("X-Siberian-Module")
+    prefix = f"/m/{module}" if module else ""
+
+    return f"{scheme}://{request.host}{prefix}/media/{path.lstrip(chr(47))}"
 
 
 def serialise(block):
