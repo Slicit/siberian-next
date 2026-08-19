@@ -19,6 +19,14 @@ Rails.application.routes.draw do
     post "modules", to: "modules#create"
     post "modules/:module_name/buckets", to: "modules#provision"
     delete "modules/:module_name", to: "modules#destroy"
+
+    # Quotas, for the Backoffice. Three levels because three questions get
+    # asked: the default for a new bucket, one bucket, and the shared pool.
+    get "quotas", to: "quotas#show"
+    patch "quotas", to: "quotas#update"
+    patch "quotas/domains/:domain", to: "quotas#update_domain", constraints: { domain: %r{[^/]+} }, format: false
+    patch "quotas/buckets/:id", to: "quotas#update_bucket"
+    post "quotas/recalculate", to: "quotas#recalculate"
   end
 
   get "up", to: "rails/health#show", as: :rails_health_check

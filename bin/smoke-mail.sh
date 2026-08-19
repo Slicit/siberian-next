@@ -4,7 +4,7 @@ A="Authorization: Bearer orchestrator_dev_only"
 D="X-Siberian-Domain: siberian.test"
 q() { curl -s -o /tmp/mb -w "%{http_code}" "$@"; }
 
-echo "1. register a module        -> $(q -X POST "$M/admin/modules" -H "$A" -H "Content-Type: application/json" -d '{"module_name":"mail-smoke","module_uuid":"ms1","daily_limit":100}')"
+echo "1. register a module        -> $(q -X POST "$M/admin/modules" -H "$A" -H "Content-Type: application/json" -d '{"module_name":"mailq-1787141226","module_uuid":"ms1","daily_limit":100}')"
 TOKEN=$(sed 's/.*"token":"//; s/".*//' /tmp/mb)
 T="Authorization: Bearer $TOKEN"
 
@@ -31,7 +31,7 @@ echo "7. stats                    -> $(q "$M/v1/stats" -H "$T" -H "$D")"
 echo "   $(head -c 220 /tmp/mb)"
 
 echo "8. another module cannot see it"
-q -X POST "$M/admin/modules" -H "$A" -H "Content-Type: application/json" -d '{"module_name":"nosy","module_uuid":"n1"}' >/dev/null
+q -X POST "$M/admin/modules" -H "$A" -H "Content-Type: application/json" -d '{"module_name":"nosy-1787141226","module_uuid":"n1"}' >/dev/null
 NOSY=$(sed 's/.*"token":"//; s/".*//' /tmp/mb)
 echo "   nosy sees $(q "$M/v1/messages" -H "Authorization: Bearer $NOSY" -H "$D" >/dev/null; grep -o '"id":' /tmp/mb | wc -l) message(s), and message $ID -> $(q "$M/v1/messages/$ID" -H "Authorization: Bearer $NOSY" -H "$D")"
 

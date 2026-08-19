@@ -29,6 +29,12 @@ Rails.application.routes.draw do
   resources :roles, only: %i[index create update destroy]
 
   resources :domains, only: %i[index create update destroy]
+  get "storage", to: "storage#index", as: :storage
+  patch "storage", to: "storage#update"
+  patch "storage/domain", to: "storage#update_domain", as: :update_domain_storage
+  patch "storage/bucket", to: "storage#update_bucket", as: :update_bucket_storage
+  post "storage/recalculate", to: "storage#recalculate", as: :recalculate_storage
+
   get "interfaces", to: "interfaces#index", as: :interfaces
   get "activity", to: "activities#index", as: :activity
 

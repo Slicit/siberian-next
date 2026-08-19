@@ -1,0 +1,163 @@
+<% content_for :title, "Storage" %>
+
+<div class="spread" style="margin-bottom:1.2rem">
+  <div>
+    <h1>Storage</h1>
+    <p class="muted" style="margin:0">
+      Three levels, because three questions get asked: what a new bucket gets,
+      what one bucket is allowed, and what every module on a domain is allowed
+      between them.
+    </p>
+  </div>
+  <% if allow?("core.storage.manage") %>
+    <%= button_to "Recount usage", recalculate_storage_path, class: "button",
+          form: { data: { turbo_confirm: "Recompute every counter from the buckets themselves?" } } %>
+  <% end %>
+</div>
+
+<% if @quotas.nil? %>
+  <div class="alert">
+    The Storage service did not answer. Quotas are still being enforced by it;
+    this page just cannot show them.
+  </div>
+<% else %>
+  <% helper = ActiveSupport::NumberHelper %>
+
+  <div class="card">
+    <header>
+      <h2>Defaults</h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        A new bucket gets the smaller of what its manifest asked for and this.
+        A manifest is written by somebody else, so it does not get to decide.
+      </p>
+    </header>
+
+    <% if allow?("core.storage.manage") %>
+      <%= form_with url: storage_path, method: :patch, class: "stack" do |form| %>
+        <div class="field">
+          <%= form.label :default_bucket_quota_mb, "Default per bucket (MB)" %>
+          <%= form.number_field :default_bucket_quota_mb, value: @quotas["default_bucket_quota_mb"], min: 1 %>
+        </div>
+        <div class="field">
+          <%= form.label :default_domain_quota_mb, "Default per domain (MB)" %>
+          <%= form.number_field :default_domain_quota_mb, value: @quotas["default_domain_quota_mb"], min: 1 %>
+          <div class="hint">Left empty, a domain has no ceiling until one is set on it.</div>
+        </div>
+        <button type="submit" class="primary">Save defaults</button>
+      <% end %>
+    <% else %>
+      <div class="row wrap">
+        <span class="badge">per bucket: <%= @quotas["default_bucket_quota_mb"] %> MB</span>
+        <span class="badge">per domain: <%= @quotas["default_domain_quota_mb"] || "no ceiling" %></span>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="card">
+    <header>
+      <h2>Domains</h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        The shared pool. Every module bucket on a domain draws from the same
+        allowance, so one module filling it stops the others too.
+      </p>
+    </header>
+
+    <% Array(@quotas["domains"]).each do |domain| %>
+      <div style="padding:.8rem 0; border-bottom:1px solid var(--line)">
+        <div class="spread">
+          <div>
+            <strong class="mono"><%= domain["domain"] %></strong>
+            <span class="muted" style="font-size:.82rem">
+              <%= pluralize(domain["bucket_count"], "bucket") %>
+            </span>
+          </div>
+          <div class="muted mono" style="font-size:.82rem">
+            <%= helper.number_to_human_size(domain["bytes_used"]) %>
+            <% if domain["unlimited"] %>
+              of no ceiling
+            <% else %>
+              of <%= domain["quota_mb"] %> MB · <%= domain["percent_used"] %>%
+            <% end %>
+          </div>
+        </div>
+
+        <% unless domain["unlimited"] %>
+          <%# A bar rather than a number alone: "83 percent" and a nearly full
+              bar say the same thing, but only one of them is noticed. %>
+          <div style="height:6px; background:var(--surface-2); border-radius:99px; margin-top:.45rem; overflow:hidden">
+            <div style="height:100%; width:<%= [domain['percent_used'].to_f, 100].min %>%;
+                        background:<%= domain['percent_used'].to_f > 90 ? 'var(--danger)' : domain['percent_used'].to_f > 75 ? 'var(--warn)' : 'var(--ok)' %>"></div>
+          </div>
+        <% end %>
+
+        <% if allow?("core.storage.manage") %>
+          <%= form_with url: update_domain_storage_path, method: :patch, class: "row",
+                        style: "margin-top:.6rem; gap:.5rem; align-items:flex-end" do |form| %>
+            <%= hidden_field_tag :domain, domain["domain"] %>
+            <div style="max-width:150px">
+              <label style="font-size:.78rem">Domain total (MB)</label>
+              <%= number_field_tag :quota_mb, domain["quota_mb"], min: 1, placeholder: "no ceiling" %>
+            </div>
+            <div style="max-width:170px">
+              <label style="font-size:.78rem">Default per bucket (MB)</label>
+              <%= number_field_tag :default_bucket_quota_mb, domain["default_bucket_quota_mb"],
+                    min: 1, placeholder: @quotas["default_bucket_quota_mb"] %>
+            </div>
+            <button type="submit">Save</button>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if Array(@quotas["domains"]).empty? %>
+      <div class="empty">No domain has storage yet. A domain appears here once a module provisions a bucket on it.</div>
+    <% end %>
+  </div>
+
+  <div class="card">
+    <header>
+      <h2>Buckets</h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        One per module, per domain. A write has to fit in both the bucket and
+        the domain, and the refusal says which one stopped it.
+      </p>
+    </header>
+
+    <% if Array(@quotas["buckets"]).any? %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Module</th><th>Domain</th><th>Used</th><th>Allowance</th><th></th></tr></thead>
+          <tbody>
+            <% Array(@quotas["buckets"]).each do |bucket| %>
+              <tr>
+                <td>
+                  <strong><%= bucket["module_name"] %></strong>
+                  <div class="faint mono" style="font-size:.72rem"><%= bucket["name"] %></div>
+                </td>
+                <td class="mono" style="font-size:.82rem"><%= bucket["domain"] %></td>
+                <td>
+                  <span class="badge <%= bucket['percent_used'].to_f > 90 ? 'danger' : bucket['percent_used'].to_f > 75 ? 'warn' : '' %>">
+                    <%= helper.number_to_human_size(bucket["bytes_used"]) %> · <%= bucket["percent_used"] %>%
+                  </span>
+                </td>
+                <td class="mono"><%= bucket["quota_mb"] %> MB</td>
+                <td class="right">
+                  <% if allow?("core.storage.manage") %>
+                    <%= form_with url: update_bucket_storage_path, method: :patch, class: "row",
+                                  style: "justify-content:flex-end; gap:.4rem" do |form| %>
+                      <%= hidden_field_tag :id, bucket["id"] %>
+                      <%= number_field_tag :quota_mb, bucket["quota_mb"], min: 1, style: "width:90px" %>
+                      <button type="submit">Set</button>
+                    <% end %>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <div class="empty">No buckets yet.</div>
+    <% end %>
+  </div>
+<% end %>

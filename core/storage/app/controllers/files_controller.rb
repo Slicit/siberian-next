@@ -12,12 +12,21 @@ class FilesController < ApplicationController
 
   # PUT /v1/:space/*path
   def create
-    return render_quota_exceeded if current_bucket.over_quota?
+    # Both allowances, checked before the bytes go anywhere. The one that
+    # refuses is worth naming: "you are full" and "the domain is full" are
+    # different problems, with different people to talk to.
+    incoming = request.content_length.to_i
+    refusal = current_bucket.refusal_for(incoming)
+    return render_quota_exceeded(refusal) if refusal
 
     stored = store.put(space, path, request.body, content_type: request.content_type)
-    current_bucket.increment!(:bytes_used, stored.size.to_i)
+    current_bucket.record_written!(stored.size.to_i)
 
-    render json: { path: path, space: space, size: stored.size }, status: :created
+    render json: {
+      path: path, space: space, size: stored.size,
+      bucket_remaining_bytes: current_bucket.reload.remaining_bytes,
+      domain_remaining_bytes: current_bucket.domain_quota.reload.remaining_bytes
+    }, status: :created
   rescue ObjectStore::Error => e
     render json: { error: e.message }, status: :bad_gateway
   end
@@ -51,8 +60,9 @@ class FilesController < ApplicationController
     end
 
     store.delete(space, path)
-    # Quota is only meaningful if deleting gives the space back.
-    current_bucket.decrement!(:bytes_used, stored.size.to_i) if stored
+    # Quota is only meaningful if deleting gives the space back, and it has to
+    # come back to the domain pool as well as to the bucket.
+    current_bucket.record_deleted!(stored.size.to_i) if stored
 
     head :no_content
   end
@@ -85,11 +95,20 @@ class FilesController < ApplicationController
     authorize_space!(space)
   end
 
-  def render_quota_exceeded
+  def render_quota_exceeded(reason)
+    domain_quota = current_bucket.domain_quota
+
     render json: {
-      error: "quota exceeded",
-      quota_mb: current_module.quota_mb,
-      bytes_used: current_bucket.bytes_used
+      error: reason == :domain_full ? "domain quota exceeded" : "bucket quota exceeded",
+      reason: reason,
+      bucket: {
+        quota_mb: current_bucket.quota_mb, bytes_used: current_bucket.bytes_used,
+        remaining_bytes: current_bucket.remaining_bytes
+      },
+      domain: {
+        domain: current_domain, quota_mb: domain_quota.quota_mb,
+        bytes_used: domain_quota.bytes_used, remaining_bytes: domain_quota.remaining_bytes
+      }
     }, status: :insufficient_storage
   end
 end
