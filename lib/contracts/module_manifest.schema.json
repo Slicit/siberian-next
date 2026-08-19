@@ -188,7 +188,8 @@
               "app_tracking",
               "purchases",
               "web_browser",
-              "network_state"
+              "network_state",
+              "push_notifications"
             ]
           }
         },

@@ -109,6 +109,19 @@ module Siberian
         settings: []
       },
       {
+        id: "push_notifications",
+        package: "expo-notifications",
+        label: "Push notifications",
+        summary: "Sending a message to somebody when the app is closed, and the badge on the icon.",
+        usage: "Lets us tell you when something needs you, without you having to look.",
+        # An app that can interrupt somebody is asking for something different
+        # from an app that can read the network state.
+        severity: :high,
+        settings: [
+          { key: "expo_access_token", label: "Expo access token", secret: true, optional: true }
+        ]
+      },
+      {
         id: "network_state",
         package: "expo-network",
         label: "Network state",
