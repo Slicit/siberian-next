@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Drives both reference modules end to end. One is PHP, one is Python.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-modules.sh
