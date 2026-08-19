@@ -263,11 +263,74 @@
     },
     "capabilities": {
       "type": "object",
-      "description": "What the module offers the rest of the system, and what it can make use of. Auto-discovery reads both sides, which is what lets workflows be composed without either module hardcoding the other.",
+      "description": "What the module offers the rest of the system, and what it can make use of. Two kinds, because they extend different things: system capabilities extend the core (mail transport, authentication, cache), feature capabilities extend the product the user sees. Auto-discovery reads all of it, which is what lets workflows be composed without either side hardcoding the other.",
       "additionalProperties": false,
       "properties": {
-        "provides": {
+        "consumes": {
           "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "optional": {
+                "type": "boolean",
+                "default": true
+              }
+            }
+          },
+          "description": "Capabilities of either kind this module would like to use if something provides them. An unmatched request is not an error; it is a feature that stays switched off."
+        },
+        "system": {
+          "type": "array",
+          "description": "Extends the core. A system capability implements a named interface the core already knows how to call, so the core can route mail, authentication, or caching through this module instead of, or alongside, its built-in service. It has no UI and no area.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "interface",
+              "endpoint"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*([.][a-z][a-z0-9_]*)+$",
+                "description": "Globally unique, dotted. Convention: <module>.<subject>.<role>, for example acme.mail.transport."
+              },
+              "interface": {
+                "type": "string",
+                "description": "The core interface this implements, including its version, for example mail.transport.v1. The core calls it through this contract and nothing else."
+              },
+              "endpoint": {
+                "type": "string",
+                "pattern": "^/",
+                "description": "Path on the module's internal API where the core reaches this implementation."
+              },
+              "title": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "integer",
+                "default": 100,
+                "description": "Lower wins when several modules implement the same interface. The core's own service is 1000, so any module outranks it unless it says otherwise."
+              },
+              "exclusive": {
+                "type": "boolean",
+                "default": false,
+                "description": "Whether this implementation replaces others for the interface rather than joining them. Two exclusive providers of one interface is an install-time conflict."
+              }
+            }
+          }
+        },
+        "features": {
+          "type": "array",
+          "description": "Extends the application the user sees. A feature capability is a page or a fragment the Base App lists or links in a named area.",
           "items": {
             "type": "object",
             "required": [
@@ -297,31 +360,16 @@
               "icon": {
                 "type": "string"
               },
+              "position": {
+                "type": "integer",
+                "default": 0
+              },
               "accepts": {
                 "type": "array",
                 "description": "Capability ids or subject types this endpoint can be handed.",
                 "items": {
                   "type": "string"
                 }
-              }
-            }
-          }
-        },
-        "consumes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "optional": {
-                "type": "boolean",
-                "default": true
               }
             }
           }

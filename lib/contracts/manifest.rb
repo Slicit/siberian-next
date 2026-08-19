@@ -98,8 +98,24 @@ module Siberian
 
       # Capabilities -------------------------------------------------------
 
-      def provided_capabilities = Array(data.dig("capabilities", "provides"))
+      # Extends the core: mail transport, authentication, cache. The core calls
+      # these through a named interface and never learns which module answered.
+      def system_capabilities = Array(data.dig("capabilities", "system"))
+
+      # Extends the product: pages and fragments the Base App lists in an area.
+      def feature_capabilities = Array(data.dig("capabilities", "features"))
+
+      # Both kinds, for the places that genuinely do not care which is which.
+      def provided_capabilities = system_capabilities + feature_capabilities
+
       def consumed_capabilities = Array(data.dig("capabilities", "consumes"))
+
+      # Interfaces this module offers to the core, newest declaration wins on
+      # ties. Used at install time to detect two modules claiming the same
+      # exclusive interface.
+      def implemented_interfaces
+        system_capabilities.map { |capability| capability["interface"] }.compact.uniq
+      end
 
       # Permissions --------------------------------------------------------
 
@@ -175,6 +191,26 @@ module Siberian
         services = containers.map { |c| c["service"] }
         duplicates = services.select { |s| services.count(s) > 1 }.uniq
         errors << "duplicate container services: #{duplicates.join(', ')}" if duplicates.any?
+
+        system_capabilities.each_with_index do |capability, index|
+          errors << "capabilities.system[#{index}] needs an interface" if capability["interface"].to_s.empty?
+          errors << "capabilities.system[#{index}] needs an endpoint" if capability["endpoint"].to_s.empty?
+          if capability.key?("area")
+            errors << "capabilities.system[#{index}] declares an area; system capabilities have no UI"
+          end
+        end
+
+        feature_capabilities.each_with_index do |capability, index|
+          errors << "capabilities.features[#{index}] needs an area" if capability["area"].to_s.empty?
+          errors << "capabilities.features[#{index}] needs a path" if capability["path"].to_s.empty?
+          if capability.key?("interface")
+            errors << "capabilities.features[#{index}] declares an interface; that makes it a system capability"
+          end
+        end
+
+        ids = provided_capabilities.map { |capability| capability["id"] }
+        repeated = ids.select { |id| ids.count(id) > 1 }.uniq
+        errors << "duplicate capability ids: #{repeated.join(', ')}" if repeated.any?
 
         database_grants.each_with_index do |grant, index|
           if grant["name"] && grant["target"]

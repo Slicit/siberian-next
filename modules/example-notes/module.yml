@@ -56,7 +56,8 @@ permissions:
   modules: []
 
 capabilities:
-  provides:
+  # Extends the product the user sees. Listed by the Base App in an area.
+  features:
     # Listed in the Base App sidebar, under the entities area.
     - id: example_notes.note.viewer
       area: sidebar.entities

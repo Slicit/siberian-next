@@ -48,5 +48,12 @@ class InstalledModule < ApplicationRecord
     "degraded"
   end
 
+  # Live means the core may route work to it. A degraded module still answers,
+  # so it stays live; a failed or stopped one does not.
+  def live? = %w[running degraded].include?(status)
+
+  def system_capabilities = capabilities.system
+  def feature_capabilities = capabilities.features
+
   def short_uuid = uuid.to_s[0, 8]
 end

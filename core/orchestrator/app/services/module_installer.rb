@@ -11,6 +11,7 @@ class ModuleInstaller
   end
 
   class AlreadyInstalled < StandardError; end
+  class ConflictingInterface < StandardError; end
 
   def initialize(manifest,
                  driver: Siberian::Engine.driver,
@@ -35,6 +36,8 @@ class ModuleInstaller
   def call
     @manifest.validate!
     raise AlreadyInstalled, "#{@manifest.name} is already installed" if InstalledModule.exists?(name: @manifest.name)
+
+    check_interface_conflicts!
 
     installed = create_record
     Activity.record("install.started", installed_module: installed, outcome: "started", module_name: @manifest.name)
@@ -122,15 +125,29 @@ class ModuleInstaller
   end
 
   def persist_capabilities(installed)
-    @manifest.provided_capabilities.each_with_index do |capability, index|
+    @manifest.system_capabilities.each_with_index do |capability, index|
       installed.capabilities.create!(
+        kind: "system",
+        capability_id: capability["id"],
+        interface: capability["interface"],
+        endpoint: capability["endpoint"],
+        title: capability["title"] || capability["interface"],
+        priority: capability["priority"] || 100,
+        exclusive: capability.fetch("exclusive", false),
+        position: index
+      )
+    end
+
+    @manifest.feature_capabilities.each_with_index do |capability, index|
+      installed.capabilities.create!(
+        kind: "feature",
         capability_id: capability["id"],
         area: capability["area"],
         title: capability["title"],
         path: capability["path"],
         icon: capability["icon"],
         accepts: capability["accepts"] || [],
-        position: index
+        position: capability["position"] || index
       )
     end
 
@@ -139,6 +156,29 @@ class ModuleInstaller
         capability_id: capability["id"],
         optional: capability.fetch("optional", true)
       )
+    end
+  end
+
+  # Two modules claiming the same interface exclusively is a conflict an
+  # operator has to resolve. Deciding it silently at install time means the core
+  # starts routing mail somewhere nobody chose.
+  def check_interface_conflicts!
+    @manifest.system_capabilities.each do |capability|
+      next unless capability.fetch("exclusive", false)
+
+      existing = Capability.exclusive_conflict_for(capability["interface"])
+      next if existing.nil?
+
+      raise ConflictingInterface,
+            "#{existing.installed_module.name} already claims #{capability['interface']} exclusively"
+    end
+
+    @manifest.provided_capabilities.each do |capability|
+      taken = Capability.find_by(capability_id: capability["id"])
+      next if taken.nil?
+
+      raise ConflictingInterface,
+            "capability #{capability['id']} is already provided by #{taken.installed_module.name}"
     end
   end
 
