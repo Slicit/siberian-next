@@ -37,8 +37,20 @@ compose restart $RAILS_SERVICES
 
 # Recreated rather than restarted: a restart keeps the old mount, and the old
 # mount is the problem.
-echo "Recreating the builder, whose /builder is a bind mount..."
-compose up -d --force-recreate mobile-builder
+#
+# A build takes minutes, so recreating the builder underneath one abandons it:
+# the row stays claimed until the stale check releases it ninety minutes later,
+# which is a long time to wait for a maintenance command nobody expected to
+# destroy anything.
+running=$(compose exec -T mobile bin/rails runner 'puts Build.where(state: "building").count' 2>/dev/null | tr -d '\r' || echo 0)
+
+if [ "${running:-0}" != "0" ] && [ "${FORCE:-}" != "true" ]; then
+  echo "Leaving the builder alone: $running build(s) in flight."
+  echo "Set FORCE=true to recreate anyway, which abandons them."
+else
+  echo "Recreating the builder, whose /builder is a bind mount..."
+  compose up -d --force-recreate mobile-builder
+fi
 
 echo
 compose ps --format "{{.Service}}\t{{.Status}}" 2>/dev/null | sort
