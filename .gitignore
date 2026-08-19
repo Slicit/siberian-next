@@ -1,1 +1,11 @@
+# Root level only. Each Rails service keeps its own .gitignore.
+
+# The manifest validator installs these with --no-save at check time.
+node_modules/
 package-lock.json
+package.json
+
+# Development environment, written by bin/setup.
+.env
+
+*.log
