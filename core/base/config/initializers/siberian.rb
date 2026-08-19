@@ -26,7 +26,7 @@ Rails.application.configure do
   # relies on, and `+=` would quietly turn that into a restrictive list: every
   # integration test then fails with "Blocked hosts: www.example.com".
   if config.hosts.any?
-    config.hosts += %w[orchestrator base auth mailer storage router]
+    config.hosts += %w[orchestrator base auth mailer storage database router]
 
     domain = ENV["SIBERIAN_DOMAIN"].presence
     if domain
