@@ -37,6 +37,10 @@ BLOCK_KINDS = {
     "image": {"label": "Image", "media": "single"},
     "carousel": {"label": "Carousel", "media": "many"},
     "video": {"label": "Video", "media": "single"},
+    # A block of links to other pages. The only kind whose content is other
+    # pages rather than words or files, which is why it resolves titles on the
+    # way out: a client should not have to fetch the page list to draw a label.
+    "nav": {"label": "Navigation", "media": None},
 }
 
 
@@ -138,6 +142,11 @@ def ensure_schema(connection):
         # sorted in the application.
         cursor.execute("CREATE INDEX IF NOT EXISTS blocks_page_position ON blocks (page_id, position)")
 
+        # Added after the first release. A column rather than a migration
+        # runner, because a module owning two tables does not need one.
+        cursor.execute("ALTER TABLE pages ADD COLUMN IF NOT EXISTS next_slug text")
+        cursor.execute("ALTER TABLE pages ADD COLUMN IF NOT EXISTS prev_slug text")
+
 
 def slugify(value, fallback="page"):
     kept = [character.lower() if character.isalnum() else "-" for character in value.strip()]
@@ -162,24 +171,35 @@ def unique_slug(connection, base):
 def all_pages(connection, published_only=False):
     clause = "WHERE published" if published_only else ""
     with connection.cursor() as cursor:
-        cursor.execute(f"SELECT id, slug, title, position, published FROM pages {clause} ORDER BY position, id")
+        cursor.execute(
+            f"SELECT id, slug, title, position, published, next_slug, prev_slug FROM pages {clause} ORDER BY position, id"
+        )
         rows = cursor.fetchall()
 
-    return [
-        {"id": row[0], "slug": row[1], "title": row[2], "position": row[3], "published": row[4]}
-        for row in rows
-    ]
+    return [as_page(row) for row in rows]
+
+
+def as_page(row):
+    return {
+        "id": row[0], "slug": row[1], "title": row[2], "position": row[3],
+        "published": row[4], "next_slug": row[5], "prev_slug": row[6],
+    }
+
+
+def titles_for(connection):
+    """slug to title, for anything that has to draw a link to a page."""
+    return {page["slug"]: page["title"] for page in all_pages(connection)}
 
 
 def page_by_slug(connection, slug):
     with connection.cursor() as cursor:
-        cursor.execute("SELECT id, slug, title, position, published FROM pages WHERE slug = %s", (slug,))
+        cursor.execute(
+            "SELECT id, slug, title, position, published, next_slug, prev_slug FROM pages WHERE slug = %s",
+            (slug,),
+        )
         row = cursor.fetchone()
 
-    if row is None:
-        return None
-
-    return {"id": row[0], "slug": row[1], "title": row[2], "position": row[3], "published": row[4]}
+    return as_page(row) if row else None
 
 
 def blocks_for(connection, page_id):
@@ -191,6 +211,20 @@ def blocks_for(connection, page_id):
         rows = cursor.fetchall()
 
     return [{"id": row[0], "kind": row[1], "position": row[2], "data": row[3] or {}} for row in rows]
+
+
+def neighbours(page, titles):
+    """The pages either side of this one, if somebody said which.
+
+    Explicit rather than taken from the ordering. Pages are ordered for the
+    menu, and a reader walking through them in that order is a different
+    intention from a menu: a page can sit fourth in the list and still be the
+    one that follows the first.
+    """
+    return {
+        side: ({"slug": slug, "title": titles[slug]} if slug in titles else None)
+        for side, slug in (("next", page.get("next_slug")), ("prev", page.get("prev_slug")))
+    }
 
 
 def public_media_url(path):
@@ -222,13 +256,23 @@ def public_media_url(path):
     return f"{scheme}://{request.host}{prefix}/media/{path.lstrip(chr(47))}"
 
 
-def serialise(block):
+def serialise(block, titles=None):
     """One block, in the shape both faces read.
 
     The web templates and the React components take the same keys. A block that
     renders differently in the two places is a bug rather than a design.
     """
     data = dict(block["data"] or {})
+    known = titles or {}
+
+    # Links resolve to a title here rather than on the client. A page that was
+    # deleted or unpublished simply is not in the list any more: a link to it
+    # would be a link somebody could tap and land nowhere.
+    links = [
+        {"slug": slug, "title": known[slug]}
+        for slug in data.get("links", [])
+        if slug in known
+    ]
 
     return {
         "id": block["id"],
@@ -238,6 +282,7 @@ def serialise(block):
         "caption": data.get("caption"),
         "url": data.get("url"),
         "media": [public_media_url(item) for item in data.get("media", []) if item],
+        "links": links,
     }
 
 
@@ -268,7 +313,13 @@ def api_page(slug):
     if page is None or not page["published"]:
         return jsonify({"error": "no such page"}), 404
 
-    return jsonify({"page": page, "blocks": [serialise(block) for block in blocks_for(connection, page["id"])]})
+    titles = titles_for(connection)
+
+    return jsonify({
+        "page": page,
+        "blocks": [serialise(block, titles) for block in blocks_for(connection, page["id"])],
+        **neighbours(page, titles),
+    })
 
 
 @app.get("/media/<path:path>")
@@ -350,6 +401,11 @@ button.danger { color:var(--danger); border-color:var(--danger); background:tran
 .strip { display:flex; gap:.6rem; overflow-x:auto; padding-bottom:.4rem; scroll-snap-type:x mandatory; }
 .strip img { flex:none; width:min(78%,420px); scroll-snap-align:center; }
 .empty { padding:1.4rem; text-align:center; color:var(--muted); }
+.pager { display:flex; justify-content:space-between; gap:.6rem; margin-top:1.4rem; padding-top:1rem; border-top:1px solid var(--line); }
+.links { list-style:none; margin:0 0 1rem; padding:0; }
+.links li + li { margin-top:.3rem; }
+.links a { display:block; padding:.55rem .7rem; border:1px solid var(--line); border-radius:8px; text-decoration:none; color:var(--text); }
+.links a:hover { border-color:var(--accent); color:var(--accent); }
 .grid { display:grid; grid-template-columns:220px 1fr; gap:1rem; align-items:start; }
 @media (max-width:720px) { .grid { grid-template-columns:1fr; } }
 """
@@ -406,6 +462,15 @@ def render_block(block):
         images = "".join(f'<img src="{escape(source)}" alt="">' for source in block["media"])
         return f'<figure><div class="strip">{images}</div>{caption_html}</figure>'
 
+    if kind == "nav":
+        if not block["links"]:
+            return '<p class="muted">A navigation block with no links.</p>'
+        items = "".join(
+            f'<li><a href="/{escape(link["slug"])}">{escape(link["title"])}</a></li>'
+            for link in block["links"]
+        )
+        return f'<ul class="links">{items}</ul>' + (f"<p>{caption}</p>" if caption else "")
+
     if kind == "video":
         source = block["media"][0] if block["media"] else block["url"]
         if not source:
@@ -420,6 +485,28 @@ def render_block(block):
         return f"<figure>{player}{caption_html}</figure>"
 
     return f'<p class="muted">A {escape(kind)} block, which this version does not know how to draw.</p>'
+
+
+def neighbour_html(sides):
+    """Next and previous, at the foot of a page.
+
+    Laid out so previous is on the left and next on the right even when only
+    one of them exists, because a single link that moves depending on which one
+    it is makes somebody read it before clicking.
+    """
+    if not sides.get("next") and not sides.get("prev"):
+        return ""
+
+    def side(which, label):
+        page = sides.get(which)
+        if not page:
+            return '<span></span>'
+        return f'<a class="button" href="/{escape(page["slug"])}">{label} {escape(page["title"])}</a>'
+
+    return ('<nav class="pager">'
+            + side("prev", "&larr;")
+            + side("next", "&rarr;")
+            + "</nav>")
 
 
 @app.get("/")
@@ -459,8 +546,10 @@ def show(slug):
     if page is None:
         return render('<div class="card empty">No page by that name.</div>', "Not found"), 404
 
-    blocks = [serialise(block) for block in blocks_for(connection, page["id"])]
+    titles = titles_for(connection)
+    blocks = [serialise(block, titles) for block in blocks_for(connection, page["id"])]
     drawn = "".join(render_block(block) for block in blocks) or '<div class="empty">This page has no blocks yet.</div>'
+    drawn += neighbour_html(neighbours(page, titles))
 
     body = f"""
       <div class="bar">
@@ -492,8 +581,9 @@ def edit(slug):
     if page is None:
         return render('<div class="card empty">No page by that name.</div>', "Not found"), 404
 
+    pages = all_pages(connection)
     blocks = blocks_for(connection, page["id"])
-    editors = "".join(block_editor(page, block) for block in blocks)
+    editors = "".join(block_editor(page, block, pages) for block in blocks)
     choices = "".join(f'<option value="{kind}">{escape(spec["label"])}</option>' for kind, spec in BLOCK_KINDS.items())
 
     body = f"""
@@ -520,12 +610,50 @@ def edit(slug):
         </form>
       </div>
 
+      <div class="card">
+        <h2>Where this page leads</h2>
+        <p class="muted" style="margin:0 0 .6rem; font-size:.88rem">
+          Somebody reading straight through. Set either, both, or neither: this
+          is a path through the pages, which is not the same thing as the order
+          they appear in the menu.
+        </p>
+        <form method="post" action="/{escape(page["slug"])}/neighbours" class="row">
+          <div class="grow">
+            <label class="muted" style="font-size:.8rem">Previous</label>
+            {page_picker("prev_slug", pages, exclude=page["slug"], current=page["prev_slug"])}
+          </div>
+          <div class="grow">
+            <label class="muted" style="font-size:.8rem">Next</label>
+            {page_picker("next_slug", pages, exclude=page["slug"], current=page["next_slug"])}
+          </div>
+          <button type="submit">Save</button>
+        </form>
+      </div>
+
       {editors or '<div class="card empty">No blocks yet. Add one above.</div>'}"""
 
     return render(body, f"Editing {page['title']}")
 
 
-def block_editor(page, block):
+def page_picker(name, pages, exclude=None, current=None, placeholder="Type to filter pages"):
+    """A filterable page picker, with no JavaScript.
+
+    An input bound to a datalist: typing filters, and the browser shows the
+    title beside the slug. A plain select cannot be filtered and a combo box
+    built by hand would be a script in a module that has none.
+    """
+    listing = f"pages-{name}"
+    options = "".join(
+        f'<option value="{escape(candidate["slug"])}" label="{escape(candidate["title"])}">'
+        for candidate in pages if candidate["slug"] != exclude
+    )
+
+    return (f'<input type="text" name="{name}" list="{listing}" value="{escape(current or "")}"'
+            f' placeholder="{escape(placeholder)}" autocomplete="off">'
+            f'<datalist id="{listing}">{options}</datalist>')
+
+
+def block_editor(page, block, pages=None):
     kind = block["kind"]
     spec = BLOCK_KINDS.get(kind, {})
     data = block["data"] or {}
@@ -545,6 +673,23 @@ def block_editor(page, block):
     if kind == "video":
         fields.append(f'<input type="url" name="url" value="{escape(data.get("url") or "")}" '
                       'placeholder="Or paste an embed URL">')
+
+    links_html = ""
+    if kind == "nav":
+        known = {candidate["slug"]: candidate["title"] for candidate in (pages or [])}
+        chosen = "".join(
+            f'<li><span class="grow">{escape(known[slug])}</span>'
+            f'<form method="post" action="{base}/links/remove" style="display:inline">'
+            f'<input type="hidden" name="slug" value="{escape(slug)}">'
+            '<button type="submit">Remove</button></form></li>'
+            for slug in (data.get("links") or []) if slug in known
+        )
+        links_html = f"""
+          <ul class="links" style="margin:.4rem 0">{chosen}</ul>
+          <form method="post" action="{base}/links" class="row">
+            {page_picker(f"slug", pages or [], exclude=page["slug"], placeholder="Add a page")}
+            <button type="submit">Add link</button>
+          </form>"""
 
     media = data.get("media") or []
     media_html = ""
@@ -580,6 +725,7 @@ def block_editor(page, block):
           {"".join(fields)}
           <div class="row" style="margin-top:.5rem"><button type="submit">Save</button></div>
         </form>
+        {links_html}
         {media_html}
       </div>"""
 
@@ -778,3 +924,74 @@ def upload_media(slug, block_id):
         cursor.execute("UPDATE blocks SET data = %s WHERE id = %s", (json.dumps(data), block_id))
 
     return redirect(url_for("edit", slug=slug))
+
+
+@app.post("/<slug>/neighbours")
+def set_neighbours(slug):
+    """Where this page leads, and what led here.
+
+    A slug that names no page is stored as nothing rather than refused: the
+    picker offers real pages, and somebody who typed something else meant to
+    clear it more often than they meant to break it.
+    """
+    if not current_user():
+        return signed_out()
+
+    connection = db()
+    known = titles_for(connection)
+
+    values = {}
+    for side in ("next_slug", "prev_slug"):
+        candidate = (request.form.get(side) or "").strip()
+        values[side] = candidate if candidate in known and candidate != slug else None
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE pages SET next_slug = %s, prev_slug = %s WHERE slug = %s",
+            (values["next_slug"], values["prev_slug"], slug),
+        )
+
+    return redirect(url_for("edit", slug=slug))
+
+
+def edit_links(slug, block_id, change):
+    if not current_user():
+        return signed_out()
+
+    connection = db()
+    page = page_by_slug(connection, slug)
+    if page is None:
+        return redirect(url_for("index"))
+
+    target = (request.form.get("slug") or "").strip()
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT data FROM blocks WHERE id = %s AND page_id = %s", (block_id, page["id"]))
+        row = cursor.fetchone()
+        if row is None:
+            return redirect(url_for("edit", slug=slug))
+
+        data = dict(row[0] or {})
+        links = list(data.get("links") or [])
+        data["links"] = change(links, target, titles_for(connection), page["slug"])
+
+        cursor.execute("UPDATE blocks SET data = %s WHERE id = %s", (json.dumps(data), block_id))
+
+    return redirect(url_for("edit", slug=slug))
+
+
+@app.post("/<slug>/blocks/<int:block_id>/links")
+def add_link(slug, block_id):
+    def append(links, target, known, here):
+        # A page cannot link to itself, and a link already there is not added
+        # twice: both are mistakes with no useful reading.
+        if target in known and target != here and target not in links:
+            links.append(target)
+        return links
+
+    return edit_links(slug, block_id, append)
+
+
+@app.post("/<slug>/blocks/<int:block_id>/links/remove")
+def remove_link(slug, block_id):
+    return edit_links(slug, block_id, lambda links, target, _known, _here: [s for s in links if s != target])
