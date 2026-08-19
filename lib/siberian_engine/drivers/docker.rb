@@ -181,7 +181,10 @@ module Siberian
         # the interface grew rather than the caller reaching past it.
         def pull(image)
           name, tag = split_image(image)
-          @http.stream("/images/create", query: { "fromImage" => name, "tag" => tag }) { |_chunk| nil }
+          # The engine streams progress from a POST here, not a GET. Asking for
+          # it with a GET returns a bare 404 that says nothing about why.
+          @http.stream("/images/create", method: "POST",
+                                         query: { "fromImage" => name, "tag" => tag }) { |_chunk| nil }
           true
         rescue UnixHTTP::Error => e
           raise Error, "could not pull #{image}: #{e.message}"

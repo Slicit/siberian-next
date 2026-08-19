@@ -57,10 +57,13 @@ module Siberian
       end
 
       # Yields body chunks as they arrive instead of buffering. Used for logs,
-      # where the whole point is not waiting for the end.
-      def stream(path, query: nil)
+      # where the whole point is not waiting for the end, and for image pulls,
+      # which stream progress from a POST.
+      def stream(path, query: nil, method: "GET", body: nil)
+        payload = body.nil? ? nil : JSON.generate(body)
+
         with_socket do |sock|
-          write_request(sock, "GET", path, query, nil)
+          write_request(sock, method, path, query, payload)
           status, headers = read_head(sock)
           raise Error.new(status, read_body(sock, headers).to_s) unless status >= 200 && status < 300
 

@@ -37,8 +37,8 @@ module Siberian
         record(:delete, path, query, nil)
       end
 
-      def stream(path, query: nil)
-        @calls << { method: :stream, path: path, query: query }
+      def stream(path, query: nil, method: "GET", body: nil)
+        @calls << { method: :stream, path: path, query: query, verb: method, body: body }
         Array(@responses["stream:#{path}"]).each { |chunk| yield chunk }
         nil
       end

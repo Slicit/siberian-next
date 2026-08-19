@@ -96,6 +96,13 @@ class DockerDriverTest < Minitest::Test
     assert_equal({ "fromImage" => "nginx", "tag" => "1.27-alpine" }, pull[:query])
   end
 
+  def test_pull_uses_post_because_the_engine_streams_progress_from_it
+    @driver.pull("nginx:1.27-alpine")
+
+    pull = @http.calls.find { |c| c[:path] == "/images/create" }
+    assert_equal "POST", pull[:verb], "a GET here returns a bare 404 that explains nothing"
+  end
+
   def test_create_does_not_pull_an_image_already_present
     @http.on(:get, "/images/nginx%3A1.27-alpine/json", TestSupport.response({}))
     @http.on(:post, "/containers/create", TestSupport.response({ "Id" => "x" }))

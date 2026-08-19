@@ -67,8 +67,10 @@ class DockerEngineIntegrationTest < Minitest::Test
     assert_equal :stopped, @driver.status(id), "a created container has not started yet"
 
     @driver.start(id)
-    # alpine with no command exits immediately, so either state is legitimate.
-    assert_includes %i[running stopped], @driver.status(id)
+    # alpine with no long-running command exits at once, and every container
+    # carries RestartPolicy unless-stopped, so the engine may already be
+    # restarting it. All three states are legitimate here.
+    assert_includes %i[running stopped restarting], @driver.status(id)
 
     @driver.remove(id, force: true)
     @created.delete(id)
