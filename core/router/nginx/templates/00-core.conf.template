@@ -49,10 +49,14 @@ server {
 
 # Orchestrator. Operator-facing, deliberately on its own origin so a compromised
 # module frame has no path to it.
+#
+# core.<domain> rather than a domain of its own: the session cookie is scoped to
+# .<domain>, so a Backoffice outside that scope would receive no session at all
+# and would need a login of its own.
 server {
   listen 443 ssl;
   http2 on;
-  server_name admin.${SIBERIAN_DOMAIN};
+  server_name core.${SIBERIAN_DOMAIN};
 
   ssl_certificate     /etc/nginx/certs/server.pem;
   ssl_certificate_key /etc/nginx/certs/server-key.pem;

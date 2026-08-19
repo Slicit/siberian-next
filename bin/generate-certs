@@ -6,16 +6,25 @@
 # so a development domain on that TLD can never point at another machine; and
 # they increasingly refuse plain HTTP for anything that looks like an app. So
 # development uses a real-shaped domain over real TLS, signed by a CA you trust
-# once.
+# once. The domain is under .test, which RFC 6761 reserves for exactly this and
+# which no registry can ever delegate out from under the box.
 #
 # The wildcards matter: certificates match one label at a time, so
-# *.siberian.test does NOT cover tasks.apps.siberian.test. Every level a module
-# origin can appear at needs its own entry, which is exactly the kind of thing
-# that is discovered at 2am rather than read in a spec.
+# *.siberian.test covers core.siberian.test but does NOT cover
+# tasks.apps.siberian.test. Every level a module origin can appear at needs its
+# own entry, which is exactly the kind of thing that is discovered at 2am
+# rather than read in a spec.
+#
+# Several domains are one certificate, not several: the Router holds exactly
+# one, and multi-domain means more names in the same SAN list.
+#
+#   SIBERIAN_DOMAINS="siberian.test siberian-second.test" bin/generate-certs
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DOMAIN="${SIBERIAN_DOMAIN:-siberian.test}"
+DOMAINS="${SIBERIAN_DOMAINS:-${SIBERIAN_DOMAIN:-siberian.test}}"
+DOMAINS=$(echo "$DOMAINS" | tr ',' ' ')
+PRIMARY=$(echo "$DOMAINS" | awk '{print $1}')
 OUT="deploy/certs"
 DAYS="${CERT_DAYS:-825}"
 
@@ -32,6 +41,18 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
   -keyout "$OUT/ca-key.pem" -out "$OUT/ca.pem" \
   -subj "/CN=Siberian Development CA/O=Siberian" 2>/dev/null
 
+# Three names per domain: the domain itself, one label under it for core and
+# for anything else the core serves, and one label under apps for the module
+# origins. Numbered in one sequence, because openssl ignores a repeated key.
+alt=""
+n=0
+for domain in $DOMAINS; do
+  n=$((n + 1)); alt="${alt}DNS.${n} = ${domain}"$'\n'
+  n=$((n + 1)); alt="${alt}DNS.${n} = *.${domain}"$'\n'
+  n=$((n + 1)); alt="${alt}DNS.${n} = *.apps.${domain}"$'\n'
+done
+n=$((n + 1)); alt="${alt}DNS.${n} = localhost"$'\n'
+
 cat > "$OUT/server.cnf" <<CNF
 [req]
 distinguished_name = dn
@@ -39,7 +60,7 @@ req_extensions     = ext
 prompt             = no
 
 [dn]
-CN = ${DOMAIN}
+CN = ${PRIMARY}
 O  = Siberian Development
 
 [ext]
@@ -49,14 +70,10 @@ keyUsage         = digitalSignature, keyEncipherment
 extendedKeyUsage = serverAuth
 
 [alt]
-DNS.1 = ${DOMAIN}
-DNS.2 = *.${DOMAIN}
-DNS.3 = *.apps.${DOMAIN}
-DNS.4 = localhost
-IP.1  = 127.0.0.1
+${alt}IP.1  = 127.0.0.1
 CNF
 
-echo "Generating a server certificate for ${DOMAIN}, *.${DOMAIN}, *.apps.${DOMAIN}..."
+echo "Generating a server certificate for: ${DOMAINS}"
 openssl req -new -newkey rsa:2048 -nodes \
   -keyout "$OUT/server-key.pem" -out "$OUT/server.csr" \
   -config "$OUT/server.cnf" 2>/dev/null

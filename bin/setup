@@ -36,7 +36,7 @@ fi
 
 if [ ! -f .env ]; then
   cat > .env <<'ENVEOF'
-SIBERIAN_DOMAIN=siberian.localhost
+SIBERIAN_DOMAIN=siberian.test
 SIBERIAN_HTTP_PORT=8080
 SIBERIAN_RESOLVER=127.0.0.11
 POSTGRES_PASSWORD=postgres_dev_only

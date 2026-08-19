@@ -1,6 +1,6 @@
 #!/bin/sh
 # Signs in, then walks every Backoffice page with the resulting cookie. The
-# cookie is scoped to .<domain>, so the same jar works on admin.<domain>.
+# cookie is scoped to .<domain>, so the same jar works on core.<domain>.
 #
 # Over HTTPS through the Router, like every other smoke: the Backoffice has no
 # plain HTTP door, and a session cookie that is not Secure never arrives.
@@ -38,19 +38,19 @@ echo "signed in as operator"
 echo
 
 for path in / /modules /catalog /domains /interfaces /activity; do
-  code=$(fetch "https://admin.$DOMAIN$path")
+  code=$(fetch "https://core.$DOMAIN$path")
   title=$(grep -o '<title>[^<]*' /tmp/bo_page | head -1 | sed 's/<title>//')
   printf "%-12s -> %s   %s\n" "$path" "$code" "$title"
 done
 
 echo
 echo "catalogue entries visible:"
-fetch "https://admin.$DOMAIN/catalog" > /dev/null
+fetch "https://core.$DOMAIN/catalog" > /dev/null
 grep -oE '>(Tasks|Notes|Example Mail Relay)<' /tmp/bo_page | tr -d '<>' | sort -u | sed 's/^/   /'
 
 echo
 echo "review screen for example-relay:"
-fetch "https://admin.$DOMAIN/catalog/example-relay" > /dev/null
+fetch "https://core.$DOMAIN/catalog/example-relay" > /dev/null
 grep -oE 'mail.transport.v1|owner access to a new database \(deliveries\)|priority [0-9]+' /tmp/bo_page \
   | sort -u | sed 's/^/   /'
 
@@ -58,5 +58,5 @@ echo
 echo "a non-operator:"
 J=/tmp/bo_user_jar.txt
 sign_in $J user@siberian.localhost
-echo "   GET / -> $(fetch "https://admin.$DOMAIN/")   (expect 403)"
+echo "   GET / -> $(fetch "https://core.$DOMAIN/")   (expect 403)"
 grep -oE 'You cannot do that' /tmp/bo_page | head -1 | sed 's/^/   says: /'

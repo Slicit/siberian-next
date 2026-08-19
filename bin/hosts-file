@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Prints the hosts file entries a browser needs to reach this stack.
+#
+# There is no wildcard DNS on a laptop and a hosts file cannot express a
+# wildcard, so every origin needs a line of its own: the product domain, the
+# Backoffice at core.<domain>, and one per installed module per served domain.
+# That list changes every time a module is installed or a domain is added,
+# which is why it is generated rather than written down somewhere that rots.
+#
+# Paste the output into the hosts file on the machine running the browser:
+#
+#   Windows  C:\Windows\System32\drivers\etc\hosts   (as Administrator)
+#   macOS    /etc/hosts
+#   Linux    /etc/hosts
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# The address the browser has to reach, which is this machine rather than
+# loopback: the stack runs on a box and the browser usually does not.
+IP="${SIBERIAN_HOST_IP:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+[ -n "$IP" ] || { echo "Could not work out this machine's address. Set SIBERIAN_HOST_IP." >&2; exit 1; }
+
+lines=$(docker compose --env-file .env -f deploy/compose.yml exec -T orchestrator \
+  bin/rails runner '
+    domains = Domain.ordered.map(&:hostname)
+    domains = [ENV.fetch("SIBERIAN_DOMAIN", "siberian.test")] if domains.empty?
+    modules = InstalledModule.live.order(:name).to_a
+
+    # A hosts entry for a .localhost name cannot take effect: browsers resolve
+    # that TLD to 127.0.0.1 themselves and never ask a resolver. Naming such a
+    # domain is more use than dropping it, because why it is missing is exactly
+    # the question somebody will have.
+    unreachable, usable = domains.partition { |domain| domain.end_with?(".localhost") }
+
+    usable.each do |domain|
+      puts domain
+      puts "core.#{domain}"
+      modules.each { |installed| puts installed.origin_for(domain) }
+    end
+
+    unreachable.each { |domain| puts "!#{domain}" }
+  ' | tr -d '\r')
+
+echo "# siberian-next, generated $(date +%F) by bin/hosts-file"
+echo "$lines" | awk -v ip="$IP" '
+  /^!/ { skipped = skipped " " substr($0, 2); next }
+  NF   { print ip, $0 }
+  END  { if (skipped != "") {
+           print "# served but not reachable this way:" skipped
+           print "# browsers hardcode .localhost to 127.0.0.1, so a hosts entry cannot take effect"
+         } }
+'
+echo "# end siberian-next"

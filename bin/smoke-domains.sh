@@ -39,12 +39,12 @@ echo "signed in as operator"
 
 # A previous run may have left it behind. Same hostname every time, so the
 # Storage service accumulates one row rather than one per run.
-get "https://admin.$DOMAIN/domains" > /dev/null
+get "https://core.$DOMAIN/domains" > /dev/null
 ID=$(domain_id)
 if [ -n "$ID" ]; then
-  c -o /dev/null -X DELETE --data-urlencode "authenticity_token=$(token)" "https://admin.$DOMAIN/domains/$ID"
+  c -o /dev/null -X DELETE --data-urlencode "authenticity_token=$(token)" "https://core.$DOMAIN/domains/$ID"
   echo "removed a leftover $HOST"
-  get "https://admin.$DOMAIN/domains" > /dev/null
+  get "https://core.$DOMAIN/domains" > /dev/null
 fi
 
 echo
@@ -54,27 +54,27 @@ echo "   -> $(c -o /tmp/dom_add -w '%{http_code}' -X POST \
   --data-urlencode "domain[hostname]=$HOST" \
   --data-urlencode "domain[label]=Storage smoke" \
   --data-urlencode "quota_mb=64" \
-  --data-urlencode "default_bucket_quota_mb=8" "https://admin.$DOMAIN/domains")   (expect 302)"
+  --data-urlencode "default_bucket_quota_mb=8" "https://core.$DOMAIN/domains")   (expect 302)"
 
-echo "2. the Domains page reads it back -> $(get "https://admin.$DOMAIN/domains")"
+echo "2. the Domains page reads it back -> $(get "https://core.$DOMAIN/domains")"
 grep -oE "$HOST [^<]{0,80}" $P | head -1 | sed 's/^/   said: /'
 grep -A25 ">$HOST<" $P | grep -oE 'of 64 MB|value="64"|value="8"' | sort -u | sed 's/^/   /'
 ID=$(domain_id)
 
-echo "3. Storage lists it with nothing stored on it -> $(get "https://admin.$DOMAIN/storage")"
+echo "3. Storage lists it with nothing stored on it -> $(get "https://core.$DOMAIN/storage")"
 grep -A10 ">$HOST<" $P | grep -oE '0 Bytes|of 64 MB|no ceiling' | head -2 | sed 's/^/   /'
 
 echo "4. clear the ceiling"
-get "https://admin.$DOMAIN/domains" > /dev/null
+get "https://core.$DOMAIN/domains" > /dev/null
 echo "   -> $(c -o /dev/null -w '%{http_code}' -X PATCH \
   --data-urlencode "authenticity_token=$(token)" \
   --data-urlencode "quota_mb=" \
-  --data-urlencode "default_bucket_quota_mb=" "https://admin.$DOMAIN/domains/$ID/storage")   (expect 302)"
-get "https://admin.$DOMAIN/domains" > /dev/null
+  --data-urlencode "default_bucket_quota_mb=" "https://core.$DOMAIN/domains/$ID/storage")   (expect 302)"
+get "https://core.$DOMAIN/domains" > /dev/null
 grep -oE "$HOST: [^<]{0,60}" $P | head -1 | sed 's/^/   said: /'
 
 echo "5. remove the domain -> $(c -o /dev/null -w '%{http_code}' -X DELETE \
-  --data-urlencode "authenticity_token=$(token)" "https://admin.$DOMAIN/domains/$ID")   (expect 302)"
+  --data-urlencode "authenticity_token=$(token)" "https://core.$DOMAIN/domains/$ID")   (expect 302)"
 
-echo "6. its storage row outlives it, and says so -> $(get "https://admin.$DOMAIN/storage")"
+echo "6. its storage row outlives it, and says so -> $(get "https://core.$DOMAIN/storage")"
 grep -A2 ">$HOST<" $P | grep -oE 'no longer served' | head -1 | sed 's/^/   /'

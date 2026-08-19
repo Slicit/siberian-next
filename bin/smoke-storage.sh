@@ -1,7 +1,7 @@
 #!/bin/sh
 S=http://storage:3000
 ADMIN="Authorization: Bearer orchestrator_dev_only"
-DOM="X-Siberian-Domain: siberian.localhost"
+DOM="X-Siberian-Domain: ${SIBERIAN_DOMAIN:-siberian.test}"
 q() { curl -s -o /tmp/body -w "%{http_code}" "$@"; }
 
 code=$(q -X POST "$S/admin/modules" -H "$ADMIN" -H "Content-Type: application/json" \
@@ -11,7 +11,7 @@ TOKEN=$(sed 's/.*"token":"//; s/".*//' /tmp/body)
 MOD="Authorization: Bearer $TOKEN"
 [ ${#TOKEN} -gt 20 ] && echo "   token looks like a token       (${#TOKEN} chars)" || { echo "   BAD TOKEN: $(head -c 200 /tmp/body)"; exit 1; }
 
-echo "2. provision bucket             -> $(q -X POST "$S/admin/modules/smoke-test/buckets" -H "$ADMIN" -H "Content-Type: application/json" -d '{"domain":"siberian.localhost"}')"
+echo "2. provision bucket             -> $(q -X POST "$S/admin/modules/smoke-test/buckets" -H "$ADMIN" -H "Content-Type: application/json" -d "{\"domain\":\"${SIBERIAN_DOMAIN:-siberian.test}\"}")"
 echo "   $(head -c 120 /tmp/body)"
 echo "3. PUT a file                   -> $(q -X PUT "$S/v1/files/notes/hello.txt" -H "$MOD" -H "$DOM" -H "Content-Type: text/plain" --data-binary 'hello from a module')"
 echo "   $(head -c 120 /tmp/body)"

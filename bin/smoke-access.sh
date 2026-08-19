@@ -29,7 +29,7 @@ echo "--- Backoffice, by role ---"
 printf "%-12s %-8s %-9s %-6s\n" page owner operator user
 for path in / /modules /catalog /people /roles /domains /activity; do
   printf "%-12s " "$path"
-  for who in owner operator user; do printf "%-9s" "$(code "$who" "https://admin.$DOMAIN$path")"; done
+  for who in owner operator user; do printf "%-9s" "$(code "$who" "https://core.$DOMAIN$path")"; done
   echo
 done
 

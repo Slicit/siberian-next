@@ -7,6 +7,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# The domain is a tenant identifier here, not a hostname to resolve, but it has
+# to be the one the stack actually serves or the bucket lands under a domain
+# nothing else knows about.
 docker run --rm --network siberian_core \
+  -e "SIBERIAN_DOMAIN=${SIBERIAN_DOMAIN:-siberian.test}" \
   -v "$PWD/bin/smoke-storage.sh:/smoke.sh:ro" \
   curlimages/curl:latest sh /smoke.sh
