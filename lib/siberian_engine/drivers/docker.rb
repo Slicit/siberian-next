@@ -143,6 +143,12 @@ module Siberian
           })
           true
         rescue UnixHTTP::Error => e
+          # Already attached is the state the caller asked for. The engine says
+          # so with 403 here rather than the 409 it uses everywhere else, so the
+          # message is what has to be read: without this, reconciling routes
+          # fails on the first module that was already wired up correctly.
+          raise AlreadyExists, e.message if e.message.include?("already exists")
+
           raise translate(e, id)
         end
 

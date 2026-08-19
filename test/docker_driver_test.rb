@@ -198,6 +198,23 @@ class DockerDriverTest < Minitest::Test
     assert_includes check["Test"].last, "http://127.0.0.1:80/up"
   end
 
+  def test_attaching_a_container_that_is_already_attached_is_already_exists
+    # The engine answers 403 here rather than the 409 it uses elsewhere, so the
+    # message is the only thing that distinguishes it from a real refusal.
+    @http.on(:post, "/networks/net/connect",
+             Engine::UnixHTTP::Error.new(403, JSON.generate({ "message" => "endpoint with name r already exists in network net" })))
+
+    assert_raises(Engine::Driver::AlreadyExists) { @driver.attach("r", network: "net") }
+  end
+
+  def test_a_genuine_attach_refusal_is_still_an_error
+    @http.on(:post, "/networks/net/connect",
+             Engine::UnixHTTP::Error.new(403, JSON.generate({ "message" => "network is internal" })))
+
+    error = assert_raises(Engine::Driver::Error) { @driver.attach("r", network: "net") }
+    refute_kind_of Engine::Driver::AlreadyExists, error
+  end
+
   # Discovery ------------------------------------------------------------
 
   def test_list_filters_by_label_and_returns_neutral_summaries
