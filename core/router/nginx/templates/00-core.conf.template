@@ -31,6 +31,33 @@ server {
   # differs by engine, so it is rendered rather than hardcoded.
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
 
+  # The app's door into a module.
+  #
+  # An app has no origins. Every module's native code runs in one JavaScript
+  # context, in one process, so nothing on the device can stop one module's code
+  # from calling another's endpoint. The boundary therefore lives here: the
+  # module is the first path segment, this block sets the module identity from
+  # that segment rather than from anything the client sends, and the call is
+  # authorised as the user, against module.<name>.use, exactly as the browser
+  # path is.
+  #
+  # Two segments, deliberately. The Base App already serves /m/<capability-id>
+  # for a framed page, and that has no second segment, so it falls through to
+  # the location below. A regex location wins over a prefix one in nginx, which
+  # is what makes these two coexist without either knowing about the other.
+  location ~ "^/m/([a-z0-9][a-z0-9-]*)/(.*)$" {
+    set $module_name $1;
+    set $module_path $2;
+    set $upstream_module "http://$module_name";
+
+    proxy_pass $upstream_module/$module_path$is_args$args;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+
+    # Set here, never accepted from the client: a header a caller can write is
+    # not an identity.
+    proxy_set_header X-Siberian-Module $module_name;
+  }
+
   # Sign in and out are served by Auth on the main domain, so the cookie it
   # sets is scoped to the domain every module frame sits under. The Base App
   # never sees a password.
