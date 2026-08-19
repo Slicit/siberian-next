@@ -42,7 +42,7 @@ module Admin
 
       # Resolved now and kept, so a build can still be explained after the
       # configuration behind it has changed. A build is a thing that happened.
-      build.update!(configuration: BuildPlan.new(build).to_h)
+      build.update!(configuration: BuildPlan.new(build).to_h(secrets: false))
 
       render json: serialize(build).merge(position: Build.pending.where("id <= ?", build.id).count), status: :accepted
     rescue ActiveRecord::RecordInvalid => e

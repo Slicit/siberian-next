@@ -12,7 +12,11 @@ class BuildPlan
     @app = build.mobile_app
   end
 
-  def to_h
+  # `secrets: false` is what gets stored on the build row. A capability's keys
+  # are a credential, not a record of what was configured, and a credential kept
+  # forever on a row nobody looks at again is a credential nobody is watching.
+  def to_h(secrets: true)
+    @secrets = secrets
     enabled = @app.enabled_capabilities
 
     {
@@ -56,7 +60,7 @@ class BuildPlan
       # explaining it, so the sentence travels with the capability rather than
       # being remembered at packaging time.
       usage: definition[:usage],
-      settings: row&.settings || {}
+      settings: @secrets ? (row&.settings || {}) : {}
     }
   end
 

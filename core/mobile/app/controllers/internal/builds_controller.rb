@@ -19,7 +19,11 @@ module Internal
       build = Build.claim_next!
       return head :no_content if build.nil?
 
-      render json: { build_id: build.id, plan: build.configuration }
+      # The plan was fixed when the build was queued, so changing a capability
+      # does not change a build already in the queue. Credentials are the one
+      # exception: they are read now, because a key that was rotated after this
+      # was queued is the key that works.
+      render json: { build_id: build.id, plan: with_current_secrets(build) }
     end
 
     # POST /internal/builds/:id/artifact
@@ -86,6 +90,18 @@ module Internal
     end
 
     private
+
+    def with_current_secrets(build)
+      plan = build.configuration.deep_dup
+      app = build.mobile_app
+
+      Array(plan["capabilities"]).each do |capability|
+        row = app.app_capabilities.find_by(capability: capability["id"])
+        capability["settings"] = row&.settings || {}
+      end
+
+      plan
+    end
 
     def extension_for(build)
       build.platform == Build::IOS ? ".zip" : ".apk"
