@@ -36,6 +36,7 @@ Rails.application.routes.draw do
   # container name, a uuid, or a network: a module is a title, an area, a URL.
   namespace :internal do
     get "capabilities", to: "capabilities#index"
+    get "interfaces/:name", to: "interfaces#show", constraints: { name: %r{[^/]+} }, format: false
   end
 
   get "up", to: "rails/health#show", as: :rails_health_check

@@ -13,7 +13,7 @@ Two classes of containers.
 - **Router**: gives every installed module a base route (`/module-base-route`) and an internal short DNS name, so modules can call each other over the local API. This is the hook and integration surface between modules.
 - **Configuration**: core data and configuration store.
 - **Auth**: out-of-the-box authentication exposed over API (OAuth, JWT, 2FA, and the rest of the modern set).
-- **Mailer**: out-of-the-box mail delivery exposed over API.
+- **Mailer**: a queue rather than a send call. A module hands over a message and stops thinking about it; the queue retries with backoff, gives up into a dead state rather than looping, and keeps reporting every terminal outcome until the module acknowledges it. Delivery resolves `mail.transport.v1` per attempt, so installing a transport module drains a queue that is already backed up.
 - **Database**: provisions one database and one Postgres role per `(module, domain)` pair and hands the module a DSN. The module then connects to Postgres directly: nothing sits in the hot path of a module reading its own data, because Postgres roles already are the isolation. Module data lives on its own cluster, separate from the one holding auth, orchestrator, and configuration. Reading a table the module does not own works the other way round, and deliberately so: those reads go through the service, table by table against grants an operator approved with a stated reason, and every one lands in the audit trail. A direct connection would be unobservable, which is what an audit trail cannot afford.
 - **Storage**: file storage for every module, over a plain HTTP API (`PUT`, `GET`, `DELETE` on `/v1/{space}/{path}`). Modules never see S3, never hold an object store credential, and never need an S3 SDK. Spaces are `files`, `tmp`, and `public`. One bucket per `(module, domain)` pair, same isolation rule as the Database service.
 
@@ -90,6 +90,7 @@ Core images build with the repository root as build context, so `lib/` can be co
 - **Reaching into a database somebody else owns is granted table by table, with a stated reason.** A grant with no table list is a request for everything, and an operator cannot meaningfully approve that. Every use of such a grant is audited, refusals included.
 - **Development runs over HTTPS.** The session cookie must be `Secure` to reach a module frame, so plain HTTP is not a simpler version of the product, it is a broken one.
 - **Modules address the core at `http://core/...`**, never a service name directly. They have no route to one.
+- **Core services reach a module at `http://modules/<name>/...`**, for the same reason in reverse. The Router is the only container on both sides.
 - **Access is resolved once per session and checked in memory.** Permissions are dotted strings with wildcards, resolved into a flat set when a session starts and invalidated by a version stamp on the user. A page may ask a dozen times without a query or a round trip. The cost is a stated ceiling: a withdrawn permission can survive up to 30 seconds, and anything that cannot tolerate that asks Auth for a fresh answer.
 - **A hidden link is not access control.** Every page checks, not only the navigation that led to it.
 

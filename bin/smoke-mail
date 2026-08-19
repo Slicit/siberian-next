@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Drives the mail queue: enqueue, deduplicate, deliver, acknowledge, and watch a
+# permanent rejection stop rather than retry six times.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec docker run --rm --network siberian_core -v "$PWD/bin/smoke-mail.sh:/s.sh:ro" curlimages/curl:latest sh /s.sh

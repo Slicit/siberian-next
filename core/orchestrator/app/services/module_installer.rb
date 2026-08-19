@@ -201,10 +201,12 @@ class ModuleInstaller
       "SIBERIAN_CORE_URL" => "http://core",
       "SIBERIAN_AUTH_URL" => "http://core/auth",
       "SIBERIAN_STORAGE_URL" => "http://core/storage",
-      "SIBERIAN_DATABASE_URL" => "http://core/database"
+      "SIBERIAN_DATABASE_URL" => "http://core/database",
+      "SIBERIAN_MAILER_URL" => "http://core/mailer"
     }
     env["SIBERIAN_STORAGE_TOKEN"] = tokens&.storage_token if tokens&.storage_token
     env["SIBERIAN_DATABASE_TOKEN"] = tokens&.database_token if tokens&.database_token
+    env["SIBERIAN_MAIL_TOKEN"] = tokens&.mail_token if tokens&.mail_token
     env
   end
 

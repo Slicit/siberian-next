@@ -32,7 +32,7 @@ class InterfaceRegistryTest < ActiveSupport::TestCase
 
     refute resolved.built_in?
     assert_equal "example-relay", resolved.provider
-    assert_equal "http://example-relay/internal/mail", resolved.url
+    assert_equal "http://modules/example-relay/internal/mail", resolved.url
   end
 
   test "a module can deliberately sit behind the core by asking for it" do

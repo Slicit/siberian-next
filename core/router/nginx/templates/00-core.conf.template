@@ -132,3 +132,34 @@ server {
     return 404 "no such core service\n";
   }
 }
+
+# The other direction: core services reaching into a module.
+#
+# Modules address the core at http://core/..., and until now nothing went the
+# other way. The Mailer resolving a transport that lives in a module could see
+# its URL and had no route to it, which presents as a DNS failure rather than as
+# a missing door.
+#
+# Symmetric with the core block, and reachable only from inside: it answers to
+# the name "modules", which no public DNS resolves and no browser sends. The
+# Router is the only container attached to every module network, which is
+# exactly why it is the one that can do this.
+server {
+  listen 80;
+  server_name modules;
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+
+  # /<module>/<path> proxies to the module short name, which resolves on that
+  # module network. Nothing here learns a uuid or a container name.
+  location ~ ^/([a-z0-9][a-z0-9-]*)/(.*)$ {
+    set $module_name $1;
+    set $module_path $2;
+    set $upstream_module "http://$module_name";
+    proxy_pass $upstream_module/$module_path$is_args$args;
+    include /etc/nginx/siberian/internal_headers.conf;
+  }
+
+  location / {
+    return 404 "address a module as /<module-name>/<path>";
+  }
+}

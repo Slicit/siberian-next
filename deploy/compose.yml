@@ -52,7 +52,10 @@ services:
         # Module containers join this network with their short name as alias.
         # The Router resolves them by that alias and never learns the
         # uuid-prefixed container name.
-        aliases: [router]
+        # The Router answers to three names on the core network: itself, the door
+        # modules use to reach the core, and the door core services use to reach
+        # a module. It is the only container on both sides, which is why.
+        aliases: [router, core, modules]
 
   orchestrator:
     build:
@@ -64,6 +67,7 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_orchestrator
       SIBERIAN_ENGINE: docker
       SIBERIAN_AUTH_URL: http://auth:3000
+      SIBERIAN_MAILER_URL: http://mailer:3000
       SIBERIAN_DATABASE_URL_SERVICE: http://database:3000
       SIBERIAN_STORAGE_URL: http://storage:3000
       SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
@@ -131,6 +135,31 @@ services:
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mailer
+      SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
+      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+    volumes:
+      - ../core/mailer:/app
+      - ../lib:/app/lib
+    depends_on:
+      configuration:
+        condition: service_healthy
+    networks: [core]
+
+  # Same image as the mailer, different command. The API and the worker are
+  # separate processes so a delivery that hangs cannot take the queue endpoints
+  # down with it, and so they restart and scale separately.
+  mailer-worker:
+    build:
+      <<: *rails_build
+      args:
+        SERVICE: mailer
+    command: ["bin/worker"]
+    environment:
+      <<: *rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mailer
+      SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
+      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      MAILER_POLL_INTERVAL: "${MAILER_POLL_INTERVAL:-5}"
     volumes:
       - ../core/mailer:/app
       - ../lib:/app/lib
