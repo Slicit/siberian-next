@@ -72,7 +72,7 @@ fetch "https://core.$DOMAIN/" > /dev/null
 # The unit tests check the menu data against the controllers. This checks that
 # the data reached the page at all, which is a different failure and one that
 # has happened: a nav entry that exists and is never rendered.
-grep -oE '>(Overview|Modules|Catalogue|People|Roles|Domains|Storage|Phone apps|Interfaces|Activity)</a>' $P \
-  | sed 's/>//; s|</a>||' | sort | tr '\n' ' ' | sed 's/^/   operator sees: /'
+grep -oE '>(Overview|Modules|Catalogue|People|Roles|Domains|Storage|Phone apps|Interfaces|Activity)</a>' /tmp/bo_page \
+  | sed 's/^>//; s|</a>||' | sort | tr '\n' ' ' | sed 's/^/   operator sees: /'
 echo
 echo "   breadcrumb blocks: $(grep -c 'class="breadcrumb"' /tmp/bo_page)"
