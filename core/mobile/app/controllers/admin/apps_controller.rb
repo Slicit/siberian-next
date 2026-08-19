@@ -74,6 +74,36 @@ module Admin
       end
     end
 
+    # POST /admin/apps/:domain/suggest
+    #
+    # A proposal, never a change. What comes back is shown to a person who
+    # accepts it capability by capability, which is the same rule that governs
+    # a manifest: something written elsewhere asks, and somebody here decides.
+    def suggest
+      return render json: { error: "the assistant is not configured" }, status: :service_unavailable unless AppAdvisor.available?
+
+      description = params[:description].to_s.strip
+      return render json: { error: "say what the app is for" }, status: :unprocessable_entity if description.empty?
+
+      app = MobileApp.find_by(domain: params[:domain])
+
+      proposal = AppAdvisor.new.call(
+        description: description,
+        domain: params[:domain],
+        app: app && serialize(app).deep_stringify_keys,
+        modules: ModuleRegistration.live.ordered.pluck(:module_name)
+      )
+
+      render json: { proposal: proposal }
+    rescue AppAdvisor::NotConfigured => e
+      render json: { error: e.message }, status: :service_unavailable
+    rescue AppAdvisor::Refused => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    rescue StandardError => e
+      Rails.logger.warn("advisor failed: #{e.class}: #{e.message}")
+      render json: { error: "the assistant could not be reached" }, status: :bad_gateway
+    end
+
     # DELETE /admin/apps/:domain
     def destroy
       app = MobileApp.find_by(domain: params[:domain])

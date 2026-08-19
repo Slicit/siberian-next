@@ -8,6 +8,7 @@ Rails.application.routes.draw do
     delete "apps/:domain", to: "apps#destroy", constraints: { domain: %r{[^/]+} }, format: false
     patch "apps/:domain/capabilities/:capability", to: "apps#update_capability",
           constraints: { domain: %r{[^/]+} }, format: false
+    post "apps/:domain/suggest", to: "apps#suggest", constraints: { domain: %r{[^/]+} }, format: false
 
     get "modules", to: "modules#index"
     post "modules", to: "modules#create"
