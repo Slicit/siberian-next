@@ -29,7 +29,7 @@ class CatalogController < ApplicationController
       return redirect_to catalog_entry_path(entry.name), alert: "Approve the permissions to install."
     end
 
-    result = ModuleInstaller.new(entry.manifest).call
+    result = ModuleInstaller.new(entry.manifest, registrar: ServiceRegistrar.new).call
 
     if result.success?
       redirect_to module_path(result.installed_module.name), notice: "#{entry.title} installed."

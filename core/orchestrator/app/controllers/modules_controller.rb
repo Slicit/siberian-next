@@ -31,7 +31,8 @@ class ModulesController < ApplicationController
   end
 
   def destroy
-    result = ModuleUninstaller.new(@module, keep_data: params[:keep_data] != "false").call
+    result = ModuleUninstaller.new(@module, registrar: ServiceRegistrar.new,
+                                   keep_data: params[:keep_data] != "false").call
 
     if result.success?
       message = "#{@module.name} removed."

@@ -13,12 +13,12 @@ class ModuleUninstaller
   def initialize(installed_module,
                  driver: Siberian::Engine.driver,
                  router: RouterConfig.new,
-                 provisioners: ModuleInstaller.default_provisioners,
+                 registrar: nil,
                  keep_data: true)
     @installed = installed_module
     @driver = driver
     @router = router
-    @provisioners = Array(provisioners)
+    @registrar = registrar
     @keep_data = keep_data
     @warnings = []
   end
@@ -72,18 +72,13 @@ class ModuleUninstaller
     attempt("remove network #{@installed.network_name}") { @driver.remove_network(@installed.network_name) }
   end
 
-  # Data outlives the module by default. Reinstalling a module and finding its
-  # files gone is a far worse surprise than a bucket left behind.
+  # Revoking a module's identity is not the same as destroying what it wrote.
+  # The services lock the credentials out and keep the data: reinstalling a
+  # module to find its files and tables gone is a far worse surprise than a
+  # bucket left behind.
   def release_provisions
-    return if @keep_data
+    return if @registrar.nil?
 
-    @installed.provisions.each do |provision|
-      provisioner = @provisioners.find { |p| p.kind == provision.kind }
-      next if provisioner.nil?
-
-      attempt("release #{provision.kind} #{provision.identifier}") do
-        provisioner.undo(@installed, provision.domain)
-      end
-    end
+    attempt("revoke service credentials") { @registrar.revoke(@installed) }
   end
 end

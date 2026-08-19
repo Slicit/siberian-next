@@ -16,21 +16,16 @@ class ModuleInstaller
   def initialize(manifest,
                  driver: Siberian::Engine.driver,
                  router: RouterConfig.new,
-                 provisioners: self.class.default_provisioners,
+                 registrar: nil,
                  domains: nil)
     @manifest = manifest
     @driver = driver
     @router = router
-    @provisioners = Array(provisioners)
+    # Injected rather than reached for, so installation can be tested without a
+    # Storage service and a Database service standing behind it.
+    @registrar = registrar
     @domains = domains
     @undo = []
-  end
-
-  # Provisioners run once per (module, domain) pair. They are injected rather
-  # than reached for, so installation can be tested without a Database service
-  # and a Storage service standing behind it.
-  def self.default_provisioners
-    []
   end
 
   def call
@@ -42,8 +37,14 @@ class ModuleInstaller
     installed = create_record
     Activity.record("install.started", installed_module: installed, outcome: "started", module_name: @manifest.name)
 
+    # Before the containers, because the tokens these calls return are injected
+    # into them as environment. A module that has to fetch credentials from a
+    # service it was never introduced to cannot start.
+    tokens = register_with_services(installed)
+
     create_network(installed)
-    create_containers(installed)
+    attach_data_cluster(installed)
+    create_containers(installed, tokens)
     provision(installed)
     publish_routes(installed)
 
@@ -192,8 +193,59 @@ class ModuleInstaller
     Activity.record("network.reused", installed_module: installed, network: installed.network_name)
   end
 
-  def create_containers(installed)
+  # Everything a module needs to find the core, handed to it rather than
+  # discovered. The addresses are the Router aliases, so a module never learns
+  # a container name.
+  def core_environment(tokens)
+    env = {
+      "SIBERIAN_CORE_URL" => "http://core",
+      "SIBERIAN_AUTH_URL" => "http://core/auth",
+      "SIBERIAN_STORAGE_URL" => "http://core/storage",
+      "SIBERIAN_DATABASE_URL" => "http://core/database"
+    }
+    env["SIBERIAN_STORAGE_TOKEN"] = tokens&.storage_token if tokens&.storage_token
+    env["SIBERIAN_DATABASE_TOKEN"] = tokens&.database_token if tokens&.database_token
+    env
+  end
+
+  def register_with_services(installed)
+    return nil if @registrar.nil?
+
+    tokens = @registrar.register(installed, @manifest)
+    @undo << -> { @registrar.revoke(installed) }
+
+    approved = @registrar.approve_table_grants(installed, @manifest)
+    if approved.any?
+      Activity.record("grants.approved", installed_module: installed, grants: approved)
+    end
+
+    tokens
+  end
+
+  # The module data cluster answers to "db" on every module network. A module
+  # connects to Postgres directly with the credentials the Database service
+  # issued it; nothing proxies a module reading its own data.
+  def attach_data_cluster(installed)
+    container = ENV["SIBERIAN_MODULEDB_CONTAINER"].presence
+    return if container.nil?
+
+    @driver.attach(container, network: installed.network_name, aliases: ["db"])
+    @undo << -> { @driver.detach(container, network: installed.network_name) }
+    Activity.record("data_cluster.attached", installed_module: installed, network: installed.network_name)
+  rescue Siberian::Engine::Driver::AlreadyExists
+    nil
+  rescue StandardError => e
+    # A module with no database grant does not need the cluster, so this is a
+    # warning rather than a failed install.
+    Activity.record("data_cluster.attach_failed", installed_module: installed,
+                                                  outcome: "failed", detail: e.message)
+  end
+
+  def create_containers(installed, tokens = nil)
+    extra_env = core_environment(tokens)
+
     @manifest.container_specs(uuid: installed.uuid).each do |spec|
+      spec.env = extra_env.merge(spec.env || {})
       container = installed.module_containers.create!(
         service: spec.labels["siberian.service"],
         name: spec.name,
@@ -212,19 +264,21 @@ class ModuleInstaller
     end
   end
 
+  # Per (module, domain), because that is where isolation lives. The containers
+  # exist once and are shared across every domain.
   def provision(installed)
-    return if @provisioners.empty?
+    return if @registrar.nil?
 
     domains.each do |domain|
-      @provisioners.each do |provisioner|
-        next unless provisioner.applies_to?(installed)
-
-        provision = provisioner.call(installed, domain)
-        next if provision.nil?
-
-        @undo << -> { provisioner.undo(installed, domain) }
-        Activity.record("provisioned", installed_module: installed, kind: provision.kind,
-                                       domain: domain.hostname, identifier: provision.identifier)
+      @registrar.provision(installed, @manifest, domain).each do |provision|
+        installed.provisions.create!(
+          domain: domain,
+          kind: provision[:kind],
+          identifier: provision[:identifier],
+          state: "ready"
+        )
+        Activity.record("provisioned", installed_module: installed, kind: provision[:kind],
+                                       domain: domain.hostname, identifier: provision[:identifier])
       end
     end
   end
