@@ -30,6 +30,7 @@ Rules:
 
 - Same-origin iframes are not a boundary: a frame served from the parent's own origin can reach `window.parent`, its DOM, and its storage. Module frames are served from `<module>.apps.<domain>` precisely so the boundary is browser-enforced. Never "simplify" a module back onto the parent origin.
 - Core images build from the repository root, not from their own directory, because `lib/` has to be copied in. A Dockerfile that assumes its own directory is the build context will fail to find `lib/`. See `deploy/rails.Dockerfile`.
+- Executable bits do not survive authoring on Windows: `chmod +x` is a no-op on the working tree there, so scripts land in git as mode 100644 and fail with `Permission denied` on Linux. Fix in the index with `git update-index --chmod=+x <file>`, not by chmod.
 - `resolver 127.0.0.11` is the Docker embedded DNS address, not a general one. Anything engine-specific in Router config has to be rendered from environment, or it silently breaks under a different engine. Caught by `bin/check-engine-leak`.
 
 ## Glossary
