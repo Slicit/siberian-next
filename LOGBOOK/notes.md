@@ -63,6 +63,9 @@ Rules:
 
 - A layout that tolerates missing data with `|| []` turns a controller that forgot into a menu that is quietly short. Two menu bugs in this codebase were the same shape: the entry existed, nothing raised, and the only symptom was one fewer link on some pages. Load what every page needs in a `before_action`, and keep the fallback only where a page genuinely halts before it (the refusal page), with a comment saying so.
 
+- Changing how a generated file is produced does not remove what the old way wrote. The upstream map moved from one file to a directory of them, and the superseded file sat in a Docker volume being included by the same glob, as a second map for the same variable frozen at whatever was installed the day it was last written. Delete the old artifact from the code that replaced it, because a volume outlives every image built after it.
+- `InstalledModule.live` is running or degraded, which excludes a module part way through being installed. Anything the installer does with `live` therefore leaves out the module it is installing: the upstream map missed it, and the module an operator had just installed was the one module unreachable at `/m/<name>/`.
+
 ## Glossary
 
 <!-- Project-specific terms an outside reader would not know. -->

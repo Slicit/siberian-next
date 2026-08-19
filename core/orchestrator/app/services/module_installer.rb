@@ -293,7 +293,11 @@ class ModuleInstaller
 
     @router.write(installed, domains)
     @undo << -> { @router.remove(installed) }
-    @router.refresh_upstreams!(InstalledModule.live)
+    # `live` is running or degraded, and this module is still `installing`, so
+    # it would be the one module missing from its own upstream map: installed,
+    # routed on its own origin, and unreachable at /m/<name>/ until something
+    # else reconciled routing.
+    @router.refresh_upstreams!(InstalledModule.live.where.not(id: installed.id).to_a + [installed])
     @router.reload
     Activity.record("routes.published", installed_module: installed, domains: domains.map(&:hostname))
   end
