@@ -1,0 +1,56 @@
+# Core routes. Rendered at container start from environment.
+#
+#   SIBERIAN_DOMAIN    the domain being served, for example example.com
+#
+# One rendered copy per served domain. Multi-domain means several of these,
+# all pointing at the same containers: isolation is at the data layer, not the
+# runtime layer (LOGBOOK.md, Conventions).
+
+# Base App. The product shell that wraps installed modules in iframes.
+server {
+  listen 80;
+  # Container names resolve through the network's embedded DNS. Its address
+  # differs by engine, so it is rendered rather than hardcoded.
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+  server_name ${SIBERIAN_DOMAIN};
+
+  location / {
+    set $upstream_base "http://base:3000";
+    proxy_pass $upstream_base;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # The domain travels with every request. Auth and the Database service use
+    # it to resolve the per-domain database; the SDKs read it so module authors
+    # never handle it by hand.
+    proxy_set_header X-Siberian-Domain $host;
+  }
+}
+
+# Orchestrator. Operator-facing, deliberately on its own origin so a compromised
+# module frame has no path to it.
+server {
+  listen 80;
+  # Container names resolve through the network's embedded DNS. Its address
+  # differs by engine, so it is rendered rather than hardcoded.
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+  server_name admin.${SIBERIAN_DOMAIN};
+
+  location / {
+    set $upstream_admin "http://orchestrator:3000";
+    proxy_pass $upstream_admin;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Siberian-Domain $host;
+
+    # The Backoffice is never framed, by anything.
+    add_header X-Frame-Options DENY always;
+    add_header Content-Security-Policy "frame-ancestors 'none'" always;
+  }
+}

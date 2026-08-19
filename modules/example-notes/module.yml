@@ -1,0 +1,71 @@
+# Reference module. Exists to exercise the contract in lib/contracts, not to be
+# useful. It uses the shape described in LOGBOOK.md: a datastore, a runner, and
+# a small http container that serves the UI.
+schema_version: 1
+name: example-notes
+version: 0.1.0
+title: Example Notes
+description: Reference module covering install, routing, a database grant, and capability declaration.
+
+containers:
+  - service: web
+    image: nginx:1.27-alpine
+    role: http
+    internal_port: 80
+    health:
+      path: /up
+      interval_seconds: 30
+
+  - service: app
+    image: php:8.3-fpm-alpine
+    role: worker
+
+  - service: cache
+    image: redis:7-alpine
+    role: datastore
+
+routes:
+  base: /example-notes
+  entry: web
+  origin: example-notes
+
+permissions:
+  databases:
+    # Provisioned and owned by this module. One database per domain, which is
+    # how domain isolation works here. The module never sees a credential it
+    # was not granted at install time.
+    - name: primary
+      access: owner
+      scope: per_domain
+
+    # Read against a database this module does not own. Read is the default.
+    - target: core.configuration
+      access: read
+      scope: global
+
+  mail:
+    send: true
+
+  modules: []
+
+capabilities:
+  provides:
+    # Listed in the Base App sidebar, under the entities area.
+    - id: example_notes.note.viewer
+      area: sidebar.entities
+      title: Notes
+      path: /notes
+      icon: note
+
+    # Not a page of its own. Offered to any module that needs to attach a note
+    # to something it owns, which is what auto-discovery composes against.
+    - id: example_notes.note.attacher
+      area: embed.attachment
+      title: Attach a note
+      path: /embeds/attach
+      accepts:
+        - core.subject.any
+
+  consumes:
+    - id: core.user.picker
+      optional: true

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Generates one core Rails service, in a container. Ruby is never required on
+# the host: the same image that runs the service generates it.
+#
+#   bin/new-rails-app orchestrator
+#   bin/new-rails-app mailer --api
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+service="${1:-}"
+if [ -z "$service" ]; then
+  echo "usage: bin/new-rails-app <orchestrator|base|auth|mailer> [rails new flags]" >&2
+  exit 1
+fi
+shift
+
+target="core/$service"
+if [ -n "$(ls -A "$target" 2>/dev/null || true)" ]; then
+  echo "core/$service is not empty. Refusing to generate over existing code." >&2
+  exit 1
+fi
+
+mkdir -p "$target"
+docker run --rm \
+  -v "$PWD/$target:/app" \
+  -w /app \
+  ruby:3.3-slim \
+  bash -lc "apt-get update -qq && apt-get install -y --no-install-recommends build-essential git libpq-dev libyaml-dev pkg-config >/dev/null && gem install rails --no-document && rails new . --database=postgresql --skip-test $*"
+
+echo "Generated core/$service. Add lib/ to its load path before using shared code."
