@@ -14,6 +14,25 @@ server {
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
   server_name ${SIBERIAN_DOMAIN};
 
+  # Sign in and out are served by Auth on the main domain, so the cookie it
+  # sets is scoped to the domain every module frame sits under. The Base App
+  # never sees a password.
+  location ~ ^/(login|logout)$ {
+    set $upstream_auth "http://auth:3000";
+    proxy_pass $upstream_auth;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Siberian-Domain $host;
+  }
+
+  location /assets/ {
+    set $upstream_assets "http://base:3000";
+    proxy_pass $upstream_assets;
+    proxy_set_header Host $host;
+  }
+
   location / {
     set $upstream_base "http://base:3000";
     proxy_pass $upstream_base;

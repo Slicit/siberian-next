@@ -6,7 +6,13 @@
     <meta name="color-scheme" content="light dark">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
-    <%= stylesheet_link_tag "siberian", "data-turbo-track": "reload" %>
+
+    <%#
+      Inlined rather than linked. Auth is served on the main domain alongside
+      the Base App, and both would claim /assets. One request, no conflict, and
+      the sign-in page renders before anything else has to load.
+    %>
+    <style><%= Rails.root.join("app/assets/stylesheets/siberian.css").read.html_safe %></style>
   </head>
 
   <body>
