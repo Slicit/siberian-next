@@ -56,7 +56,16 @@ for entry in "${SERVICES[@]}"; do
   docker run --rm -v "$PWD/$target:/app" "$IMAGE" \
     chown -R "$(id -u):$(id -g)" /app
 
-  rm -f "$target/.gitkeep"
+  # --skip-git also skips generating .gitignore, which is not obvious and is not
+  # what was wanted: the repository is the monorepo's, but each app still needs
+  # to keep its own tmp and log out of it. Without this, 1743 bootsnap cache
+  # files ended up tracked, and being root-owned on the build host they then
+  # blocked git pull entirely.
+  if [ ! -f $target/.gitignore ]; then
+    cp core/orchestrator/.gitignore $target/.gitignore 2>/dev/null || true
+  fi
+
+  rm -f $target/.gitkeep
   echo "Generated core/$service"
 done
 
