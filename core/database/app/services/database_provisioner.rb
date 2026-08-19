@@ -17,7 +17,23 @@ class DatabaseProvisioner
     @admin.harden_cluster!
 
     existing = registration.provisioned_databases.find_by(domain: domain, logical_name: logical_name)
-    return existing if existing&.ready?
+
+    if existing&.ready?
+      # The role may be locked out from a previous uninstall. Handing back
+      # credentials that cannot log in is worse than not handing them back at
+      # all, because the failure surfaces inside the module as a wrong password.
+      @admin.reactivate(role_name: existing.role_name, password: existing.encrypted_password)
+
+      AuditEvent.record!(
+        module_name: registration.module_name,
+        domain: domain,
+        action: "database.reactivated",
+        subject: existing.database_name,
+        detail: "login restored for an existing database"
+      )
+
+      return existing
+    end
 
     names = ProvisionedDatabase.names_for(registration.module_name, domain, logical_name)
     password = SecureRandom.urlsafe_base64(24)

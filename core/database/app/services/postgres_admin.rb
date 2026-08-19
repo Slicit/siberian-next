@@ -68,6 +68,22 @@ class PostgresAdmin
     raise Error, e.message
   end
 
+  # Undoes revoke_login, and re-asserts the password while it is there.
+  #
+  # Reinstalling a module is completely ordinary, and without this the role it
+  # gets back is still NOLOGIN from the last uninstall. Postgres reports that as
+  # "password authentication failed", which sends everyone hunting for a wrong
+  # password that is in fact perfectly correct.
+  def reactivate(role_name:, password:)
+    with_connection do |connection|
+      connection.exec("ALTER ROLE #{quote_ident(connection, role_name)} WITH LOGIN " \
+                      "PASSWORD #{connection.escape_literal(password)}")
+    end
+    true
+  rescue PG::Error => e
+    raise Error, e.message
+  end
+
   # Locks the role out without destroying anything. Removing a module should
   # not remove its data, so revoking its login is the strongest safe move.
   def revoke_login(role_name:)
