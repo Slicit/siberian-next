@@ -17,8 +17,11 @@ class Role < ApplicationRecord
 
   # Changing what a role grants changes the answers for everybody holding it, so
   # every one of them has to re-resolve.
-  after_update_commit :invalidate_holders
-  after_destroy_commit :invalidate_holders
+  #
+  # One registration listing both events, not two registrations naming the same
+  # method: Rails deduplicates commit callbacks by filter, so the second
+  # silently replaces the first and only the last one declared ever runs.
+  after_commit :invalidate_holders, on: %i[update destroy]
 
   def self.seed_defaults!
     Siberian::Permissions::SEEDED_ROLES.each do |name, attributes|
