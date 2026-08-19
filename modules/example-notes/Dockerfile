@@ -2,7 +2,10 @@
 # anything about the core beyond four HTTP endpoints and a Postgres DSN.
 FROM php:8.3-cli
 
-RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev \
+# unzip is not optional: composer downloads packages as zips and the php:cli
+# image ships with neither the zip extension nor an unzip binary, so it fails
+# with a message about ini files that has nothing to do with the cause.
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev unzip \
     && docker-php-ext-install pdo pdo_pgsql \
     && rm -rf /var/lib/apt/lists/*
 
