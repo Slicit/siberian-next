@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Exercises all three quota levels against the running stack: the operator
+# default capping a manifest, a bucket allowance, and the shared domain pool.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec docker run --rm --network siberian_core -v "$PWD/bin/smoke-quotas.sh:/s.sh:ro" curlimages/curl:latest sh /s.sh
