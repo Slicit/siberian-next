@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Signs in as the seeded operator and walks every Backoffice page, then checks
+# that a non-operator is refused.
+#
+# The cookie is scoped to .<domain>, so one jar works on both the main domain
+# and admin.<domain>. That sharing is the mechanism, so it is worth checking.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-backoffice.sh
