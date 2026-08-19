@@ -24,6 +24,8 @@ Rules:
 
 <!-- Things that have caused bugs, regressions, or maintenance pain. Avoid these. -->
 
+- A smoke that greps a fixed temp file can pass while touching nothing. `bin/smoke-backoffice.sh` pointed at `127.0.0.1:8080` and `*.siberian.localhost` from before the stack moved to HTTPS on `siberian.test`. Every request returned 000 and every grep read the page the previous run left in `/tmp`, so the output looked normal for six features. Clear the file before each fetch, and print the status code beside whatever was grepped out of it.
+
 ## Gotchas
 
 <!-- Surprising behavior in dependencies, frameworks, or our own code. -->
@@ -43,6 +45,7 @@ Rules:
 - A module container is unreachable from the Router until the Router joins that module network. Module containers sit on `siberian-mod-<uuid>` and the Router sits on `siberian_core`, so install has to attach the Router explicitly. This is deliberate: it is what stops module A from reaching module B directly.
 - Executable bits do not survive authoring on Windows: `chmod +x` is a no-op on the working tree there, so scripts land in git as mode 100644 and fail with `Permission denied` on Linux. Fix in the index with `git update-index --chmod=+x <file>`, not by chmod.
 - `resolver 127.0.0.11` is the Docker embedded DNS address, not a general one. Anything engine-specific in Router config has to be rendered from environment, or it silently breaks under a different engine. Caught by `bin/check-engine-leak`.
+- A generated healthcheck runs inside an image the core did not build. The probe was `wget ... || curl ...`, and an image with neither exits 127, which the engine counts as a failed probe rather than as a missing tool. A module on `python:3.12-slim` therefore reported unhealthy forever while serving every request. The probe now looks for a client first and says nothing when it finds none, matching what `healthy?` already answers for a container with no healthcheck at all. A module image that wants a real verdict ships wget or curl.
 
 ## Glossary
 
