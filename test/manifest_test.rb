@@ -203,13 +203,68 @@ class ManifestTest < Minitest::Test
     assert_includes kinds, "mail"
   end
 
-  def test_owning_a_database_is_a_higher_severity_request_than_reading_one
+  def test_reading_another_databases_tables_is_never_a_routine_request
     requests = reference_manifest.requested_permissions
     owner = requests.find { |r| r[:summary].include?("owner") }
     reader = requests.find { |r| r[:summary].start_with?("read") }
 
-    assert_equal :high, owner[:severity]
-    assert_equal :low, reader[:severity]
+    assert_equal :high, owner[:severity], "owning a database is the strongest database request"
+    assert_equal :medium, reader[:severity],
+                 "reading somebody else data is never routine, whatever the verb"
+    assert reader[:audited], "a cross-database grant is audited, and the review screen should say so"
+  end
+
+  def test_a_cross_database_request_names_the_tables_and_the_reason
+    reader = reference_manifest.requested_permissions.find { |r| r[:summary].start_with?("read") }
+
+    assert_includes reader[:detail], "settings"
+    assert_includes reader[:detail], "feature_flags"
+    assert_includes reader[:detail], "locale"
+  end
+
+  def test_a_target_grant_with_no_tables_is_rejected
+    bad = manifest(<<~YAML)
+      permissions:
+        databases:
+          - target: core.configuration
+            access: read
+            reason: because
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "names no tables"
+  end
+
+  def test_a_target_grant_with_no_reason_is_rejected
+    bad = manifest(<<~YAML)
+      permissions:
+        databases:
+          - target: core.configuration
+            access: read
+            tables: [settings]
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "gives no reason"
+  end
+
+  def test_a_module_cannot_claim_to_own_somebody_elses_database
+    bad = manifest(<<~YAML)
+      permissions:
+        databases:
+          - target: core.configuration
+            access: owner
+            tables: [settings]
+            reason: because
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "belongs to somebody else"
+  end
+
+  def test_owned_and_cross_database_grants_are_told_apart
+    assert_equal ["primary"], reference_manifest.owned_database_grants.map { |g| g["name"] }
+    assert_equal ["core.configuration"], reference_manifest.cross_database_grants.map { |g| g["target"] }
   end
 
   def test_a_public_storage_space_is_flagged_above_a_private_one
