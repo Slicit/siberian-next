@@ -30,6 +30,8 @@ Rules:
 
 - Same-origin iframes are not a boundary: a frame served from the parent's own origin can reach `window.parent`, its DOM, and its storage. Module frames are served from `<module>.apps.<domain>` precisely so the boundary is browser-enforced. Never "simplify" a module back onto the parent origin.
 - Core images build from the repository root, not from their own directory, because `lib/` has to be copied in. A Dockerfile that assumes its own directory is the build context will fail to find `lib/`. See `deploy/rails.Dockerfile`.
+- Reinstalling a module can 502 for up to the resolver TTL (`valid=10s`). nginx resolves the module short name per request but caches the answer, so for a few seconds after a reinstall it still holds the previous container IP. The route recovers on its own; do not go looking for a bug.
+- A module container is unreachable from the Router until the Router joins that module network. Module containers sit on `siberian-mod-<uuid>` and the Router sits on `siberian_core`, so install has to attach the Router explicitly. This is deliberate: it is what stops module A from reaching module B directly.
 - Executable bits do not survive authoring on Windows: `chmod +x` is a no-op on the working tree there, so scripts land in git as mode 100644 and fail with `Permission denied` on Linux. Fix in the index with `git update-index --chmod=+x <file>`, not by chmod.
 - `resolver 127.0.0.11` is the Docker embedded DNS address, not a general one. Anything engine-specific in Router config has to be rendered from environment, or it silently breaks under a different engine. Caught by `bin/check-engine-leak`.
 
