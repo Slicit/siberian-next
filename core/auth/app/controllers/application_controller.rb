@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 class ApplicationController < ActionController::Base
-  allow_browser versions: :modern
+  # No allow_browser guard. It answers an unrecognised User-Agent with 403,
+  # which catches every non-browser caller: health checks, the test suite, and
+  # any service relaying a request. Browser support is a product decision, not
+  # something to enforce at the door of an authentication service.
 
   helper_method :current_user, :current_session, :current_domain
 

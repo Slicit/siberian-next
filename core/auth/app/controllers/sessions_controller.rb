@@ -8,8 +8,6 @@
 class SessionsController < ApplicationController
   COOKIE = :siberian_session
 
-  allow_browser versions: :modern, only: []
-
   def new
     redirect_to(safe_return_to || root_path) if current_session
   end
