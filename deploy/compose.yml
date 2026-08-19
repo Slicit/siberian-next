@@ -6,6 +6,15 @@
 
 name: siberian
 
+x-rails-build: &rails_build
+  context: ..
+  dockerfile: deploy/rails.Dockerfile
+
+x-rails-env: &rails_env
+  SIBERIAN_DOMAIN: ${SIBERIAN_DOMAIN:-siberian.localhost}
+  SIBERIAN_RESOLVER: ${SIBERIAN_RESOLVER:-127.0.0.11}
+  RAILS_ENV: ${RAILS_ENV:-development}
+
 services:
   configuration:
     image: postgres:16-alpine
@@ -35,9 +44,6 @@ services:
       # Written by the Orchestrator on install, read by nginx after a reload.
       # A shared volume rather than an API, because nginx reads files.
       - router_modules:/etc/nginx/conf.d/modules
-    depends_on:
-      base:
-        condition: service_started
     networks:
       core:
         # Module containers join this network with their short name as alias.
@@ -46,14 +52,13 @@ services:
         aliases: [router]
 
   orchestrator:
-    build: &rails_build
-      context: ..
-      dockerfile: deploy/rails.Dockerfile
+    build:
+      <<: *rails_build
       args:
         SERVICE: orchestrator
-    environment: &rails_env
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432
-      SIBERIAN_DOMAIN: ${SIBERIAN_DOMAIN:-siberian.localhost}
+    environment:
+      <<: *rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_orchestrator
       SIBERIAN_ENGINE: docker
       SIBERIAN_ROUTER_CONFIG_DIR: /var/lib/siberian/router
       SIBERIAN_ROUTER_CONTAINER: siberian-router-1
@@ -74,7 +79,11 @@ services:
       <<: *rails_build
       args:
         SERVICE: base
-    environment: *rails_env
+    environment:
+      <<: *rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_base
+      SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
+      SIBERIAN_AUTH_URL: http://auth:3000
     volumes:
       - ../core/base:/app
       - ../lib:/app/lib
@@ -88,7 +97,9 @@ services:
       <<: *rails_build
       args:
         SERVICE: auth
-    environment: *rails_env
+    environment:
+      <<: *rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_auth
     volumes:
       - ../core/auth:/app
       - ../lib:/app/lib
@@ -102,7 +113,9 @@ services:
       <<: *rails_build
       args:
         SERVICE: mailer
-    environment: *rails_env
+    environment:
+      <<: *rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mailer
     volumes:
       - ../core/mailer:/app
       - ../lib:/app/lib
@@ -118,6 +131,7 @@ services:
         SERVICE: storage
     environment:
       <<: *rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_storage
       GARAGE_ENDPOINT: http://garage:3900
       GARAGE_ADMIN_ENDPOINT: http://garage:3903
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-storage_service_dev_only}

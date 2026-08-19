@@ -8,6 +8,8 @@ CREATE DATABASE siberian_configuration;
 CREATE DATABASE siberian_orchestrator;
 CREATE DATABASE siberian_auth;
 CREATE DATABASE siberian_base;
+CREATE DATABASE siberian_mailer;
+CREATE DATABASE siberian_storage;
 
 -- The Database service owns provisioning, so it is the only role allowed to
 -- create databases and roles. Nothing else in the system gets CREATEDB.
