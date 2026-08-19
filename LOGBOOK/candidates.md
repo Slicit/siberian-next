@@ -6,6 +6,8 @@ Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 
 ## 2026-08-19
 
+- `Role.seed_defaults!` skips a role that already exists, so a permission added to the catalogue later never reaches an installation that has already been seeded. `core.storage.manage` shipped with storage quotas and no seeded operator role held it. Deciding this is not obvious: re-seeding would overwrite a role an operator has edited, which is exactly what the current guard protects. (trigger: gap, source: feat-domain-storage-limits Outcome 2026-08-19, agent: claude-code)
+- `bin/smoke-quotas` does not clean up after itself. Every run leaves objects in the same bucket on the same domain, so the domain pool it caps at 2 MB fills over time and step 7, which expects a write to succeed once the bucket is raised, starts failing on the domain instead. The smoke reports a real refusal for the wrong reason. (trigger: gap, source: feat-domain-storage-limits verification 2026-08-19, agent: claude-code)
 - Evaluate Podman as a second engine driver backend, for rootless isolation of untrusted third-party modules. (trigger: alternative, source: LOGBOOK bootstrap engine decision 2026-08-19, agent: claude-code)
 - Server-side fragment composition, where modules expose fragments the Base App renders into its own layout, as a path to a more seamless product feel than iframes allow. (trigger: alternative, source: LOGBOOK bootstrap composition decision 2026-08-19, agent: claude-code)
 - Reverse-proxy composition through the Router as a fallback for modules whose UI cannot sit in an iframe. (trigger: alternative, source: LOGBOOK bootstrap composition decision 2026-08-19, agent: claude-code)
