@@ -17,7 +17,6 @@ class ModulesController < ApplicationController
       return render "shared/no_access", status: :forbidden
     end
 
-    @groups = directory.grouped(domain: current_domain, only: method(:visible_capabilities))
     @breadcrumb_section = @capability.area.to_s.split(".").last.to_s.capitalize.presence || "Modules"
     @breadcrumb_leaf = @capability.title
 

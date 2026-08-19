@@ -28,7 +28,13 @@
 
           <%# Every group here came from an installed module. Nothing in this
               file names one, which is why installing a module does not require
-              touching the shell. %>
+              touching the shell.
+
+              The fallback is for the refusal page: require_user! renders it and
+              halts, so the menu never loads. Every other page has @groups set
+              by ApplicationController. It used to be set per controller, and
+              the one that forgot rendered a menu missing every module without
+              anything reporting it. %>
           <% (@groups || []).each do |label, capabilities| %>
             <div class="nav-group">
               <div class="label"><%= label %></div>
