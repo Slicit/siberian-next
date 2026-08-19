@@ -19,6 +19,7 @@ class CatalogController < ApplicationController
       return redirect_to catalog_path, alert: "No module named #{params[:name]} in the catalogue."
     end
 
+    @breadcrumb_leaf = @entry.title.presence || @entry.name
     @manifest = @entry.manifest
     @conflicts = conflicts_for(@manifest)
   end

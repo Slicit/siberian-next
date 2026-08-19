@@ -25,7 +25,7 @@ module Siberian
         entries: [
           { label: "Overview", route: :root_path, permission: nil, controller: "dashboard" },
           { label: "Modules", route: :modules_path, permission: "core.modules.read", controller: "modules" },
-          { label: "Catalogue", route: :catalog_path, permission: "core.modules.install", controller: "catalog" }
+          { label: "Catalogue", route: :catalog_path, permission: "core.modules.read", controller: "catalog" }
         ]
       },
       {
@@ -66,5 +66,17 @@ module Siberian
     end
 
     def self.entries = BACKOFFICE.flat_map { |group| group[:entries] }
+
+    # Where a controller sits, for the breadcrumb: which group, and which entry.
+    # Derived from the same list the menu is built from, so a page cannot be in
+    # the menu under one heading and describe itself as being under another.
+    def self.locate(controller)
+      BACKOFFICE.each do |group|
+        entry = group[:entries].find { |candidate| candidate[:controller] == controller.to_s }
+        return [group[:label], Entry.new(**entry)] if entry
+      end
+
+      [nil, nil]
+    end
   end
 end

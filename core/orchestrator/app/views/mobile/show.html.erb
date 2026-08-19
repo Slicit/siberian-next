@@ -129,11 +129,13 @@
         <div class="row" style="gap:.4rem; margin-top:.8rem">
           <% if splash["image"] %>
             <%= button_to "Remove image", mobile_splash_path(@domain), method: :delete,
-                  class: "button danger", params: { kind: "image" } %>
+                  class: "button danger", params: { kind: "image" },
+                  form: { data: { turbo_confirm: "Remove the splash image? The next build falls back to a plain background." } } %>
           <% end %>
           <% if splash["animation"] %>
             <%= button_to "Remove animation", mobile_splash_path(@domain), method: :delete,
-                  class: "button danger", params: { kind: "animation" } %>
+                  class: "button danger", params: { kind: "animation" },
+                  form: { data: { turbo_confirm: "Remove the Android animation? The next build shows the still image instead." } } %>
           <% end %>
         </div>
       <% end %>
@@ -164,7 +166,9 @@
             <% if capability["severity"] == "high" %>
               <span class="badge warn" style="margin-left:.3rem">asks a lot</span>
             <% end %>
-            <% if enabled %><span class="badge" style="margin-left:.3rem">on</span><% end %>
+            <span class="state <%= enabled ? "on" : "off" %>" style="margin-left:.4rem">
+              <span class="dot <%= enabled ? "ok" : "" %>"></span><%= enabled ? "on" : "off" %>
+            </span>
             <div class="muted" style="font-size:.82rem; margin-top:.15rem"><%= capability["summary"] %></div>
             <div class="faint mono" style="font-size:.72rem"><%= capability["package"] %></div>
 
@@ -176,10 +180,12 @@
           </div>
 
           <% if may_manage %>
-            <%= button_to enabled ? "Turn off" : "Turn on",
+            <%= button_to((enabled ? "Turn off" : "Turn on"),
                   mobile_capability_path(@domain, capability["id"]),
-                  method: :patch, class: "button",
-                  params: { enabled: enabled ? "false" : "true" } %>
+                  method: :patch,
+                  class: "button toggle #{enabled ? 'on' : 'off'}",
+                  params: { enabled: enabled ? "false" : "true" },
+                  form: { data: { turbo_confirm: (enabled || capability["severity"] != "high") ? nil : "#{capability['label']} asks a lot of somebody using this app. Switch it on?" } }) %>
           <% end %>
         </div>
 
@@ -302,7 +308,8 @@
                 </td>
                 <td class="right">
                   <% if may_manage && %w[queued failed building].include?(build["state"]) %>
-                    <%= button_to "Cancel", cancel_mobile_build_path(@domain, build["id"]), class: "button danger" %>
+                    <%= button_to "Cancel", cancel_mobile_build_path(@domain, build["id"]), class: "button danger",
+                          form: { data: { turbo_confirm: "Cancel this build? Whatever it has compiled so far is discarded." } } %>
                   <% end %>
                 </td>
               </tr>

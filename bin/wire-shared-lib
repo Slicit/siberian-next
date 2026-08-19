@@ -79,6 +79,22 @@ RUBYEOF
     cp lib/ui/siberian.css "$app/app/assets/stylesheets/siberian.css"
   fi
 
+  # The confirmation dialog, for the same reason: an interface that asks "are
+  # you sure" differently in two places has taught nobody anything. Pinned and
+  # imported here rather than in each app, so adding a service does not mean
+  # remembering this.
+  if [ -d "$app/app/javascript" ]; then
+    cp lib/ui/confirm.js "$app/app/javascript/confirm.js"
+
+    if ! grep -q 'import "confirm"' "$app/app/javascript/application.js"; then
+      echo 'import "confirm"' >> "$app/app/javascript/application.js"
+    fi
+
+    if [ -f "$app/config/importmap.rb" ] && ! grep -q '^pin "confirm"' "$app/config/importmap.rb"; then
+      echo 'pin "confirm"' >> "$app/config/importmap.rb"
+    fi
+  fi
+
   echo "  $service: wired"
 done
 

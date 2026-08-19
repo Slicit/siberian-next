@@ -1,0 +1,36 @@
+<%# Where this page is, at every level.
+    Home > <group> > <page> > <this thing>, with the last one not a link
+    because it is where you already are. The group and page come from
+    lib/navigation.rb, so a page cannot appear in the menu under one heading
+    and describe itself as sitting under another. A page with a record sets
+    @breadcrumb_leaf and gets a fourth level for free. %>
+<% group, entry = Siberian::Navigation.locate(controller_name) %>
+<% at_home = entry.nil? || (entry.route == :root_path && @breadcrumb_leaf.blank?) %>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <ol>
+    <li>
+      <% if at_home %>
+        <span class="here" aria-current="page">Home</span>
+      <% else %>
+        <%= link_to "Home", root_path %>
+      <% end %>
+    </li>
+
+    <% unless at_home %>
+      <% if group %><li><span class="step"><%= group %></span></li><% end %>
+
+      <li>
+        <% if @breadcrumb_leaf.present? %>
+          <%= link_to entry.label, send(entry.route) %>
+        <% else %>
+          <span class="here" aria-current="page"><%= entry.label %></span>
+        <% end %>
+      </li>
+
+      <% if @breadcrumb_leaf.present? %>
+        <li><span class="here" aria-current="page"><%= @breadcrumb_leaf %></span></li>
+      <% end %>
+    <% end %>
+  </ol>
+</nav>

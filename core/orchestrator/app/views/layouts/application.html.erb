@@ -19,43 +19,19 @@
         </div>
 
         <nav class="nav stack" style="--gap:1rem">
-          <div class="nav-group">
-            <div class="label">Operate</div>
-            <%= link_to "Overview", root_path, "aria-current": ("page" if current_page?(root_path)) %>
-            <% if allow?("core.modules.read") %>
-              <%= link_to "Modules", modules_path, "aria-current": ("page" if controller_name == "modules") %>
-            <% end %>
-            <% if allow?("core.modules.install") %>
-              <%= link_to "Catalogue", catalog_path, "aria-current": ("page" if controller_name == "catalog") %>
-            <% end %>
-          </div>
-
-          <% if allow?("core.users.read") || allow?("core.roles.manage") %>
+          <%# Built from lib/navigation.rb rather than from conditionals here,
+              so that what a link asks for and what its page requires cannot
+              drift apart unnoticed. test/navigation_test.rb checks them
+              against each other. %>
+          <% Siberian::Navigation.visible(allow: method(:allow?)).each do |group| %>
             <div class="nav-group">
-              <div class="label">Access</div>
-              <% if allow?("core.users.read") %>
-                <%= link_to "People", people_path, "aria-current": ("page" if controller_name == "people") %>
-              <% end %>
-              <% if allow?("core.roles.manage") %>
-                <%= link_to "Roles", roles_path, "aria-current": ("page" if controller_name == "roles") %>
+              <div class="label"><%= group.label %></div>
+              <% group.entries.each do |entry| %>
+                <%= link_to entry.label, send(entry.route),
+                      "aria-current": ("page" if controller_name == entry.controller) %>
               <% end %>
             </div>
           <% end %>
-
-          <div class="nav-group">
-            <div class="label">System</div>
-            <% if allow?("core.domains.manage") %>
-              <%= link_to "Domains", domains_path, "aria-current": ("page" if controller_name == "domains") %>
-            <% end %>
-            <% if allow?("core.modules.read") %>
-              <%= link_to "Storage", storage_path, "aria-current": ("page" if controller_name == "storage") %>
-              <%= link_to "Phone apps", mobile_path, "aria-current": ("page" if controller_name == "mobile") %>
-              <%= link_to "Interfaces", interfaces_path, "aria-current": ("page" if controller_name == "interfaces") %>
-            <% end %>
-            <% if allow?("core.audit.read") %>
-              <%= link_to "Activity", activity_path, "aria-current": ("page" if controller_name == "activities") %>
-            <% end %>
-          </div>
         </nav>
 
         <div style="margin-top:auto">
@@ -70,6 +46,7 @@
       </aside>
 
       <main>
+        <%= render "shared/breadcrumb" %>
         <% if flash[:notice] %><div class="notice"><%= flash[:notice] %></div><% end %>
         <% if flash[:alert] %><div class="alert"><%= flash[:alert] %></div><% end %>
         <%= yield %>

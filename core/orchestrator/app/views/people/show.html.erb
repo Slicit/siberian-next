@@ -83,6 +83,7 @@
               <% if allow?("core.users.write") %>
                 <% if held %>
                   <%= button_to "Remove", person_roles_path(@person["id"]), method: :delete,
+                        form: { data: { turbo_confirm: "Take the #{role['name']} role away from #{@person['email']}? They lose everything it granted." } },
                         params: { role_id: role["id"] }, class: "button quiet" %>
                 <% else %>
                   <%= button_to "Add", person_roles_path(@person["id"]),
@@ -123,7 +124,8 @@
                 <% if allow?("core.users.write") %>
                   <%= button_to "Remove", person_grants_path(@person["id"]), method: :delete,
                         params: { permission: grant["permission"], effect: grant["effect"] },
-                        class: "button quiet" %>
+                        class: "button quiet",
+                        form: { data: { turbo_confirm: "Remove the #{grant['effect']} on #{grant['permission']}? This takes effect within the 30 second permission cache." } } %>
                 <% end %>
               </td>
             </tr>

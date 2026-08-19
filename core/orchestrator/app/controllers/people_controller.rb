@@ -18,6 +18,7 @@ class PeopleController < ApplicationController
     @person = auth.user(params[:id])
     return redirect_to people_path, alert: "No such person." if @person.nil?
 
+    @breadcrumb_leaf = @person.name.presence || @person.email
     @roles = (auth.roles || {})["roles"] || []
     @catalogue = Siberian::Permissions::CATALOGUE
   end
