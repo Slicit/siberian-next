@@ -20,6 +20,7 @@ convenience.
 | Engine | Docker 29.7.2 |
 | Services | 13 containers: 7 Rails apps, a mail worker, a build worker, the Router, two Postgres clusters, and Garage |
 | Domain | `siberian.test` over HTTPS, behind a local CA |
+| Housekeeping | Nightly at 04:30 via `/etc/cron.d/siberian-housekeeping`, logging to `/var/log/siberian-housekeeping.log`. Installed by `deploy/maintenance/install.sh` |
 | Assistant | `ANTHROPIC_API_KEY` in `.env`, read by the Mobile service alone. Absent, the app studio says so and everything else works |
 
 The laptop is for authoring. The loop is edit locally, commit, push, pull on the
@@ -150,6 +151,17 @@ docker compose --env-file .env -f deploy/compose.yml exec -T \
 ```
 
 ## When something is broken
+
+**Several unrelated things break at once.** Check `df -h /` first. The box
+filled to 100 percent once and the symptoms were Postgres refusing writes and
+services failing to boot, none of which points at a disk. Housekeeping runs
+nightly (below); to see what it has been doing, `sudo tail
+/var/log/siberian-housekeeping.log`, and to run it now:
+
+```
+sudo SIBERIAN_REPO=~/siberian-next ~/siberian-next/deploy/maintenance/housekeeping.sh
+```
+
 
 **Every module route answers 502.** The Router was probably rebuilt. A new
 container has none of the network attachments the old one had, so it can no

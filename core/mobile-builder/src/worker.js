@@ -5,7 +5,7 @@
 // rewrite, but until somebody needs that this stays the simplest thing that
 // cannot lose a build.
 import { spawn } from "node:child_process";
-import { readFile, rm, stat } from "node:fs/promises";
+import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { assemble, applyAndroidSplashAnimation } from "./assemble.js";
 
@@ -165,6 +165,39 @@ async function upload(id, file, type, durationMs, log) {
   }
 }
 
+// A finished build's workspace is roughly 800 MB of node_modules and Gradle
+// output, and it explains nothing once the build has reported: the log is on
+// the row and the artifact is in Storage. Left behind, sixteen of them filled
+// a 47 GB disk and Postgres stopped being able to write, which does not look
+// like a build problem from anywhere else.
+async function discard(id) {
+  try {
+    await rm(path.join(WORKSPACES, String(id)), { recursive: true, force: true });
+  } catch (error) {
+    // Worth saying and not worth failing a finished build over.
+    console.error(`could not remove the workspace for build ${id}: ${error.message}`);
+  }
+}
+
+// Anything here at startup belonged to a build this process was running, and
+// this process has just started. Removing the children rather than the
+// directory, because the directory is a mount point.
+async function sweep() {
+  let left;
+
+  try {
+    left = await readdir(WORKSPACES);
+  } catch {
+    return;
+  }
+
+  for (const entry of left) {
+    await rm(path.join(WORKSPACES, entry), { recursive: true, force: true }).catch(() => {});
+  }
+
+  if (left.length > 0) console.log(`swept ${left.length} workspace(s) left by a previous run`);
+}
+
 async function once() {
   const claimed = await claim();
   if (!claimed) return false;
@@ -184,6 +217,10 @@ async function once() {
       log: error.log || String(error.stack || error)
     });
     console.log(`build ${claimed.build_id} failed: ${error.message}`);
+  } finally {
+    // Both ways. A failed build is explained by its log, which has already been
+    // reported by the time this runs.
+    await discard(claimed.build_id);
   }
 
   return true;
@@ -191,6 +228,7 @@ async function once() {
 
 async function loop() {
   console.log(`builder up, polling ${MOBILE} every ${POLL / 1000}s`);
+  await sweep();
 
   for (;;) {
     try {
