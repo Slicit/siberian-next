@@ -206,8 +206,10 @@ Deliberate, not forgotten:
   description, which needs an `ANTHROPIC_API_KEY` in `.env`. Without one the
   page says the assistant is not configured and the rest of it still works.
 - **No iOS binary.** Apple's toolchain runs on macOS, so the builder produces
-  the configured Xcode project and stops. Signing and an `.ipa` need a macOS
-  runner or EAS.
+  the configured Xcode project and stops. The artifact is a zip of `ios/`, the
+  package manifest, the generated module registry, and any native module
+  source: on a Mac that is `npm install && cd ios && pod install`, then open the
+  workspace. Signing and an `.ipa` need a macOS runner or EAS.
 - **No over the air updates, and no store submission.** A build produces an
   artifact; getting one onto a phone that already has the app is a different
   mechanism.
