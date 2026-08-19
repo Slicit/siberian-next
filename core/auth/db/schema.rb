@@ -10,15 +10,52 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_19_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_19_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "permission_grants", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "effect", default: "allow", null: false
+    t.bigint "granted_by_id"
+    t.string "permission", null: false
+    t.string "reason"
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["granted_by_id"], name: "index_permission_grants_on_granted_by_id"
+    t.index ["user_id", "permission", "effect"], name: "index_permission_grants_on_user_permission_effect", unique: true
+    t.index ["user_id"], name: "index_permission_grants_on_user_id"
+  end
+
+  create_table "role_assignments", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "granted_by_id"
+    t.bigint "role_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["granted_by_id"], name: "index_role_assignments_on_granted_by_id"
+    t.index ["role_id"], name: "index_role_assignments_on_role_id"
+    t.index ["user_id", "role_id"], name: "index_role_assignments_on_user_id_and_role_id", unique: true
+    t.index ["user_id"], name: "index_role_assignments_on_user_id"
+  end
+
+  create_table "roles", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "description"
+    t.string "name", null: false
+    t.json "permissions", default: [], null: false
+    t.boolean "seeded", default: false, null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_roles_on_name", unique: true
+  end
 
   create_table "sessions", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "domain", null: false
     t.datetime "expires_at", null: false
     t.string "ip_address"
+    t.json "permissions", default: {}, null: false
+    t.integer "permissions_version", default: 0, null: false
     t.datetime "revoked_at"
     t.string "token_digest", null: false
     t.datetime "updated_at", null: false
@@ -30,7 +67,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_160000) do
   end
 
   create_table "users", force: :cascade do |t|
+    t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
+    t.datetime "deactivated_at"
     t.string "email", null: false
     t.datetime "last_seen_at"
     t.string "name"
@@ -38,9 +77,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_160000) do
     t.boolean "otp_required", default: false, null: false
     t.string "otp_secret"
     t.string "password_digest", null: false
+    t.integer "permissions_version", default: 0, null: false
     t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_users_on_active"
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
+  add_foreign_key "permission_grants", "users"
+  add_foreign_key "permission_grants", "users", column: "granted_by_id"
+  add_foreign_key "role_assignments", "roles"
+  add_foreign_key "role_assignments", "users"
+  add_foreign_key "role_assignments", "users", column: "granted_by_id"
   add_foreign_key "sessions", "users"
 end
