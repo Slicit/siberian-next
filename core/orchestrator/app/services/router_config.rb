@@ -18,6 +18,14 @@ class RouterConfig
   # which is exactly the isolation we want, so the Router is the door.
   INTERNAL_ALIASES = %w[router core].freeze
 
+  # Sorts before every module file in the include glob, though nginx does not
+  # care: a map is http context and resolved per request.
+  # Map entries live in a directory of their own, included from inside the map
+  # block in 00-core.conf. The map itself has to exist before any module does,
+  # or nginx refuses to start on an unknown variable, so the core template owns
+  # the block and the Orchestrator owns only what goes in it.
+  UPSTREAMS_DIR = "upstreams"
+
   def initialize(driver: Siberian::Engine.driver,
                  config_dir: ENV.fetch("SIBERIAN_ROUTER_CONFIG_DIR", "/var/lib/siberian/router"),
                  router_container: ENV.fetch("SIBERIAN_ROUTER_CONTAINER", "siberian-router-1"))
@@ -73,6 +81,28 @@ class RouterConfig
   def write_and_reload(installed_module, domains)
     write(installed_module, domains)
     reload
+  end
+
+  # One map entry per installed module, its name to its upstream.
+  #
+  # The app addresses a module as /m/<name>/, and that location lives on the
+  # product domain, which no module owns: a per-module server block cannot
+  # answer it. A map is the nginx construct for exactly this.
+  def refresh_upstreams!(installed_modules)
+    directory = File.join(@config_dir, UPSTREAMS_DIR)
+    FileUtils.mkdir_p(directory)
+
+    # Rewritten whole rather than appended to, so a module that is gone leaves
+    # nothing addressable behind.
+    FileUtils.rm_f(Dir.glob(File.join(directory, "*.map")))
+
+    Array(installed_modules).each do |installed|
+      entry = installed.entry_container
+      next if entry.nil? || entry.internal_port.blank?
+
+      File.write(File.join(directory, "#{installed.name}.map"),
+                 "#{installed.name} \"#{installed.name}:#{entry.internal_port}\";\n")
+    end
   end
 
   def path_for(installed_module)

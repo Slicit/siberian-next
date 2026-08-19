@@ -30,6 +30,7 @@ SERVICES=(
   "mailer:--api"
   "storage:--api"
   "database:--api"
+  "mobile:--api"
 )
 
 COMMON="--database=postgresql --skip-kamal --skip-solid --skip-docker --skip-ci --skip-rubocop --skip-git"

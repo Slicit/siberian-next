@@ -70,6 +70,7 @@ services:
       SIBERIAN_MAILER_URL: http://mailer:3000
       SIBERIAN_DATABASE_URL_SERVICE: http://database:3000
       SIBERIAN_STORAGE_URL: http://storage:3000
+      SIBERIAN_MOBILE_URL: http://mobile:3000
       SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
       # Joined to every module network so modules can reach Postgres directly.
       SIBERIAN_MODULEDB_CONTAINER: siberian-moduledb-1
@@ -168,6 +169,57 @@ services:
         condition: service_healthy
     networks: [core]
 
+  mobile:
+    build:
+      <<: *rails_build
+      args:
+        SERVICE: mobile
+    environment:
+      <<: *rails_env
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mobile
+      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      # A different trust level gets a different credential. The builder runs
+      # third-party module code; the Orchestrator does not.
+      SIBERIAN_BUILDER_TOKEN: ${SIBERIAN_BUILDER_TOKEN:-builder_dev_only}
+      SIBERIAN_STORAGE_URL: http://storage:3000
+    volumes:
+      - ../core/mobile:/app
+      - ../lib:/app/lib
+    depends_on:
+      configuration:
+        condition: service_healthy
+    networks: [core]
+
+  # Node rather than Rails, because the thing it drives is an Expo toolchain.
+  # One builder shared by every domain, which is why there is a queue: two
+  # domains asking at the same moment are two rows, not two containers.
+  #
+  # It holds no engine socket and no admin token. It claims one build, receives
+  # the plan for that build, and can ask this service nothing else.
+  mobile-builder:
+    build:
+      context: ..
+      dockerfile: core/mobile-builder/Dockerfile
+    environment:
+      SIBERIAN_MOBILE_URL: http://mobile:3000
+      SIBERIAN_STORAGE_URL: http://storage:3000
+      SIBERIAN_BUILDER_TOKEN: ${SIBERIAN_BUILDER_TOKEN:-builder_dev_only}
+      BUILDER_POLL_INTERVAL: "${BUILDER_POLL_INTERVAL:-10}"
+      # Gradle and Metro both assume a home they can write to.
+      HOME: /home/builder
+    volumes:
+      - ../core/mobile-builder:/builder
+      # The module catalogue, read only. A module that ships native code ships
+      # it in its own directory, and this is where the builder reads it from.
+      # Read only because building must never edit what it built from.
+      - ../modules:/modules:ro
+      - builder_workspace:/workspace
+      - builder_cache:/home/builder
+    depends_on:
+      mobile:
+        condition: service_started
+    networks: [core]
+
   storage:
     build:
       <<: *rails_build
@@ -240,6 +292,11 @@ services:
 
 volumes:
   router_modules:
+  # The builder's scratch space and its package caches. A build that had to
+  # download the Android toolchain again every time would be a build nobody
+  # waits for.
+  builder_workspace:
+  builder_cache:
   moduledb_data:
   configuration_data:
   garage_meta:

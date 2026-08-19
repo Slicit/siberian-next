@@ -18,7 +18,7 @@ convenience.
 | SSH | `ssh siberian` (alias in `~/.ssh/config`, key `~/.ssh/siberian_debian`) |
 | Repo | `~/siberian-next`, remote over SSH, pushes as `Slicit` |
 | Engine | Docker 29.7.2 |
-| Services | 11 containers: 6 Rails apps, a mail worker, the Router, two Postgres clusters, and Garage |
+| Services | 13 containers: 7 Rails apps, a mail worker, a build worker, the Router, two Postgres clusters, and Garage |
 | Domain | `siberian.test` over HTTPS, behind a local CA |
 
 The laptop is for authoring. The loop is edit locally, commit, push, pull on the
@@ -122,6 +122,8 @@ Every one of these drives the real stack. They are the fastest way to answer
 ./bin/smoke-access     every page against three roles, and a surgical deny
 ./bin/smoke-storage    register, provision, and every verb and refusal
 ./bin/smoke-quotas     all three quota levels, including a refusal from each
+./bin/smoke-domains    a domain allowance set before a module stores anything
+./bin/smoke-mobile     the phone app for a domain, its capabilities, and its queue
 ./bin/smoke-mail       enqueue, deliver, acknowledge, and a permanent rejection
 ./bin/smoke-backoffice every Backoffice page, as an operator and as a plain user
 ./bin/smoke-demo       the demo module end to end over HTTPS
@@ -195,3 +197,12 @@ Deliberate, not forgotten:
 - **No per-space storage quotas.** A module's `public` and `files` share one
   allowance.
 - **No OAuth, SSO, or 2FA.** Auth is password sessions.
+- **No iOS binary.** Apple's toolchain runs on macOS, so the builder produces
+  the configured Xcode project and stops. Signing and an `.ipa` need a macOS
+  runner or EAS.
+- **No over the air updates, and no store submission.** A build produces an
+  artifact; getting one onto a phone that already has the app is a different
+  mechanism.
+- **One builder.** Two domains asking at once are two rows in a queue. The
+  claim query is already written for more than one worker, so adding a second
+  is a compose change, but nothing scales itself yet.

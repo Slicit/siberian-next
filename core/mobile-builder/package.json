@@ -1,0 +1,11 @@
+{
+  "name": "siberian-mobile-builder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Claims one build at a time from the Mobile service, assembles an Expo app, and compiles it.",
+  "type": "module",
+  "main": "src/worker.js",
+  "scripts": {
+    "start": "node src/worker.js"
+  }
+}

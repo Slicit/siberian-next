@@ -12,6 +12,9 @@ class ModulesController < ApplicationController
   def show
     @activities = @module.activities.recent.limit(25)
     @registry = InterfaceRegistry.new
+    # How this module appears in each domain's phone app, which is a question
+    # about this module and belongs on its page rather than only on the app's.
+    @mobile = MobileClient.new.apps
   end
 
   # Asks the engine what is actually running, rather than trusting what we

@@ -26,6 +26,8 @@ Rules:
 
 - A smoke that greps a fixed temp file can pass while touching nothing. `bin/smoke-backoffice.sh` pointed at `127.0.0.1:8080` and `*.siberian.localhost` from before the stack moved to HTTPS on `siberian.test`. Every request returned 000 and every grep read the page the previous run left in `/tmp`, so the output looked normal for six features. Clear the file before each fetch, and print the status code beside whatever was grepped out of it.
 
+- Piping a `docker compose build` to `tail` throws away its exit status. A build that failed reported success, and the image being missing was only noticed at `up`.
+
 ## Gotchas
 
 <!-- Surprising behavior in dependencies, frameworks, or our own code. -->
@@ -46,6 +48,11 @@ Rules:
 - Executable bits do not survive authoring on Windows: `chmod +x` is a no-op on the working tree there, so scripts land in git as mode 100644 and fail with `Permission denied` on Linux. Fix in the index with `git update-index --chmod=+x <file>`, not by chmod.
 - `resolver 127.0.0.11` is the Docker embedded DNS address, not a general one. Anything engine-specific in Router config has to be rendered from environment, or it silently breaks under a different engine. Caught by `bin/check-engine-leak`.
 - A generated healthcheck runs inside an image the core did not build. The probe was `wget ... || curl ...`, and an image with neither exits 127, which the engine counts as a failed probe rather than as a missing tool. A module on `python:3.12-slim` therefore reported unhealthy forever while serving every request. The probe now looks for a client first and says nothing when it finds none, matching what `healthy?` already answers for a container with no healthcheck at all. A module image that wants a real verdict ships wget or curl.
+
+- A `.gitignore` pattern with no leading slash matches at every depth. The root file said "Root level only" and listed `package.json`, which then swallowed `core/mobile-builder/package.json`, and the symptom was a Docker build failing on a file that plainly exists in the working tree. Anchor root-level patterns with `/`.
+- `:domain` is a reserved URL option in Rails. `ActionDispatch::Routing::RouteSet::RESERVED_OPTIONS` is `[:host, :protocol, :port, :subdomain, :domain, ...]`, so a route segment named `:domain` never receives its value: it is consumed to build the host, and the path helper raises "missing required keys: [:domain]" for an argument that was in fact passed. Name the segment something else, or address the record by id.
+- nginx refuses to start on a variable no `map` defines. A map whose entries another service writes has to have its block in config that is always present, with the entries pulled in by an `include` glob: an include matching nothing is not an error, but an undefined variable is, and the Router stays down on an installation with no modules.
+- An expo-* package installed as "*" is built for whichever SDK is newest, not the one in `package.json`. The build then fails in Gradle with `Plugin [id: expo-module-gradle-plugin] was not found`, which reads as a broken Android toolchain rather than as a version mismatch. `expo install` resolves versions against the installed SDK, which is what it is for.
 
 ## Glossary
 

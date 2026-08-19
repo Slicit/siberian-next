@@ -117,6 +117,33 @@ module Siberian
         system_capabilities.map { |capability| capability["interface"] }.compact.uniq
       end
 
+      # Native app ---------------------------------------------------------
+
+      # What this module contributes to the domain's phone app. Optional: a
+      # module that declares nothing native still appears in the app, as a
+      # WebView on the same UI the Base App frames. That fallback is not a
+      # lesser path, it is the right one for a module whose UI is a form.
+      def native = data["native"] || {}
+
+      def ships_native? = native_screens.any?
+
+      # The module's React Native entry point, relative to the module directory.
+      def native_entry = native["entry"]
+
+      # One per feature capability the module renders natively. Matched to a
+      # feature capability by id, so a module can ship native for one screen and
+      # let another fall back.
+      def native_screens = Array(native["screens"])
+
+      # Native capabilities this module needs. A request, not a switch: an
+      # operator approves it at install, or the screen stays off.
+      def required_native_capabilities = Array(native["requires"]).map(&:to_s)
+
+      # "webview" or "none". A module that says none has no screen at all when
+      # its native code is unavailable, which is a decision only its author can
+      # make.
+      def native_fallback = native["fallback"] || "webview"
+
       # Permissions --------------------------------------------------------
 
       def permissions = data["permissions"] || {}
@@ -180,6 +207,16 @@ module Siberian
             summary: "#{grant['access']} access to the #{grant['name']} module",
             detail: grant["optional"] ? "optional" : "required",
             severity: grant["access"] == "read" ? :low : :high
+          }
+        end
+
+        required_native_capabilities.each do |id|
+          capability = Siberian::MobileCapabilities.find(id)
+          requests << {
+            kind: "native",
+            summary: "the #{capability ? capability[:label].downcase : id} capability in the phone app",
+            detail: capability ? capability[:summary] : "not a capability this core knows about",
+            severity: capability ? capability[:severity] : :high
           }
         end
 
@@ -254,6 +291,30 @@ module Siberian
           if grant["access"] == "owner"
             errors << "permissions.databases[#{index}] cannot own #{grant['target']}; it belongs to somebody else"
           end
+        end
+
+        unknown_native = Siberian::MobileCapabilities.unknown(required_native_capabilities)
+        if unknown_native.any?
+          errors << "native.requires names capabilities that do not exist: #{unknown_native.join(', ')}"
+        end
+
+        if native_screens.any? && native_entry.to_s.empty?
+          errors << "native.screens are declared but native.entry names no entry point"
+        end
+
+        feature_ids = feature_capabilities.map { |capability| capability["id"] }
+        native_screens.each_with_index do |screen, index|
+          errors << "native.screens[#{index}] needs a component" if screen["component"].to_s.empty?
+
+          if screen["capability"].to_s.empty?
+            errors << "native.screens[#{index}] needs a capability"
+          elsif !feature_ids.include?(screen["capability"])
+            errors << "native.screens[#{index}] renders #{screen['capability']}, which this module does not provide"
+          end
+        end
+
+        unless %w[webview none].include?(native_fallback)
+          errors << "native.fallback must be webview or none, not #{native_fallback}"
         end
 
         errors

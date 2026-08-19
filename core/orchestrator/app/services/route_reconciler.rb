@@ -42,6 +42,10 @@ class RouteReconciler
       end
     end
 
+    # The app addresses a module by name, so the map from name to upstream is
+    # part of routing being right, not a separate thing to remember.
+    @router.refresh_upstreams!(InstalledModule.live)
+
     reloaded = begin
       @router.reload
       true

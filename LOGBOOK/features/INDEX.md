@@ -1,6 +1,6 @@
 # Feature index
 
-_Generated: 2026-08-19, by hand. Nine features, all shipped._
+_Generated: 2026-08-19, by hand. Ten features, all shipped._
 
 ## Active
 
@@ -23,6 +23,7 @@ None.
 | [Storage quotas](feat-storage-quotas.md) | Per bucket, per domain, and the default that caps a manifest | `bin/smoke-quotas` |
 | [Domain storage limits](feat-domain-storage-limits.md) | An allowance set where a domain is added, before anything is stored | `bin/smoke-domains` |
 | [Domain naming](feat-domain-naming.md) | The Backoffice at core.<domain>, off .localhost for good, generated hosts entries | `bin/smoke-auth`, `bin/hosts-file` |
+| [Phone apps](feat-mobile-apps.md) | One React Native app per domain, native capabilities an operator caps, and a build queue | `bin/smoke-mobile` |
 
 ## Abandoned
 

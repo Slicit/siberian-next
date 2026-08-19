@@ -1,9 +1,14 @@
 # Root level only. Each Rails service keeps its own .gitignore.
 
 # The manifest validator installs these with --no-save at check time.
-node_modules/
-package-lock.json
-package.json
+#
+# Anchored with a leading slash. Without one git matches the name at any depth,
+# so "package.json" quietly swallowed core/mobile-builder/package.json and the
+# image failed with a bare "not found" for a file that was right there on the
+# machine it was authored on.
+/node_modules/
+/package-lock.json
+/package.json
 
 # Development environment, written by bin/setup.
 .env

@@ -28,7 +28,7 @@ Rails.application.configure do
   if config.hosts.any?
     # "core" is the alias the Router answers to on module networks, so it is the
     # Host every module-originated call arrives with.
-    config.hosts += %w[core orchestrator base auth mailer storage database router]
+    config.hosts += %w[core orchestrator base auth mailer storage database mobile router]
 
     domain = ENV["SIBERIAN_DOMAIN"].presence
     if domain

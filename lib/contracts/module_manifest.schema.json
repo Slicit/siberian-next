@@ -136,6 +136,73 @@
         }
       }
     },
+    "native": {
+      "type": "object",
+      "description": "What this module contributes to the domain's phone app. Optional: a module that declares nothing native still appears in the app, as a WebView on the UI the Base App already frames.",
+      "additionalProperties": false,
+      "properties": {
+        "entry": {
+          "type": "string",
+          "description": "React Native entry point, relative to the module directory."
+        },
+        "screens": {
+          "type": "array",
+          "description": "One per feature capability this module renders natively. A capability with no native screen falls back on its own.",
+          "items": {
+            "type": "object",
+            "required": [
+              "capability",
+              "component"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "capability": {
+                "type": "string",
+                "description": "Feature capability id this screen renders. Must be one this module provides."
+              },
+              "component": {
+                "type": "string",
+                "description": "Exported component name in the entry point."
+              },
+              "title": {
+                "type": "string"
+              },
+              "icon": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "requires": {
+          "type": "array",
+          "description": "Native capabilities this module needs. A request an operator approves at install, never a switch: a capability an operator has not enabled leaves this module's native screen off.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "location",
+              "biometric_auth",
+              "secure_storage",
+              "haptics",
+              "file_system",
+              "device_info",
+              "app_tracking",
+              "purchases",
+              "web_browser",
+              "network_state"
+            ]
+          }
+        },
+        "fallback": {
+          "type": "string",
+          "enum": [
+            "webview",
+            "none"
+          ],
+          "default": "webview",
+          "description": "What the app shows when this module's native code is unavailable."
+        }
+      }
+    },
     "permissions": {
       "type": "object",
       "description": "Everything the module is allowed to reach. Granted at install or update time on the Android model: the operator sees this list and approves it. Nothing outside this list is reachable.",

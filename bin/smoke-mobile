@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Configures the phone app for a domain and queues a build, through the
+# Backoffice. The interesting part is a module whose native requirement an
+# operator has not approved: it appears as its web UI, and says why.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-mobile.sh

@@ -1,0 +1,240 @@
+<% content_for :title, "#{@domain.hostname} app" %>
+<% may_manage = allow?("core.mobile.manage") %>
+<% helper = ActiveSupport::NumberHelper %>
+
+<div style="margin-bottom:1.2rem">
+  <p class="muted" style="margin:0 0 .3rem"><%= link_to "Phone apps", mobile_path %></p>
+  <h1><%= @domain.hostname %></h1>
+  <p class="muted" style="margin:0">
+    One app for this domain, assembled from the modules installed here and the
+    native capabilities switched on below.
+  </p>
+</div>
+
+<div class="card">
+  <header><h2>The app</h2></header>
+
+  <% if may_manage %>
+    <%= form_with url: mobile_app_path(@domain), method: :patch, class: "stack" do %>
+      <div class="field">
+        <%= label_tag :name, "Name" %>
+        <%= text_field_tag :name, @app && @app["name"] || @domain.label.presence || @domain.hostname, required: true %>
+        <div class="hint">What somebody sees under the icon.</div>
+      </div>
+
+      <div class="field">
+        <%= label_tag :bundle_identifier, "Bundle identifier" %>
+        <%= text_field_tag :bundle_identifier, @app && @app["bundle_identifier"] %>
+        <div class="hint">
+          Left empty it is derived from the domain. Both stores treat this as the
+          identity of the app, and changing it after a release ships a different
+          app rather than an update.
+        </div>
+      </div>
+
+      <div class="row" style="gap:.6rem; align-items:flex-end">
+        <div class="field" style="max-width:8rem">
+          <%= label_tag :version, "Version" %>
+          <%= text_field_tag :version, (@app && @app["version"]) || "1.0.0" %>
+        </div>
+        <div class="field" style="max-width:9rem">
+          <%= label_tag :primary_color, "Accent colour" %>
+          <%= text_field_tag :primary_color, @app && @app["primary_color"], placeholder: "#2563eb" %>
+        </div>
+      </div>
+
+      <p class="faint" style="margin:0; font-size:.8rem">
+        Build number <%= @app ? @app["build_number"].to_i : 0 %> so far. The
+        builder increments it on success and never on a failure, so no two
+        artifacts can share one.
+      </p>
+
+      <button type="submit" class="primary"><%= @app ? "Save" : "Create the app" %></button>
+    <% end %>
+  <% elsif @app %>
+    <div class="row wrap">
+      <span class="badge"><%= @app["name"] %></span>
+      <span class="badge"><%= @app["bundle_identifier"] %></span>
+      <span class="badge">v<%= @app["version"] %></span>
+    </div>
+  <% else %>
+    <div class="empty">No app configured for this domain yet.</div>
+  <% end %>
+</div>
+
+<% if @app %>
+  <div class="card">
+    <header>
+      <h2>Native capabilities</h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        A module can say it needs one of these. It cannot switch one on: a
+        manifest is written by a third party, and every capability here is
+        something the app can then do to somebody.
+      </p>
+    </header>
+
+    <% configured = Array(@app["capabilities"]).index_by { |row| row["capability"] } %>
+    <% required_by = Hash.new { |hash, key| hash[key] = [] } %>
+    <% Array(@app["modules"]).each { |mod| Array(mod["requires"]).each { |id| required_by[id] << mod["name"] } } %>
+
+    <% @catalogue.each do |capability| %>
+      <% row = configured[capability["id"]] %>
+      <% enabled = row && row["enabled"] %>
+      <div style="padding:.8rem 0; border-bottom:1px solid var(--line)">
+        <div class="spread">
+          <div>
+            <strong><%= capability["label"] %></strong>
+            <% if capability["severity"] == "high" %>
+              <span class="badge warn" style="margin-left:.3rem">asks a lot</span>
+            <% end %>
+            <% if enabled %><span class="badge" style="margin-left:.3rem">on</span><% end %>
+            <div class="muted" style="font-size:.82rem; margin-top:.15rem"><%= capability["summary"] %></div>
+            <div class="faint mono" style="font-size:.72rem"><%= capability["package"] %></div>
+
+            <% if required_by[capability["id"]].any? %>
+              <div class="faint" style="font-size:.78rem; margin-top:.25rem">
+                Required by <%= required_by[capability["id"]].to_sentence %><% unless enabled %>, which is why that module falls back to its web UI<% end %>.
+              </div>
+            <% end %>
+          </div>
+
+          <% if may_manage %>
+            <%= button_to enabled ? "Turn off" : "Turn on",
+                  mobile_capability_path(@domain, capability["id"]),
+                  method: :patch, class: "button",
+                  params: { enabled: enabled ? "false" : "true" } %>
+          <% end %>
+        </div>
+
+        <% settings = Array(capability["settings"]) %>
+        <% if settings.any? && may_manage %>
+          <%= form_with url: mobile_capability_path(@domain, capability["id"]),
+                        method: :patch, class: "row",
+                        style: "margin-top:.5rem; gap:.5rem; align-items:flex-end; flex-wrap:wrap" do %>
+            <%= hidden_field_tag :enabled, enabled ? "true" : "false" %>
+            <% settings.each do |setting| %>
+              <div style="max-width:16rem">
+                <label style="font-size:.72rem"><%= setting["label"] %></label>
+                <%= text_field_tag "settings[#{setting['key']}]", nil,
+                      placeholder: (row && row["settings"] && row["settings"][setting["key"]] == "set") ? "set" : "not set" %>
+              </div>
+            <% end %>
+            <button type="submit">Save</button>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if Array(@app["misconfigured"]).any? %>
+      <div class="alert" style="margin-top:.8rem">
+        <% @app["misconfigured"].each do |entry| %>
+          <div>
+            <%= entry["capability"] %> is on but has no
+            <%= Array(entry["missing"]).to_sentence %>. A build is refused until it does.
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="card">
+    <header>
+      <h2>What goes in the app</h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        Every installed module appears. One that ships native code gets a real
+        screen; one that does not gets its web UI in a WebView, the same UI the
+        product shell frames in a browser.
+      </p>
+    </header>
+
+    <% if Array(@app["modules"]).any? %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Module</th><th>In the app as</th><th>Needs</th></tr></thead>
+          <tbody>
+            <% @app["modules"].each do |mod| %>
+              <tr>
+                <td><strong><%= mod["name"] %></strong></td>
+                <td>
+                  <span class="badge <%= mod["kind"] == "native" ? "" : mod["kind"] == "none" ? "danger" : "warn" %>">
+                    <%= mod["kind"] == "webview" ? "its web UI" : mod["kind"] %>
+                  </span>
+                  <% if mod["reason"].present? %>
+                    <div class="faint" style="font-size:.72rem"><%= mod["reason"] %></div>
+                  <% end %>
+                </td>
+                <td class="faint" style="font-size:.78rem">
+                  <%= Array(mod["requires"]).join(", ").presence || "nothing" %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <div class="empty">No modules installed, so the app would have nothing in it.</div>
+    <% end %>
+  </div>
+
+  <div class="card">
+    <header>
+      <div class="spread">
+        <div>
+          <h2>Builds</h2>
+          <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+            One builder, shared by every domain. Asking for a build is asking to
+            be next.
+          </p>
+        </div>
+        <% if may_manage %>
+          <div class="row" style="gap:.4rem">
+            <%= button_to "Build for Android", build_mobile_app_path(@domain),
+                  class: "button primary", params: { platform: "android" } %>
+            <%= button_to "iOS project", build_mobile_app_path(@domain),
+                  class: "button", params: { platform: "ios" },
+                  form: { data: { turbo_confirm: "iOS cannot be compiled on Linux. This produces the configured Xcode project, which is what a macOS runner needs. Continue?" } } %>
+          </div>
+        <% end %>
+      </div>
+    </header>
+
+    <% if @builds.any? %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>Platform</th><th>State</th><th>Artifact</th><th></th></tr></thead>
+          <tbody>
+            <% @builds.each do |build| %>
+              <tr>
+                <td class="faint" style="font-size:.78rem"><%= build["created_at"] %></td>
+                <td><%= build["platform"] %></td>
+                <td>
+                  <span class="badge <%= build["state"] == "succeeded" ? "" : build["state"] == "dead" ? "danger" : "warn" %>">
+                    <%= build["state"] %>
+                  </span>
+                  <% if build["last_error"].present? %>
+                    <div class="faint" style="font-size:.72rem"><%= truncate(build["last_error"], length: 80) %></div>
+                  <% end %>
+                </td>
+                <td class="mono" style="font-size:.75rem">
+                  <% if build["artifact_path"].present? %>
+                    <%= build["artifact_path"] %>
+                    <div class="faint"><%= helper.number_to_human_size(build["artifact_bytes"].to_i) %></div>
+                  <% else %>
+                    <span class="faint">none</span>
+                  <% end %>
+                </td>
+                <td class="right">
+                  <% if may_manage && %w[queued failed building].include?(build["state"]) %>
+                    <%= button_to "Cancel", cancel_mobile_build_path(@domain, build["id"]), class: "button danger" %>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <div class="empty">Nothing built yet for this domain.</div>
+    <% end %>
+  </div>
+<% end %>

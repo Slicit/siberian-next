@@ -293,6 +293,7 @@ class ModuleInstaller
 
     @router.write(installed, domains)
     @undo << -> { @router.remove(installed) }
+    @router.refresh_upstreams!(InstalledModule.live)
     @router.reload
     Activity.record("routes.published", installed_module: installed, domains: domains.map(&:hostname))
   end
