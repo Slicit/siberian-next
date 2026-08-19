@@ -3,22 +3,33 @@
 require "test_helper"
 
 class SessionsTest < ActionDispatch::IntegrationTest
+  # Production always has a Router in front supplying the domain, and the
+  # cookie is scoped to it. A test that skips that is testing a path nobody
+  # runs.
+  DOMAIN_HEADERS = { "X-Siberian-Domain" => "example.test" }.freeze
+
   setup do
+    host! "app.example.test"
     @user = User.create!(email: "alex@example.test", password: "password123", name: "Alex")
   end
 
+  def sign_in(password: "password123", **extra)
+    post login_path, params: { email: "alex@example.test", password: password }.merge(extra),
+                     headers: DOMAIN_HEADERS
+  end
+
   test "signing in sets a session cookie and redirects" do
-    post login_path, params: { email: "alex@example.test", password: "password123" }
+    sign_in
 
     assert_response :redirect
     assert cookies[:siberian_session].present?
   end
 
   test "a wrong password says the same thing as an unknown email" do
-    post login_path, params: { email: "alex@example.test", password: "wrong" }
+    sign_in(password: "wrong")
     wrong_password = response.body
 
-    post login_path, params: { email: "nobody@example.test", password: "password123" }
+    post login_path, params: { email: "nobody@example.test", password: "password123" }, headers: DOMAIN_HEADERS
     unknown_email = response.body
 
     assert_response :unprocessable_entity
@@ -27,7 +38,7 @@ class SessionsTest < ActionDispatch::IntegrationTest
   end
 
   test "the internal endpoint identifies the signed-in user to other services" do
-    post login_path, params: { email: "alex@example.test", password: "password123" }
+    sign_in
     token = cookies[:siberian_session]
 
     get "/internal/session", headers: { "X-Siberian-Session" => token }
@@ -47,26 +58,24 @@ class SessionsTest < ActionDispatch::IntegrationTest
   end
 
   test "signing out revokes the session for everyone, not just this browser" do
-    post login_path, params: { email: "alex@example.test", password: "password123" }
+    sign_in
     token = cookies[:siberian_session]
 
-    delete logout_path
+    delete logout_path, headers: DOMAIN_HEADERS
 
     get "/internal/session", headers: { "X-Siberian-Session" => token }
     assert_response :unauthorized
   end
 
   test "an off-domain return_to is ignored" do
-    post login_path, params: { email: "alex@example.test", password: "password123",
-                               return_to: "https://evil.example.com/steal" }
+    sign_in(return_to: "https://evil.example.com/steal")
 
     assert_response :redirect
     refute_includes response.location, "evil.example.com"
   end
 
   test "a relative return_to is honoured" do
-    post login_path, params: { email: "alex@example.test", password: "password123",
-                               return_to: "/somewhere" }
+    sign_in(return_to: "/somewhere")
 
     assert_redirected_to "/somewhere"
   end

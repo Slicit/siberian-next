@@ -7,6 +7,9 @@
 # a password.
 module Internal
   class SessionsController < ActionController::API
+    # API controllers ship without a cookie jar, and this endpoint exists to read
+    # the browser cookie a caller forwarded.
+    include ActionController::Cookies
     # GET /internal/session
     #
     # The caller forwards the browser's cookie. A module can therefore learn who
