@@ -17,7 +17,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for service in orchestrator base auth mailer storage database; do
+for service in orchestrator base auth mailer storage database mobile; do
   app="core/$service"
   [ -f "$app/config/application.rb" ] || continue
 
