@@ -22,10 +22,15 @@ convenience.
 | Domain | `siberian.test` over HTTPS, behind a local CA |
 
 The laptop is for authoring. The loop is edit locally, commit, push, pull on the
-box, run there. Anything generated on the box (Rails apps, migrations, schema
-dumps) has to be committed **from** the box, which is a step easy to forget: CI
-once checked out five services with no initializer because a generator ran there
-and its output never left.
+box, run there. Two things about that loop have bitten already:
+
+- Anything generated on the box (Rails apps, migrations, schema dumps) has to be
+  committed **from** the box. CI once checked out five services with no
+  initializer because a generator ran there and its output never left.
+- Containers write `tmp` and `log` as root. If either is ever tracked, `git
+  pull` on the box fails with `unable to unlink old ...: Permission denied`,
+  which reads as a broken checkout. The fix is `sudo chown -R claude:claude
+  core/*/tmp core/*/log`, and then making sure the app has a `.gitignore`.
 
 ## Bringing it up
 
