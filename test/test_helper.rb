@@ -9,6 +9,10 @@ $LOAD_PATH.unshift(File.expand_path("..", __dir__))
 
 require "lib/siberian_engine"
 
+# Backends load lazily in production, through Engine.driver. Tests name the
+# class directly, so they load it directly.
+require "lib/siberian_engine/drivers/docker"
+
 module Siberian
   module TestSupport
     # Stands in for UnixHTTP so driver tests assert on the requests the driver
