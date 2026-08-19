@@ -73,7 +73,9 @@ module Internal
     # is relaying one. Both carry the same opaque token.
     def token_from_request
       request.headers["X-Siberian-Session"].presence ||
-        cookies[SessionsController::COOKIE].presence
+        # Rooted, because inside module Internal a bare SessionsController
+        # resolves to Internal::SessionsController, which has no cookie name.
+        cookies[::SessionsController::COOKIE].presence
     end
   end
 end
