@@ -16,7 +16,7 @@ containers:
     role: http
     internal_port: 80
     health:
-      path: /up
+      path: /
       interval_seconds: 30
 
 routes:
