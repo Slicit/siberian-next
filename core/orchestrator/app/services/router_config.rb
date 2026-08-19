@@ -105,8 +105,6 @@ class RouterConfig
   # The template opens with a comment explaining its own placeholders. Rendering
   # that block turns the explanation into nonsense, so it does not travel.
   def strip_template_header(body)
-    body.sub(/A(?:#.*
-|
-)*/, "")
+    body.lines.drop_while { |line| line.start_with?("#") || line.strip.empty? }.join
   end
 end
