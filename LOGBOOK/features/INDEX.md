@@ -1,6 +1,6 @@
 # Feature index
 
-_Generated: 2026-08-19, by hand. Twelve features, all shipped._
+_Generated: 2026-08-19, by hand. Thirteen features, all shipped._
 
 ## Active
 
@@ -26,6 +26,7 @@ None.
 | [Phone apps](feat-mobile-apps.md) | One React Native app per domain, native capabilities an operator caps, and a build queue | `bin/smoke-mobile` |
 | [App studio](feat-app-studio.md) | The phone app configured from the product side, from a description | `bin/smoke-mobile` |
 | [Splash](feat-splash.md) | Custom splash artwork, centred with a stated safe zone, and an animated one on Android | `bin/smoke-mobile` |
+| [Interface polish](feat-interface-polish.md) | A menu built from data and tested against the controllers, breadcrumbs, a confirm dialog, and actions that read as what they do | `bin/test-lib`, `bin/smoke-backoffice` |
 
 ## Abandoned
 
