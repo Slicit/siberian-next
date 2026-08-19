@@ -67,8 +67,8 @@ than demonstrating itself.
 The feature also found a hole in the architecture. Modules could reach the core
 and nothing could reach a module: the Mailer resolved a transport living in a
 module, saw its URL, and had no route to it. There is now a door in that
-direction too, , and the Router is the only container
-that could provide it because it is the only one on every module network.
+direction too, `http://modules/<name>/...`, and the Router is the only container
+that could provide it, because it is the only one on every module network.
 
 The sharpest bug was mine and not the design: attempt numbers derived from the
 retry budget collided after a manual retry, because reviving resets the budget
