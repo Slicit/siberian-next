@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Proves the access model against the running stack: every page agrees with the
+# permission set, a per-module deny is surgical, and a withdrawn permission
+# stops working within the stated window.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-access.sh

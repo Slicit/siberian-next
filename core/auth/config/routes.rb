@@ -5,12 +5,26 @@ Rails.application.routes.draw do
   delete "logout", to: "sessions#destroy", as: :logout
   get "logout", to: "sessions#destroy"
 
-  # How everything else asks who is signed in. The caller forwards the
-  # browser's cookie; only this service can read it.
+  # How everything else asks who is signed in and what they may do. The caller
+  # forwards the browser cookie; only this service can read it.
   namespace :internal do
     get "session", to: "sessions#show"
     delete "session", to: "sessions#destroy"
-    resources :users, only: %i[index show]
+
+    # A fresh answer for one question, for the handful of actions where a
+    # cached set is not good enough.
+    post "authorize", to: "sessions#authorize_action"
+
+    resources :users, only: %i[index show create update destroy] do
+      member do
+        post "roles", to: "users#assign_role"
+        delete "roles", to: "users#unassign_role"
+        post "grants", to: "users#grant"
+        delete "grants", to: "users#revoke"
+      end
+    end
+
+    resources :roles, only: %i[index create update destroy]
   end
 
   get "up", to: "rails/health#show", as: :rails_health_check

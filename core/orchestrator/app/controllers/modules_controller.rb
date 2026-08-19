@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class ModulesController < ApplicationController
+  requires "core.modules.read"
+  requires "core.modules.remove", only: :destroy
   before_action :set_module, only: %i[show refresh destroy]
 
   def index
@@ -31,6 +33,11 @@ class ModulesController < ApplicationController
   end
 
   def destroy
+    # Fresh rather than cached: an operator who has just had this taken away
+    # should not get one more removal out of a thirty second window.
+    require_fresh_permission!("core.modules.remove")
+    return if performed?
+
     result = ModuleUninstaller.new(@module, registrar: ServiceRegistrar.new,
                                    keep_data: params[:keep_data] != "false").call
 

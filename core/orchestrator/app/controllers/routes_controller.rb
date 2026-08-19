@@ -6,6 +6,7 @@
 # network are gone and every module route answers 502 with nothing in any log
 # to explain it. One button beats an explanation.
 class RoutesController < ApplicationController
+  requires "core.modules.read"
   def reconcile
     result = RouteReconciler.new.call
 

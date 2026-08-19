@@ -1,0 +1,71 @@
+<% content_for :title, "People" %>
+
+<div style="margin-bottom:1.2rem">
+  <h1>People</h1>
+  <p class="muted" style="margin:0">
+    One account across the whole system. What somebody can do is the sum of the
+    roles they hold, plus anything granted to them directly, minus anything
+    denied.
+  </p>
+</div>
+
+<div class="card">
+  <header><h2><%= pluralize(@people.size, "person") %></h2></header>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Person</th><th>Roles</th><th>Last seen</th><th></th></tr></thead>
+      <tbody>
+        <% @people.each do |person| %>
+          <tr>
+            <td>
+              <strong><%= person["name"] %></strong>
+              <% unless person["active"] %><span class="badge danger" style="margin-left:.4rem">deactivated</span><% end %>
+              <div class="faint mono" style="font-size:.76rem"><%= person["email"] %></div>
+            </td>
+            <td>
+              <% Array(person["roles"]).each do |role| %>
+                <span class="badge accent"><%= role %></span>
+              <% end %>
+              <% if Array(person["roles"]).empty? %><span class="faint">none</span><% end %>
+            </td>
+            <td class="muted mono" style="font-size:.78rem">
+              <%= person["last_seen_at"] ? Time.parse(person["last_seen_at"]).strftime("%Y-%m-%d") : "never" %>
+            </td>
+            <td class="right"><%= link_to "Open", person_path(person["id"]), class: "button" %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<% if allow?("core.users.write") %>
+  <div class="card">
+    <header><h2>Add someone</h2></header>
+    <%= form_with url: people_path, method: :post, class: "stack" do |form| %>
+      <div class="field">
+        <%= form.label :email, "Email" %>
+        <%= form.email_field :email, required: true, placeholder: "person@example.com" %>
+      </div>
+      <div class="field">
+        <%= form.label :name, "Name" %>
+        <%= form.text_field :name %>
+      </div>
+      <div class="field">
+        <%= form.label :password, "Initial password" %>
+        <%= form.text_field :password, placeholder: "at least 8 characters" %>
+        <div class="hint">Left empty, one is generated and nobody can sign in until it is reset.</div>
+      </div>
+      <div class="field">
+        <label>Roles</label>
+        <% @roles.each do |role| %>
+          <label class="row" style="font-weight:400">
+            <%= check_box_tag "role_ids[]", role["id"], false, style: "width:auto" %>
+            <span><strong><%= role["name"] %></strong> <span class="muted"><%= role["description"] %></span></span>
+          </label>
+        <% end %>
+      </div>
+      <button type="submit" class="primary">Add</button>
+    <% end %>
+  </div>
+<% end %>

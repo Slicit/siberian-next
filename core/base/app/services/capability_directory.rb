@@ -57,8 +57,11 @@ class CapabilityDirectory
 
   # Grouped the way the sidebar renders, in a stable order, with anything
   # unrecognised collected rather than dropped.
-  def grouped(domain:)
+  # `only` is the caller's filter, applied before grouping so an area with
+  # nothing visible in it does not render as an empty heading.
+  def grouped(domain:, only: nil)
     capabilities = all(domain: domain)
+    capabilities = only.call(capabilities) if only
     known = AREAS.keys
 
     groups = AREAS.filter_map do |area, label|

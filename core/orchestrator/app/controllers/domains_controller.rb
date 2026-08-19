@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class DomainsController < ApplicationController
+  requires "core.domains.manage"
   def index
     @domains = Domain.ordered
     @domain = Domain.new

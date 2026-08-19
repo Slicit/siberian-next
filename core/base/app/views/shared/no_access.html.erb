@@ -1,0 +1,23 @@
+<div class="centred">
+  <div class="card stack">
+    <div class="brand"><span class="mark">S</span><span>Siberian</span></div>
+    <h1 style="font-size:1.2rem">Nothing here for you yet</h1>
+    <p class="muted" style="margin:0">
+      <% if @missing_permission %>
+        Your account can sign in, but has not been given access to this.
+      <% else %>
+        Your account exists, but has not been given access to the product yet.
+      <% end %>
+    </p>
+    <% if @missing_permission %>
+      <p class="muted" style="margin:0">
+        Missing: <span class="badge danger mono"><%= @missing_permission %></span>
+      </p>
+    <% end %>
+    <p class="hint" style="margin:0">
+      Somebody who manages people can grant it. Naming the permission means you
+      can ask for the right thing rather than for "access".
+    </p>
+    <a class="button" href="/logout">Sign out</a>
+  </div>
+</div>

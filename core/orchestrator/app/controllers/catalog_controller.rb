@@ -6,6 +6,8 @@
 # whole security model, and an operator who never sees them has not approved
 # anything.
 class CatalogController < ApplicationController
+  requires "core.modules.read"
+  requires "core.modules.install", only: :create
   def index
     @entries = catalog.entries
   end
