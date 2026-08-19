@@ -22,7 +22,11 @@ server {
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Siberian-Domain $host;
+    # The served domain, not $host. $host here is the module origin
+    # (<module>.apps.<domain>), and a module that reports that as its domain asks
+    # the core for a database nobody provisioned. The template is rendered once
+    # per domain, so the right answer is already known at render time.
+    proxy_set_header X-Siberian-Domain ${SIBERIAN_DOMAIN};
 
     # Framed only by the Base App on the parent domain, never by another module
     # and never by an outside site.
