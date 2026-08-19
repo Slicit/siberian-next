@@ -62,6 +62,10 @@ services:
       SIBERIAN_ENGINE: docker
       SIBERIAN_ROUTER_CONFIG_DIR: /var/lib/siberian/router
       SIBERIAN_ROUTER_CONTAINER: siberian-router-1
+      # Where the Orchestrator looks for installable modules. A directory for
+      # now; a registry later. Read only, because installing must never edit
+      # the source it installed from.
+      SIBERIAN_MODULE_CATALOG: /var/lib/siberian/modules
     volumes:
       - ../core/orchestrator:/app
       - ../lib:/app/lib
@@ -69,6 +73,7 @@ services:
       # reaches the daemon. Nothing else gets the socket.
       - /var/run/docker.sock:/var/run/docker.sock
       - router_modules:/var/lib/siberian/router
+      - ../modules:/var/lib/siberian/modules:ro
     depends_on:
       configuration:
         condition: service_healthy
