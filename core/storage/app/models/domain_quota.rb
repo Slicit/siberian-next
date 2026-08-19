@@ -5,6 +5,12 @@
 # The shared pool. A module's own quota says how much of it that module may
 # take; this says how much there is.
 class DomainQuota < ApplicationRecord
+  # Rails inflects "quota" as already plural, from the Latin "quotum", so it
+  # looks for a table called domain_quota and finds nothing. Said here rather
+  # than as a global inflection rule, because the surprise belongs next to the
+  # thing that surprises.
+  self.table_name = "domain_quotas"
+
   validates :domain, presence: true, uniqueness: true
   validates :quota_mb, numericality: { greater_than: 0 }, allow_nil: true
   validates :default_bucket_quota_mb, numericality: { greater_than: 0 }, allow_nil: true
