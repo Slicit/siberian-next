@@ -22,15 +22,37 @@
           <div class="nav-group">
             <div class="label">Operate</div>
             <%= link_to "Overview", root_path, "aria-current": ("page" if current_page?(root_path)) %>
-            <%= link_to "Modules", modules_path, "aria-current": ("page" if controller_name == "modules") %>
-            <%= link_to "Catalogue", catalog_path, "aria-current": ("page" if controller_name == "catalog") %>
+            <% if allow?("core.modules.read") %>
+              <%= link_to "Modules", modules_path, "aria-current": ("page" if controller_name == "modules") %>
+            <% end %>
+            <% if allow?("core.modules.install") %>
+              <%= link_to "Catalogue", catalog_path, "aria-current": ("page" if controller_name == "catalog") %>
+            <% end %>
           </div>
+
+          <% if allow?("core.users.read") || allow?("core.roles.manage") %>
+            <div class="nav-group">
+              <div class="label">Access</div>
+              <% if allow?("core.users.read") %>
+                <%= link_to "People", people_path, "aria-current": ("page" if controller_name == "people") %>
+              <% end %>
+              <% if allow?("core.roles.manage") %>
+                <%= link_to "Roles", roles_path, "aria-current": ("page" if controller_name == "roles") %>
+              <% end %>
+            </div>
+          <% end %>
 
           <div class="nav-group">
             <div class="label">System</div>
-            <%= link_to "Domains", domains_path, "aria-current": ("page" if controller_name == "domains") %>
-            <%= link_to "Interfaces", interfaces_path, "aria-current": ("page" if controller_name == "interfaces") %>
-            <%= link_to "Activity", activity_path, "aria-current": ("page" if controller_name == "activities") %>
+            <% if allow?("core.domains.manage") %>
+              <%= link_to "Domains", domains_path, "aria-current": ("page" if controller_name == "domains") %>
+            <% end %>
+            <% if allow?("core.modules.read") %>
+              <%= link_to "Interfaces", interfaces_path, "aria-current": ("page" if controller_name == "interfaces") %>
+            <% end %>
+            <% if allow?("core.audit.read") %>
+              <%= link_to "Activity", activity_path, "aria-current": ("page" if controller_name == "activities") %>
+            <% end %>
           </div>
         </nav>
 

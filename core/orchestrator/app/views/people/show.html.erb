@@ -1,0 +1,164 @@
+<% content_for :title, @person["name"] %>
+
+<div style="margin-bottom:1.2rem">
+  <%= link_to "All people", people_path, class: "muted" %>
+  <div class="spread" style="margin-top:.4rem">
+    <div>
+      <h1 style="margin:0">
+        <%= @person["name"] %>
+        <% unless @person["active"] %><span class="badge danger">deactivated</span><% end %>
+      </h1>
+      <p class="muted mono" style="margin:.2rem 0 0; font-size:.82rem"><%= @person["email"] %></p>
+    </div>
+    <% if allow?("core.users.write") %>
+      <%= button_to @person["active"] ? "Deactivate" : "Reactivate",
+            deactivate_person_path(@person["id"]),
+            params: { reactivate: (!@person["active"]).to_s },
+            class: @person["active"] ? "button danger" : "button",
+            form: { data: { turbo_confirm: @person["active"] ? "Deactivate #{@person['email']}? Their sessions end immediately." : nil } } %>
+    <% end %>
+  </div>
+</div>
+
+<div class="card">
+  <header>
+    <h2>What they can do right now</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      The resolved answer: every role they hold, plus their own grants, minus
+      anything denied. This is exactly the set their session carries, which is
+      why checking it costs nothing on any page.
+    </p>
+  </header>
+
+  <div class="row wrap" style="gap:.4rem">
+    <% Array(@person["effective_permissions"]).each do |permission| %>
+      <span class="badge ok mono"><%= permission %></span>
+    <% end %>
+    <% if Array(@person["effective_permissions"]).empty? %>
+      <span class="muted">Nothing. They cannot even sign in to the product.</span>
+    <% end %>
+  </div>
+
+  <% if Array(@person["denied"]).any? %>
+    <div style="margin-top:.8rem">
+      <div class="faint" style="font-size:.78rem">Denied, and no role can grant these back</div>
+      <div class="row wrap" style="gap:.4rem; margin-top:.3rem">
+        <% Array(@person["denied"]).each do |permission| %>
+          <span class="badge danger mono"><%= permission %></span>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <div class="muted" style="margin-top:.8rem; font-size:.82rem">
+    <%= pluralize(@person["session_count"].to_i, "active session") %>.
+    A change here takes effect on their next request, and within 30 seconds
+    everywhere else.
+  </div>
+</div>
+
+<div class="card">
+  <header><h2>Roles</h2></header>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Role</th><th>Grants</th><th></th></tr></thead>
+      <tbody>
+        <% @roles.each do |role| %>
+          <% held = Array(@person["role_ids"]).include?(role["id"]) %>
+          <tr>
+            <td>
+              <strong><%= role["name"] %></strong>
+              <div class="muted" style="font-size:.8rem"><%= role["description"] %></div>
+            </td>
+            <td>
+              <% Array(role["permissions"]).first(4).each do |permission| %>
+                <span class="badge mono" style="font-size:.7rem"><%= permission %></span>
+              <% end %>
+              <% if Array(role["permissions"]).size > 4 %>
+                <span class="faint">+<%= Array(role["permissions"]).size - 4 %></span>
+              <% end %>
+            </td>
+            <td class="right">
+              <% if allow?("core.users.write") %>
+                <% if held %>
+                  <%= button_to "Remove", person_roles_path(@person["id"]), method: :delete,
+                        params: { role_id: role["id"] }, class: "button quiet" %>
+                <% else %>
+                  <%= button_to "Add", person_roles_path(@person["id"]),
+                        params: { role_id: role["id"] }, class: "button" %>
+                <% end %>
+              <% elsif held %>
+                <span class="badge accent">held</span>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <header>
+    <h2>Direct grants</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      Outside any role. A deny here cannot be overridden by any role, which is
+      how "an operator, except for this" is said without hoping nobody grants it
+      back later.
+    </p>
+  </header>
+
+  <% if Array(@person["grants"]).any? %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Effect</th><th>Permission</th><th>Reason</th><th></th></tr></thead>
+        <tbody>
+          <% Array(@person["grants"]).each do |grant| %>
+            <tr>
+              <td><span class="badge <%= grant["effect"] == "deny" ? "danger" : "ok" %>"><%= grant["effect"] %></span></td>
+              <td class="mono"><%= grant["permission"] %></td>
+              <td class="muted"><%= grant["reason"] %></td>
+              <td class="right">
+                <% if allow?("core.users.write") %>
+                  <%= button_to "Remove", person_grants_path(@person["id"]), method: :delete,
+                        params: { permission: grant["permission"], effect: grant["effect"] },
+                        class: "button quiet" %>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="empty">No direct grants. Everything they can do comes from a role.</div>
+  <% end %>
+
+  <% if allow?("core.users.write") %>
+    <%= form_with url: person_grants_path(@person["id"]), method: :post, class: "stack", style: "margin-top:1rem" do |form| %>
+      <div class="field">
+        <%= form.label :permission, "Permission" %>
+        <%= form.text_field :permission, list: "catalogue", required: true, placeholder: "core.modules.install" %>
+        <datalist id="catalogue">
+          <% @catalogue.each do |entry| %>
+            <option value="<%= entry[:permission] %>"><%= entry[:label] %></option>
+          <% end %>
+        </datalist>
+        <div class="hint">
+          Wildcards work: <span class="mono">core.*</span> takes everything under
+          core, <span class="mono">module.*.use</span> is any module but only that verb.
+        </div>
+      </div>
+      <div class="field">
+        <%= form.label :effect, "Effect" %>
+        <%= form.select :effect, [["allow", "allow"], ["deny", "deny"]] %>
+      </div>
+      <div class="field">
+        <%= form.label :reason, "Reason" %>
+        <%= form.text_field :reason, placeholder: "Why this person, outside their roles" %>
+      </div>
+      <button type="submit" class="primary">Add grant</button>
+    <% end %>
+  <% end %>
+</div>

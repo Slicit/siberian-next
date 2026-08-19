@@ -1,0 +1,99 @@
+<% content_for :title, "Roles" %>
+
+<div style="margin-bottom:1.2rem">
+  <h1>Roles</h1>
+  <p class="muted" style="margin:0">
+    A role is a bundle of permissions with a name. Changing one changes what
+    everybody holding it can do, on their next request.
+  </p>
+</div>
+
+<% @roles.each do |role| %>
+  <div class="card">
+    <header class="spread">
+      <div>
+        <h2 style="margin:0">
+          <%= role["name"] %>
+          <% if role["seeded"] %><span class="badge" style="margin-left:.4rem">seeded</span><% end %>
+        </h2>
+        <p class="muted" style="margin:.15rem 0 0; font-size:.86rem"><%= role["description"] %></p>
+      </div>
+      <span class="badge <%= role["member_count"].to_i.positive? ? "accent" : "" %>">
+        <%= pluralize(role["member_count"].to_i, "holder") %>
+      </span>
+    </header>
+
+    <%= form_with url: role_path(role["id"]), method: :patch, class: "stack" do |form| %>
+      <div class="field">
+        <%= form.label :description, "Description" %>
+        <%= form.text_field :description, value: role["description"] %>
+      </div>
+
+      <div class="field">
+        <label>Permissions</label>
+        <% @catalogue.group_by { |entry| entry[:group] }.each do |group, entries| %>
+          <div style="margin:.5rem 0 .2rem" class="faint"><%= group %></div>
+          <% entries.each do |entry| %>
+            <label class="row" style="font-weight:400; align-items:flex-start">
+              <%= check_box_tag "permissions[]", entry[:permission],
+                    Array(role["permissions"]).include?(entry[:permission]), style: "width:auto; margin-top:.3rem",
+                    id: "role_#{role['id']}_#{entry[:permission].parameterize}" %>
+              <span>
+                <%= entry[:label] %>
+                <span class="faint mono" style="font-size:.74rem"><%= entry[:permission] %></span>
+                <% if entry[:note] %><div class="muted" style="font-size:.78rem"><%= entry[:note] %></div><% end %>
+              </span>
+            </label>
+          <% end %>
+        <% end %>
+
+        <% extra = Array(role["permissions"]) - @catalogue.map { |entry| entry[:permission] } %>
+        <% if extra.any? %>
+          <div style="margin:.6rem 0 .2rem" class="faint">Not in the catalogue</div>
+          <% extra.each do |permission| %>
+            <label class="row" style="font-weight:400">
+              <%= check_box_tag "permissions[]", permission, true, style: "width:auto",
+                    id: "role_#{role['id']}_extra_#{permission.parameterize}" %>
+              <span class="mono"><%= permission %></span>
+            </label>
+          <% end %>
+          <div class="hint">
+            Granted by hand or by a module. Unticking removes it.
+          </div>
+        <% end %>
+      </div>
+
+      <div class="row">
+        <button type="submit" class="primary">Save</button>
+        <%= button_to "Remove role", role_path(role["id"]), method: :delete, class: "button danger",
+              params: { force: "true" },
+              form: { data: { turbo_confirm: "Remove #{role['name']}? #{role['member_count']} person(s) hold it and will lose what it grants." } } %>
+      </div>
+    <% end %>
+  </div>
+<% end %>
+
+<div class="card">
+  <header><h2>New role</h2></header>
+  <%= form_with url: roles_path, method: :post, class: "stack" do |form| %>
+    <div class="field">
+      <%= form.label :name, "Name" %>
+      <%= form.text_field :name, required: true, placeholder: "support" %>
+    </div>
+    <div class="field">
+      <%= form.label :description, "Description" %>
+      <%= form.text_field :description, placeholder: "What somebody with this role is meant to do" %>
+    </div>
+    <div class="field">
+      <label>Permissions</label>
+      <% @catalogue.each do |entry| %>
+        <label class="row" style="font-weight:400">
+          <%= check_box_tag "permissions[]", entry[:permission], false, style: "width:auto",
+                id: "new_role_#{entry[:permission].parameterize}" %>
+          <span><%= entry[:label] %> <span class="faint mono" style="font-size:.74rem"><%= entry[:permission] %></span></span>
+        </label>
+      <% end %>
+    </div>
+    <button type="submit" class="primary">Create role</button>
+  <% end %>
+</div>

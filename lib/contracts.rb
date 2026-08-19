@@ -7,6 +7,7 @@
 require_relative "siberian_engine"
 require_relative "contracts/manifest"
 require_relative "permissions"
+require_relative "auth_client"
 
 module Siberian
   module Contracts

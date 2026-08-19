@@ -1,0 +1,22 @@
+<% content_for :title, "Not permitted" %>
+
+<div class="card">
+  <h1>You cannot do that</h1>
+  <p class="muted">
+    Your account (<span class="mono"><%= current_user&.email %></span>) does not
+    have the permission this page needs.
+  </p>
+  <% if @missing_permission %>
+    <p class="muted">
+      Missing: <span class="badge danger mono"><%= @missing_permission %></span>
+    </p>
+  <% end %>
+  <p class="muted" style="font-size:.88rem">
+    Somebody with <span class="mono">core.roles.manage</span> can grant it. Naming
+    the permission rather than only refusing means you can ask for the right thing.
+  </p>
+  <div class="row">
+    <%= link_to "Back to the overview", root_path, class: "button" %>
+    <a class="button quiet" href="<%= request.scheme %>://<%= current_domain.to_s.delete_prefix('admin.') %>/logout">Sign out</a>
+  </div>
+</div>
