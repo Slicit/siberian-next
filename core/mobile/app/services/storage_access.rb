@@ -42,6 +42,19 @@ class StorageAccess
     { path: "files/#{path}", bytes: body.bytesize }
   end
 
+  # Reads one back. The builder never holds this credential, so an asset it
+  # needs comes to it through here, the same way the artifact goes out.
+  def fetch(domain:, path:)
+    response = request(Net::HTTP::Get, "/v1/#{path}", nil, {
+                         "Authorization" => "Bearer #{module_token}",
+                         "X-Siberian-Domain" => domain
+                       })
+
+    return nil unless response.code.to_i.between?(200, 299)
+
+    [response.body, response["Content-Type"]]
+  end
+
   private
 
   def module_token
@@ -92,7 +105,7 @@ class StorageAccess
     uri = URI.join(@endpoint, path)
     message = verb.new(uri)
     headers.each { |key, value| message[key] = value }
-    message.body = body
+    message.body = body if body
 
     Net::HTTP.start(uri.hostname, uri.port, open_timeout: 5, read_timeout: 120) do |http|
       http.request(message)

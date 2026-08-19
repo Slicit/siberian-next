@@ -1,6 +1,6 @@
 # Feature index
 
-_Generated: 2026-08-19, by hand. Eleven features, all shipped._
+_Generated: 2026-08-19, by hand. Twelve features, all shipped._
 
 ## Active
 
@@ -25,6 +25,7 @@ None.
 | [Domain naming](feat-domain-naming.md) | The Backoffice at core.<domain>, off .localhost for good, generated hosts entries | `bin/smoke-auth`, `bin/hosts-file` |
 | [Phone apps](feat-mobile-apps.md) | One React Native app per domain, native capabilities an operator caps, and a build queue | `bin/smoke-mobile` |
 | [App studio](feat-app-studio.md) | The phone app configured from the product side, from a description | `bin/smoke-mobile` |
+| [Splash](feat-splash.md) | Custom splash artwork, centred with a stated safe zone, and an animated one on Android | `bin/smoke-mobile` |
 
 ## Abandoned
 

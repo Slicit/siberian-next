@@ -26,6 +26,25 @@ module Internal
       render json: { build_id: build.id, plan: with_current_secrets(build) }
     end
 
+    # GET /internal/builds/:id/asset/:kind
+    #
+    # An asset the build needs, streamed out. The builder holds no Storage
+    # credential, so it asks for the splash image by kind and gets bytes: it
+    # never learns a path, a bucket, or which domain the file sits under.
+    def asset
+      build = Build.find_by(id: params[:id], state: Build::BUILDING)
+      return render json: { error: "no build of yours by that id" }, status: :not_found if build.nil?
+
+      app = build.mobile_app
+      path = params[:kind] == "animation" ? app.splash_animation_path : app.splash_image_path
+      return head :no_content if path.blank?
+
+      body, content_type = StorageAccess.new.fetch(domain: build.domain, path: path)
+      return head :no_content if body.nil?
+
+      send_data body, type: content_type.presence || "application/octet-stream", disposition: "inline"
+    end
+
     # POST /internal/builds/:id/artifact
     #
     # The finished app, streamed back rather than uploaded from the builder.

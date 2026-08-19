@@ -49,5 +49,18 @@ class MobileApp < ApplicationRecord
     end
   end
 
+  # What the app shows before it has drawn anything. A still image on every
+  # platform; an animation only on Android, and only if one was supplied.
+  def splash_image? = splash_image_path.present?
+  def splash_animation? = splash_animation_path.present?
+
+  # Android caps the splash animation at one second. Storing a larger number
+  # would be storing a promise the platform does not keep.
+  ANIMATION_CEILING_MS = 1000
+
+  def clamped_animation_duration
+    [splash_animation_duration_ms.to_i, ANIMATION_CEILING_MS].min.clamp(0, ANIMATION_CEILING_MS)
+  end
+
   def latest_build = builds.order(created_at: :desc).first
 end

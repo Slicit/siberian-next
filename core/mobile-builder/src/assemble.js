@@ -3,7 +3,7 @@
 // Everything here is derived from the plan and nothing is asked of the Mobile
 // service: the builder receives an answer rather than a database, because it is
 // about to run third-party module code.
-import { mkdir, writeFile, cp, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, cp, access } from "node:fs/promises";
 import path from "node:path";
 
 // Where module source is mounted, read only. Building must never edit what it
@@ -40,9 +40,14 @@ const PLUGIN_FOR = {
   app_tracking: (usage) => ["expo-tracking-transparency", { userTrackingPermission: usage }]
 };
 
-export async function assemble(plan, workspace) {
+export async function assemble(plan, workspace, assets = {}) {
   await mkdir(workspace, { recursive: true });
   await cp(path.join(process.cwd(), "template"), workspace, { recursive: true });
+
+  // Written before app.json, because app.json refers to it by path and expo
+  // prebuild fails on a splash image that is not there.
+  if (assets.image) await writeFile(path.join(workspace, "splash.png"), assets.image);
+  if (assets.animation) await writeFile(path.join(workspace, "splash-animation.xml"), assets.animation);
 
   const dependencies = { ...BASE_DEPENDENCIES };
   const plugins = [];
@@ -87,7 +92,12 @@ export async function assemble(plan, workspace) {
           // found", which reads as a corrupt template rather than as missing
           // configuration.
           splash: {
-            backgroundColor: plan.app.primary_color || "#ffffff",
+            // contain rather than cover: the artwork is square and the screen
+            // is not, so covering would crop the sides off a logo. Contained,
+            // the whole square is always visible and the background fills the
+            // rest, which is what "centred with safe zones" means in practice.
+            image: assets.image ? "./splash.png" : undefined,
+            backgroundColor: plan.splash?.background || plan.app.primary_color || "#ffffff",
             resizeMode: "contain"
           },
           android: {
@@ -187,4 +197,48 @@ const stripExtension = (value) => value.replace(/\.(js|jsx|ts|tsx)$/, "");
 
 export async function readJson(file) {
   return JSON.parse(await readFile(file, "utf8"));
+}
+
+// The Android animated splash, applied after prebuild because it edits files
+// prebuild generates.
+//
+// Android animates a splash through the platform splash screen API, and the
+// only thing that API animates is an AnimatedVectorDrawable: not a GIF, not a
+// video, not a sequence of frames. The drawable goes in res/drawable and two
+// theme attributes point the splash at it.
+export async function applyAndroidSplashAnimation(workspace, durationMs) {
+  const source = path.join(workspace, "splash-animation.xml");
+
+  try {
+    await access(source);
+  } catch {
+    return false;
+  }
+
+  const drawables = path.join(workspace, "android/app/src/main/res/drawable");
+  await mkdir(drawables, { recursive: true });
+  await cp(source, path.join(drawables, "splashscreen_animation.xml"));
+
+  const stylesPath = path.join(workspace, "android/app/src/main/res/values/styles.xml");
+  const styles = await readFile(stylesPath, "utf8");
+
+  // Android stops the animation at one second whatever this says, so the value
+  // is clamped rather than passed through: a theme claiming three seconds is a
+  // theme that lies about what the device does.
+  const duration = Math.max(0, Math.min(Number(durationMs) || 1000, 1000));
+
+  const items =
+    `\n        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splashscreen_animation</item>` +
+    `\n        <item name="android:windowSplashScreenAnimationDuration">${duration}</item>`;
+
+  // Anchored on the splash style prebuild writes rather than on the file's
+  // shape: matching the first <style> would put these on the app theme, where
+  // they do nothing and nothing says so.
+  const anchor = /<style name="Theme\.App\.SplashScreen"[^>]*>/;
+  if (!anchor.test(styles)) {
+    throw new Error("prebuild wrote no Theme.App.SplashScreen to attach the animation to");
+  }
+
+  await writeFile(stylesPath, styles.replace(anchor, (match) => match + items));
+  return true;
 }

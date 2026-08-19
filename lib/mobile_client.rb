@@ -42,6 +42,25 @@ module Siberian
               { description: description }, read_timeout: 180)
     end
 
+    # The still image, and the Android animation. Sent as bytes rather than as
+    # a JSON field: base64 in a body that then gets logged is how an image ends
+    # up in three places nobody meant to put it.
+    def upload_splash(domain, bytes, background: nil)
+      query = background.present? ? "?background=#{CGI.escape(background)}" : ""
+      request(Net::HTTP::Post, "/admin/apps/#{CGI.escape(domain)}/splash#{query}",
+              bytes, read_timeout: 60, content_type: "image/png")
+    end
+
+    def upload_splash_animation(domain, bytes, duration_ms: nil)
+      query = duration_ms.present? ? "?duration_ms=#{duration_ms.to_i}" : ""
+      request(Net::HTTP::Post, "/admin/apps/#{CGI.escape(domain)}/splash/animation#{query}",
+              bytes, read_timeout: 60, content_type: "application/xml")
+    end
+
+    def remove_splash(domain, kind: "image")
+      request(Net::HTTP::Delete, "/admin/apps/#{CGI.escape(domain)}/splash?kind=#{CGI.escape(kind)}")
+    end
+
     def builds(domain: nil)
       path = domain ? "/admin/builds?domain=#{CGI.escape(domain)}" : "/admin/builds"
       request(Net::HTTP::Get, path)
@@ -58,12 +77,15 @@ module Siberian
     # The assistant takes as long as it takes, which is why the timeout is a
     # parameter: three seconds is right for reading a page and wrong for asking
     # a model to think.
-    def request(verb, path, body = nil, read_timeout: 15)
+    def request(verb, path, body = nil, read_timeout: 15, content_type: nil)
       uri = URI.join(@endpoint, path)
       message = verb.new(uri)
       message["Authorization"] = "Bearer #{@token}"
 
-      if body
+      if body && content_type
+        message["Content-Type"] = content_type
+        message.body = body
+      elsif body
         message["Content-Type"] = "application/json"
         message.body = JSON.generate(body)
       end
