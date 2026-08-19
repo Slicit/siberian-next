@@ -74,6 +74,70 @@ module Admin
       end
     end
 
+    # POST /admin/apps/:domain/splash
+    #
+    # The still image, on every platform. Square, because it is centred on
+    # screens of every shape and a rectangle would have to be cropped somewhere.
+    def upload_splash
+      app = MobileApp.find_by(domain: params[:domain])
+      return render json: { error: "no app for that domain" }, status: :not_found if app.nil?
+
+      bytes = request.body.read
+      result = SplashAsset.inspect_image(bytes)
+      return render json: { errors: result.problems }, status: :unprocessable_entity unless result.ok?
+
+      stored = StorageAccess.new.store(domain: app.domain, path: "splash/#{app.bundle_identifier}.png",
+                                       body: bytes, content_type: "image/png")
+
+      app.update!(splash_image_path: stored[:path],
+                  splash_background: params[:background].presence || app.splash_background)
+
+      render json: serialize(app).merge(warnings: result.warnings,
+                                        image: { width: result.width, height: result.height })
+    rescue StorageAccess::Refused => e
+      render json: { errors: [e.message] }, status: :insufficient_storage
+    end
+
+    # POST /admin/apps/:domain/splash/animation
+    #
+    # Android only, and only an AnimatedVectorDrawable: that is the one thing
+    # the platform splash screen API animates.
+    def upload_splash_animation
+      app = MobileApp.find_by(domain: params[:domain])
+      return render json: { error: "no app for that domain" }, status: :not_found if app.nil?
+
+      bytes = request.body.read
+      result = SplashAsset.inspect_animation(bytes)
+      return render json: { errors: result.problems }, status: :unprocessable_entity unless result.ok?
+
+      stored = StorageAccess.new.store(domain: app.domain, path: "splash/#{app.bundle_identifier}.xml",
+                                       body: bytes, content_type: "application/xml")
+
+      app.update!(splash_animation_path: stored[:path],
+                  splash_animation_duration_ms: params[:duration_ms].presence || app.splash_animation_duration_ms)
+
+      render json: serialize(app).merge(warnings: result.warnings)
+    rescue StorageAccess::Refused => e
+      render json: { errors: [e.message] }, status: :insufficient_storage
+    end
+
+    # DELETE /admin/apps/:domain/splash
+    #
+    # Forgets the reference. The object stays in Storage, where a build that
+    # already used it can still be explained.
+    def remove_splash
+      app = MobileApp.find_by(domain: params[:domain])
+      return render json: { error: "no app for that domain" }, status: :not_found if app.nil?
+
+      if params[:kind] == "animation"
+        app.update!(splash_animation_path: nil)
+      else
+        app.update!(splash_image_path: nil, splash_background: nil)
+      end
+
+      render json: serialize(app)
+    end
+
     # POST /admin/apps/:domain/suggest
     #
     # A proposal, never a change. What comes back is shown to a person who
@@ -126,6 +190,14 @@ module Admin
         build_number: app.build_number,
         primary_color: app.primary_color,
         icon_path: app.icon_path,
+        splash: {
+          image: app.splash_image?,
+          background: app.splash_background,
+          animation: app.splash_animation?,
+          animation_duration_ms: app.clamped_animation_duration,
+          recommended_px: SplashAsset::RECOMMENDED,
+          safe_zone_px: SplashAsset.safe_zone_px
+        },
         capabilities: app.app_capabilities.order(:capability).map do |row|
           {
             capability: row.capability,

@@ -9,6 +9,10 @@ Rails.application.routes.draw do
     patch "apps/:domain/capabilities/:capability", to: "apps#update_capability",
           constraints: { domain: %r{[^/]+} }, format: false
     post "apps/:domain/suggest", to: "apps#suggest", constraints: { domain: %r{[^/]+} }, format: false
+    post "apps/:domain/splash", to: "apps#upload_splash", constraints: { domain: %r{[^/]+} }, format: false
+    post "apps/:domain/splash/animation", to: "apps#upload_splash_animation",
+         constraints: { domain: %r{[^/]+} }, format: false
+    delete "apps/:domain/splash", to: "apps#remove_splash", constraints: { domain: %r{[^/]+} }, format: false
 
     get "modules", to: "modules#index"
     post "modules", to: "modules#create"
@@ -26,6 +30,7 @@ Rails.application.routes.draw do
     post "builds/claim", to: "builds#claim"
     patch "builds/:id", to: "builds#update"
     post "builds/:id/artifact", to: "builds#artifact"
+    get "builds/:id/asset/:kind", to: "builds#asset"
   end
 
   get "up", to: "rails/health#show", as: :rails_health_check

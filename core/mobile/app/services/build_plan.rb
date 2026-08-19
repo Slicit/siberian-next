@@ -33,6 +33,15 @@ class BuildPlan
         primary_color: @app.primary_color,
         icon_path: @app.icon_path
       },
+      # What it shows before it has drawn anything. The bytes are not here: the
+      # builder asks for them by kind when it claims, because a plan is a thing
+      # that gets stored and an image is not.
+      splash: {
+        background: @app.splash_background.presence || @app.primary_color.presence || "#ffffff",
+        image: @app.splash_image?,
+        animation: @app.splash_animation? && @build.platform == Build::ANDROID,
+        animation_duration_ms: @app.clamped_animation_duration
+      },
       # Where the app talks to the core. The app has no origins, so every module
       # call is namespaced by path and the Router decides which module a path
       # segment means. Nothing here is chosen by the module.

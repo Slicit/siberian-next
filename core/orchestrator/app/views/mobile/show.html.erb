@@ -63,6 +63,83 @@
 </div>
 
 <% if @app %>
+  <% splash = @app["splash"] || {} %>
+  <div class="card">
+    <header>
+      <h2>Splash</h2>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        What the app shows before it has drawn anything. A square image is
+        centred on screens of every shape, so nothing is cropped; Android can
+        also animate one, and only Android.
+      </p>
+    </header>
+
+    <div class="row wrap" style="gap:.5rem; margin-bottom:.8rem">
+      <span class="badge <%= splash["image"] ? "" : "warn" %>">
+        image: <%= splash["image"] ? "set" : "none" %>
+      </span>
+      <span class="badge <%= splash["animation"] ? "" : "warn" %>">
+        Android animation: <%= splash["animation"] ? "set" : "none" %>
+      </span>
+      <% if splash["background"].present? %>
+        <span class="badge">background <%= splash["background"] %></span>
+      <% end %>
+    </div>
+
+    <% if may_manage %>
+      <%= form_with url: mobile_splash_path(@domain), method: :post, class: "stack", multipart: true do %>
+        <div class="field">
+          <%= label_tag :image, "Splash image (PNG)" %>
+          <%= file_field_tag :image, accept: "image/png" %>
+          <div class="hint">
+            Square, <%= splash["recommended_px"] || 2500 %> by
+            <%= splash["recommended_px"] || 2500 %>. Keep the logo inside the
+            centre <%= splash["safe_zone_px"] || 1650 %> pixels: Android masks
+            the splash icon to a circle and crops what is outside it.
+          </div>
+        </div>
+        <div class="field" style="max-width:11rem">
+          <%= label_tag :background, "Background" %>
+          <%= text_field_tag :background, splash["background"], placeholder: "#ffffff" %>
+        </div>
+        <button type="submit" class="primary">Upload image</button>
+      <% end %>
+
+      <hr style="border:0; border-top:1px solid var(--line); margin:1rem 0">
+
+      <%= form_with url: mobile_splash_path(@domain), method: :post, class: "stack", multipart: true do %>
+        <div class="field">
+          <%= label_tag :animation, "Android animation (AnimatedVectorDrawable XML)" %>
+          <%= file_field_tag :animation, accept: ".xml,text/xml,application/xml" %>
+          <div class="hint">
+            Android animates a splash from an AnimatedVectorDrawable and nothing
+            else: not a GIF, not a video, not a sequence of frames. iOS has no
+            equivalent, so this changes nothing there.
+          </div>
+        </div>
+        <div class="field" style="max-width:11rem">
+          <%= label_tag :duration_ms, "Duration (ms)" %>
+          <%= number_field_tag :duration_ms, splash["animation_duration_ms"] || 1000, min: 0, max: 1000 %>
+          <div class="hint">Android stops it at 1000 whatever this says.</div>
+        </div>
+        <button type="submit">Upload animation</button>
+      <% end %>
+
+      <% if splash["image"] || splash["animation"] %>
+        <div class="row" style="gap:.4rem; margin-top:.8rem">
+          <% if splash["image"] %>
+            <%= button_to "Remove image", mobile_splash_path(@domain), method: :delete,
+                  class: "button danger", params: { kind: "image" } %>
+          <% end %>
+          <% if splash["animation"] %>
+            <%= button_to "Remove animation", mobile_splash_path(@domain), method: :delete,
+                  class: "button danger", params: { kind: "animation" } %>
+          <% end %>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+
   <div class="card">
     <header>
       <h2>Native capabilities</h2>

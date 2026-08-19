@@ -44,6 +44,8 @@ Rails.application.routes.draw do
   get "mobile/:id", to: "mobile#show", as: :mobile_app
   patch "mobile/:id", to: "mobile#save"
   patch "mobile/:id/capabilities/:capability", to: "mobile#update_capability", as: :mobile_capability
+  post "mobile/:id/splash", to: "mobile#upload_splash", as: :mobile_splash
+  delete "mobile/:id/splash", to: "mobile#remove_splash"
   post "mobile/:id/build", to: "mobile#build", as: :build_mobile_app
   post "mobile/:id/builds/:build_id/cancel", to: "mobile#cancel", as: :cancel_mobile_build
 

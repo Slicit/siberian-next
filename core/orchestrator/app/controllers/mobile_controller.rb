@@ -8,7 +8,7 @@
 # permission of its own for the same reason storage quotas do.
 class MobileController < ApplicationController
   requires "core.modules.read"
-  requires "core.mobile.manage", only: %i[save update_capability build cancel]
+  requires "core.mobile.manage", only: %i[save update_capability build cancel upload_splash remove_splash]
 
   def index
     @domains = Domain.ordered
@@ -74,6 +74,40 @@ class MobileController < ApplicationController
     else
       redirect_to mobile_app_path(domain), alert: refusal(result)
     end
+  end
+
+  # The still image, or the Android animation. Which one is decided by the
+  # field the form used, never by sniffing the file: a person who picked the
+  # animation field and attached a PNG should be told that, not have it
+  # silently accepted as something else.
+  def upload_splash
+    domain = Domain.find_by(id: params[:id])
+    return redirect_to mobile_path, alert: "No such domain." if domain.nil?
+
+    if params[:animation].present?
+      result = mobile.upload_splash_animation(domain.hostname, params[:animation].read,
+                                              duration_ms: params[:duration_ms])
+    elsif params[:image].present?
+      result = mobile.upload_splash(domain.hostname, params[:image].read,
+                                    background: params[:background])
+    else
+      return redirect_to mobile_app_path(domain), alert: "Choose a file first."
+    end
+
+    if result && result["ok"]
+      redirect_to mobile_app_path(domain),
+                  notice: ["Splash saved.", Array(result["warnings"]).join(" ")].join(" ").strip
+    else
+      redirect_to mobile_app_path(domain), alert: refusal(result)
+    end
+  end
+
+  def remove_splash
+    domain = Domain.find_by(id: params[:id])
+    return redirect_to mobile_path, alert: "No such domain." if domain.nil?
+
+    result = mobile.remove_splash(domain.hostname, kind: params[:kind].presence || "image")
+    redirect_to mobile_app_path(domain), notice: notice_for(result, "Splash removed.")
   end
 
   def cancel

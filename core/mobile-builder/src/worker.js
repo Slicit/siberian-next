@@ -7,7 +7,7 @@
 import { spawn } from "node:child_process";
 import { readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { assemble } from "./assemble.js";
+import { assemble, applyAndroidSplashAnimation } from "./assemble.js";
 
 const MOBILE = process.env.SIBERIAN_MOBILE_URL || "http://mobile:3000";
 const TOKEN = process.env.SIBERIAN_BUILDER_TOKEN || "builder_dev_only";
@@ -55,7 +55,15 @@ async function build({ build_id: id, plan }) {
   };
 
   await rm(workspace, { recursive: true, force: true });
-  const { sdkManaged } = await assemble(plan, workspace);
+
+  // Fetched before assembling, because app.json refers to the splash image by
+  // path and prebuild fails on one that is not there yet.
+  const assets = {
+    image: plan.splash?.image ? await asset(id, "image") : null,
+    animation: plan.splash?.animation ? await asset(id, "animation") : null
+  };
+
+  const { sdkManaged } = await assemble(plan, workspace, assets);
   log.push(`assembled ${plan.modules.length} module(s), ${plan.capabilities.length} capability(ies)`);
 
   await step("npm install", "npm", ["install", "--no-audit", "--no-fund"]);
@@ -96,6 +104,11 @@ async function build({ build_id: id, plan }) {
     };
   }
 
+  if (assets.animation) {
+    const applied = await applyAndroidSplashAnimation(workspace, plan.splash?.animation_duration_ms);
+    log.push(applied ? "applied the animated splash" : "no animated splash to apply");
+  }
+
   await step("gradle assembleRelease", "./gradlew", ["assembleRelease", "--no-daemon"], {
     cwd: path.join(workspace, "android")
   });
@@ -113,6 +126,18 @@ class BuildFailed extends Error {
     super(message);
     this.log = log;
   }
+}
+
+// The bytes of an asset the build needs. The builder holds no Storage
+// credential: it asks by kind and is handed the file, or 204 when there is
+// none, which is the ordinary case rather than an error.
+async function asset(id, kind) {
+  const response = await fetch(`${MOBILE}/internal/builds/${id}/asset/${kind}`, { headers: authorized() });
+
+  if (response.status === 204) return null;
+  if (!response.ok) throw new Error(`${kind} asset refused: ${response.status}`);
+
+  return Buffer.from(await response.arrayBuffer());
 }
 
 async function report(id, outcome, body) {
