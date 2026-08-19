@@ -32,10 +32,27 @@ class PostgresAdmin
   # Idempotent: an existing database and role are the state the caller wanted.
   def provision(database_name:, role_name:, password:)
     with_connection do |connection|
+      harden(connection)
       create_role(connection, role_name, password)
       create_database(connection, database_name, role_name)
       lock_down(connection, database_name, role_name)
     end
+    true
+  rescue PG::Error => e
+    raise Error, e.message
+  end
+
+  # Closes the door every fresh Postgres cluster leaves open.
+  #
+  # Revoking CONNECT per database is not enough on its own: `postgres` and
+  # `template1` still admit PUBLIC, and from either of them a module role can
+  # read pg_database and pg_roles and enumerate every other tenant. Isolating
+  # the tenants while leaving the lobby unlocked is not isolation.
+  #
+  # Idempotent, and cheap enough to run on every provision rather than relying
+  # on somebody having run a setup step once.
+  def harden_cluster!
+    with_connection { |connection| harden(connection) }
     true
   rescue PG::Error => e
     raise Error, e.message
@@ -87,6 +104,15 @@ class PostgresAdmin
   end
 
   private
+
+  # PUBLIC keeps CONNECT on the databases a cluster ships with. A module role
+  # that can reach `postgres` can read pg_database and pg_roles, which is every
+  # other tenant's name and every database on the box.
+  def harden(connection)
+    %w[postgres template1].each do |database|
+      connection.exec("REVOKE CONNECT ON DATABASE #{quote_ident(connection, database)} FROM PUBLIC")
+    end
+  end
 
   def create_role(connection, role_name, password)
     return if role_exists_in?(connection, role_name)
