@@ -58,15 +58,18 @@
       <h2>Domains</h2>
       <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
         The shared pool. Every module bucket on a domain draws from the same
-        allowance, so one module filling it stops the others too.
+        allowance, so one module filling it stops the others too. Every domain
+        the system serves is listed, whether or not anything is stored on it
+        yet, and the same fields sit on the Domains page.
       </p>
     </header>
 
-    <% Array(@quotas["domains"]).each do |domain| %>
+    <% @domain_rows.each do |domain| %>
       <div style="padding:.8rem 0; border-bottom:1px solid var(--line)">
         <div class="spread">
           <div>
             <strong class="mono"><%= domain["domain"] %></strong>
+            <% unless domain["served"] %><span class="badge warn" style="margin-left:.3rem">no longer served</span><% end %>
             <span class="muted" style="font-size:.82rem">
               <%= pluralize(domain["bucket_count"], "bucket") %>
             </span>
@@ -109,8 +112,8 @@
       </div>
     <% end %>
 
-    <% if Array(@quotas["domains"]).empty? %>
-      <div class="empty">No domain has storage yet. A domain appears here once a module provisions a bucket on it.</div>
+    <% if @domain_rows.empty? %>
+      <div class="empty">No domains yet. Add one before setting an allowance for it.</div>
     <% end %>
   </div>
 

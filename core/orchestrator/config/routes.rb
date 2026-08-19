@@ -29,6 +29,7 @@ Rails.application.routes.draw do
   resources :roles, only: %i[index create update destroy]
 
   resources :domains, only: %i[index create update destroy]
+  patch "domains/:id/storage", to: "domains#update_storage", as: :domain_storage
   get "storage", to: "storage#index", as: :storage
   patch "storage", to: "storage#update"
   patch "storage/domain", to: "storage#update_domain", as: :update_domain_storage
