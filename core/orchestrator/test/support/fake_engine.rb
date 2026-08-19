@@ -93,13 +93,26 @@ end
 # whether a reload followed a write. A write with no reload is invisible to
 # nginx, so the tests need to see both.
 class FakeRouter
-  attr_reader :written, :removed, :reloads
+  attr_reader :written, :removed, :reloads, :joined_networks, :left_networks
 
   def initialize(fail_reload: false)
     @written = {}
     @removed = []
     @reloads = 0
+    @joined_networks = []
+    @left_networks = []
     @fail_reload = fail_reload
+  end
+
+  def join_network(name)
+    @joined_networks << name
+    true
+  end
+
+  def leave_network(name)
+    @left_networks << name
+    @joined_networks.delete(name)
+    true
   end
 
   def write(installed_module, domains)

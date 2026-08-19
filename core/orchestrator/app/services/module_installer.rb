@@ -192,6 +192,9 @@ class ModuleInstaller
   def publish_routes(installed)
     return if domains.empty?
 
+    @router.join_network(installed.network_name)
+    @undo << -> { @router.leave_network(installed.network_name) }
+
     @router.write(installed, domains)
     @undo << -> { @router.remove(installed) }
     @router.reload

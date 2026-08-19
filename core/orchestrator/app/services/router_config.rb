@@ -34,6 +34,26 @@ class RouterConfig
     FileUtils.rm_f(path_for(installed_module))
   end
 
+  # A module's containers sit on their own network, and the Router sits on the
+  # core one. Until the Router joins, the module's short name resolves to
+  # nothing and every route answers 502. Joining here rather than putting all
+  # modules on one shared network is what keeps module A from reaching module B
+  # directly: traffic between modules goes through the Router, by construction.
+  def join_network(network_name)
+    @driver.attach(@router_container, network: network_name)
+    true
+  rescue Siberian::Engine::Driver::AlreadyExists
+    true
+  end
+
+  def leave_network(network_name)
+    @driver.detach(@router_container, network: network_name)
+    true
+  rescue StandardError
+    # A network that is already gone needs no leaving.
+    true
+  end
+
   # nginx keeps serving the old config until told otherwise, so a write that is
   # never followed by a reload looks exactly like a write that did nothing.
   def reload
@@ -77,8 +97,16 @@ class RouterConfig
       "SIBERIAN_RESOLVER" => ENV.fetch("SIBERIAN_RESOLVER", "127.0.0.11")
     }
 
-    substitutions.reduce(template) do |body, (key, value)|
+    substitutions.reduce(strip_template_header(template)) do |body, (key, value)|
       body.gsub("${#{key}}", value)
     end
+  end
+
+  # The template opens with a comment explaining its own placeholders. Rendering
+  # that block turns the explanation into nonsense, so it does not travel.
+  def strip_template_header(body)
+    body.sub(/A(?:#.*
+|
+)*/, "")
   end
 end

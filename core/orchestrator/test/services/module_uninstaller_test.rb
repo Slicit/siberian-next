@@ -49,6 +49,14 @@ class ModuleUninstallerTest < ActiveSupport::TestCase
     refute @router.written.key?("demo-tasks")
   end
 
+  test "the router leaves the module network before it is removed" do
+    network = @installed.network_name
+
+    uninstall
+
+    assert_includes @router.left_networks, network
+  end
+
   test "a container the engine has already lost does not block removal" do
     @engine.containers.clear
 

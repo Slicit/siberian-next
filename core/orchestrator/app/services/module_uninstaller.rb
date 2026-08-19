@@ -55,6 +55,7 @@ class ModuleUninstaller
   def withdraw_routes
     attempt("remove router config") { @router.remove(@installed) }
     attempt("reload router") { @router.reload }
+    attempt("detach router from module network") { @router.leave_network(@installed.network_name) }
   end
 
   def remove_containers

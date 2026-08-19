@@ -97,6 +97,13 @@ class ModuleInstallerTest < ActiveSupport::TestCase
     assert_equal 1, @router.reloads, "a write nginx was never told about is invisible"
   end
 
+  test "the router joins the module network, or every route is a 502" do
+    installed = install.installed_module
+
+    assert_includes @router.joined_networks, installed.network_name,
+                    "the router sits on the core network; without joining, the module short name resolves to nothing"
+  end
+
   test "grants record what the operator approved, not what the module asked for" do
     installed = install.installed_module
 
