@@ -12,9 +12,15 @@ class QuotaTest < ActiveSupport::TestCase
     )
   end
 
-  def bucket(domain: "example.test", quota_mb: 10, bytes_used: 0)
-    @registration.buckets.create!(
-      domain: domain, name: "sib-notes-#{SecureRandom.hex(4)}",
+  # A fresh registration each time. One module has one bucket per domain, which
+  # is the design, so two buckets on one domain means two modules.
+  def bucket(domain: "example.test", quota_mb: 10, bytes_used: 0, owner: nil)
+    owner ||= ModuleRegistration.register!(
+      module_name: "mod-#{SecureRandom.hex(4)}", module_uuid: SecureRandom.hex(4), spaces: %w[files]
+    ).first
+
+    owner.buckets.create!(
+      domain: domain, name: "sib-#{SecureRandom.hex(4)}",
       quota_mb: quota_mb, bytes_used: bytes_used
     )
   end
