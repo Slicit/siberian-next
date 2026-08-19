@@ -182,6 +182,10 @@ services:
       # third-party module code; the Orchestrator does not.
       SIBERIAN_BUILDER_TOKEN: ${SIBERIAN_BUILDER_TOKEN:-builder_dev_only}
       SIBERIAN_STORAGE_URL: http://storage:3000
+      # The assistant that proposes a configuration. Absent, the page says the
+      # assistant is not configured and everything else still works: nothing
+      # about building an app depends on being able to describe one.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - ../core/mobile:/app
       - ../lib:/app/lib
