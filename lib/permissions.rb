@@ -30,6 +30,8 @@ module Siberian
       { group: "Modules", permission: "core.modules.remove", label: "Remove a module" },
 
       { group: "System", permission: "core.domains.manage", label: "Add and remove domains" },
+      { group: "System", permission: "core.storage.manage", label: "Set storage quotas",
+        note: "Raising a quota spends a disk everybody shares." },
       { group: "System", permission: "core.audit.read", label: "Read the audit trail" },
       { group: "System", permission: "core.settings.write", label: "Change product settings" },
 
@@ -47,7 +49,7 @@ module Siberian
       },
       "operator" => {
         description: "Runs the system: modules, domains, and the audit trail.",
-        permissions: %w[core.modules.* core.domains.manage core.audit.read core.users.read app.use module.*.use]
+        permissions: %w[core.modules.* core.domains.manage core.storage.manage core.audit.read core.users.read app.use module.*.use]
       },
       "member" => {
         description: "Uses the product and every module in it.",

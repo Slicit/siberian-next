@@ -15,6 +15,15 @@ class BucketProvisioner
     return existing if existing&.access_key_id.present?
 
     name = Bucket.name_for(registration.module_name, domain)
+
+    # The operator default caps what the manifest asked for. A manifest is
+    # written by a third party, and if asking for more were enough to get more,
+    # the setting would be a suggestion and the disk a shared resource with no
+    # owner. A module asking for less than the default still gets what it asked
+    # for: there is no reason to give it more than it wants.
+    quota = DomainQuota.for(domain)
+    allowance = [registration.quota_mb, quota.default_bucket_quota].compact.min
+
     bucket_id = @admin.create_bucket(name)
     key = @admin.create_key("#{name}-key")
     @admin.allow_key(bucket_id: bucket_id, access_key_id: key[:access_key_id],
@@ -23,6 +32,7 @@ class BucketProvisioner
     bucket = existing || registration.buckets.build(domain: domain)
     bucket.update!(
       name: name,
+      quota_mb: allowance,
       bucket_id: bucket_id,
       access_key_id: key[:access_key_id],
       secret_access_key: key[:secret_access_key]
