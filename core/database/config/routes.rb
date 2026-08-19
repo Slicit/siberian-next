@@ -9,7 +9,11 @@ Rails.application.routes.draw do
     get "credentials", to: "credentials#show"
     get "databases", to: "credentials#index"
     get "system", to: "system_tables#index"
-    get "system/:database/:table", to: "system_tables#show"
+    # Logical database names carry dots (core.configuration), and Rails reads a
+    # trailing dot segment as a format, so the route matches nothing without
+    # both the constraint and format: false.
+    get "system/:database/:table", to: "system_tables#show",
+        constraints: { database: %r{[^/]+}, table: %r{[^/]+} }, format: false
     get "audit", to: "audit#index"
   end
 
