@@ -5,8 +5,14 @@ LOGBOOK.md
 CLAUDE.md
 AGENTS.md
 docs
+
 **/tmp
 **/log
 **/node_modules
 **/.bundle
-**/storage
+
+# Rails puts uploaded files in <app>/storage. Written as core/*/storage rather
+# than **/storage, because **/storage also matched core/storage, which is the
+# Storage service itself: the whole service silently vanished from the build
+# context and the image failed with "/core/storage: not found".
+core/*/storage
