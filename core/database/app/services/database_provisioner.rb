@@ -11,6 +11,11 @@ class DatabaseProvisioner
   end
 
   def call(registration, domain:, logical_name: "primary")
+    # Before the early return, not after. A cluster provisioned before the
+    # hardening existed would otherwise never get it, which is exactly the case
+    # that found the gap.
+    @admin.harden_cluster!
+
     existing = registration.provisioned_databases.find_by(domain: domain, logical_name: logical_name)
     return existing if existing&.ready?
 
