@@ -38,12 +38,14 @@ Rails.application.routes.draw do
 
   # The phone apps. One per domain, and the queue that builds them.
   get "mobile", to: "mobile#index", as: :mobile
-  get "mobile/:domain", to: "mobile#show", as: :mobile_app, constraints: { domain: %r{[^/]+} }, format: false
-  patch "mobile/:domain", to: "mobile#save", constraints: { domain: %r{[^/]+} }, format: false
-  patch "mobile/:domain/capabilities/:capability", to: "mobile#update_capability",
-        constraints: { domain: %r{[^/]+} }, format: false, as: :mobile_capability
-  post "mobile/:domain/build", to: "mobile#build", as: :build_mobile_app, constraints: { domain: %r{[^/]+} }, format: false
-  post "mobile/:domain/builds/:id/cancel", to: "mobile#cancel", as: :cancel_mobile_build, constraints: { domain: %r{[^/]+} }, format: false
+  # Addressed by the domain record rather than the hostname, like every other
+  # domain route here. A hostname in a path segment is a dot in a place Rails
+  # reserves for a format.
+  get "mobile/:id", to: "mobile#show", as: :mobile_app
+  patch "mobile/:id", to: "mobile#save"
+  patch "mobile/:id/capabilities/:capability", to: "mobile#update_capability", as: :mobile_capability
+  post "mobile/:id/build", to: "mobile#build", as: :build_mobile_app
+  post "mobile/:id/builds/:build_id/cancel", to: "mobile#cancel", as: :cancel_mobile_build
 
   get "interfaces", to: "interfaces#index", as: :interfaces
   get "activity", to: "activities#index", as: :activity

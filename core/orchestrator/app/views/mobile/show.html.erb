@@ -15,7 +15,7 @@
   <header><h2>The app</h2></header>
 
   <% if may_manage %>
-    <%= form_with url: mobile_app_path(@domain.hostname), method: :patch, class: "stack" do %>
+    <%= form_with url: mobile_app_path(@domain), method: :patch, class: "stack" do %>
       <div class="field">
         <%= label_tag :name, "Name" %>
         <%= text_field_tag :name, @app && @app["name"] || @domain.label.presence || @domain.hostname, required: true %>
@@ -100,7 +100,7 @@
 
           <% if may_manage %>
             <%= button_to enabled ? "Turn off" : "Turn on",
-                  mobile_capability_path(@domain.hostname, capability["id"]),
+                  mobile_capability_path(@domain, capability["id"]),
                   method: :patch, class: "button",
                   params: { enabled: enabled ? "false" : "true" } %>
           <% end %>
@@ -108,7 +108,7 @@
 
         <% settings = Array(capability["settings"]) %>
         <% if settings.any? && may_manage %>
-          <%= form_with url: mobile_capability_path(@domain.hostname, capability["id"]),
+          <%= form_with url: mobile_capability_path(@domain, capability["id"]),
                         method: :patch, class: "row",
                         style: "margin-top:.5rem; gap:.5rem; align-items:flex-end; flex-wrap:wrap" do %>
             <%= hidden_field_tag :enabled, enabled ? "true" : "false" %>
@@ -188,9 +188,9 @@
         </div>
         <% if may_manage %>
           <div class="row" style="gap:.4rem">
-            <%= button_to "Build for Android", build_mobile_app_path(@domain.hostname),
+            <%= button_to "Build for Android", build_mobile_app_path(@domain),
                   class: "button primary", params: { platform: "android" } %>
-            <%= button_to "iOS project", build_mobile_app_path(@domain.hostname),
+            <%= button_to "iOS project", build_mobile_app_path(@domain),
                   class: "button", params: { platform: "ios" },
                   form: { data: { turbo_confirm: "iOS cannot be compiled on Linux. This produces the configured Xcode project, which is what a macOS runner needs. Continue?" } } %>
           </div>
@@ -225,7 +225,7 @@
                 </td>
                 <td class="right">
                   <% if may_manage && %w[queued failed building].include?(build["state"]) %>
-                    <%= button_to "Cancel", cancel_mobile_build_path(@domain.hostname, build["id"]), class: "button danger" %>
+                    <%= button_to "Cancel", cancel_mobile_build_path(@domain, build["id"]), class: "button danger" %>
                   <% end %>
                 </td>
               </tr>

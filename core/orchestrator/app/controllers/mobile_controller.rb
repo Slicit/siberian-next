@@ -19,8 +19,8 @@ class MobileController < ApplicationController
   end
 
   def show
-    @domain = Domain.find_by(hostname: params[:domain])
-    return redirect_to mobile_path, alert: "No domain named #{params[:domain]}." if @domain.nil?
+    @domain = Domain.find_by(id: params[:id])
+    return redirect_to mobile_path, alert: "No such domain." if @domain.nil?
 
     @app = mobile.app(@domain.hostname)
     @app = nil unless @app && @app["ok"]
@@ -31,8 +31,8 @@ class MobileController < ApplicationController
   # One app per domain, so this creates or updates rather than asking an
   # operator which they meant.
   def save
-    domain = Domain.find_by(hostname: params[:domain])
-    return redirect_to mobile_path, alert: "No domain named #{params[:domain]}." if domain.nil?
+    domain = Domain.find_by(id: params[:id])
+    return redirect_to mobile_path, alert: "No such domain." if domain.nil?
 
     result = mobile.save_app(domain.hostname, {
       name: params[:name],
@@ -41,16 +41,19 @@ class MobileController < ApplicationController
       primary_color: params[:primary_color]
     })
 
-    redirect_to mobile_app_path(domain.hostname), notice: notice_for(result, "App saved.")
+    redirect_to mobile_app_path(domain), notice: notice_for(result, "App saved.")
   end
 
   def update_capability
-    result = mobile.set_capability(params[:domain], params[:capability], {
+    domain = Domain.find_by(id: params[:id])
+    return redirect_to mobile_path, alert: "No such domain." if domain.nil?
+
+    result = mobile.set_capability(domain.hostname, params[:capability], {
       enabled: params[:enabled] != "false",
       settings: params[:settings]&.permit!&.to_h || {}
     })
 
-    redirect_to mobile_app_path(params[:domain]),
+    redirect_to mobile_app_path(domain),
                 notice: notice_for(result, "#{params[:capability].humanize} updated.")
   end
 
@@ -58,21 +61,27 @@ class MobileController < ApplicationController
   # build is asking to be next, and the page says so rather than appearing to
   # hang.
   def build
-    result = mobile.queue_build(domain: params[:domain],
+    domain = Domain.find_by(id: params[:id])
+    return redirect_to mobile_path, alert: "No such domain." if domain.nil?
+
+    result = mobile.queue_build(domain: domain.hostname,
                                 platform: params[:platform].presence || "android",
                                 requested_by: current_user&.email)
 
     if result && result["ok"]
-      redirect_to mobile_app_path(params[:domain]),
-                  notice: "Build queued#{result['position'] ? ", ##{result['position']} in line" : ''}."
+      place = result["position"] ? ", number #{result['position']} in line" : ""
+      redirect_to mobile_app_path(domain), notice: "Build queued#{place}."
     else
-      redirect_to mobile_app_path(params[:domain]), alert: refusal(result)
+      redirect_to mobile_app_path(domain), alert: refusal(result)
     end
   end
 
   def cancel
-    result = mobile.cancel_build(params[:id])
-    redirect_to mobile_app_path(params[:domain]), notice: notice_for(result, "Build cancelled.")
+    domain = Domain.find_by(id: params[:id])
+    return redirect_to mobile_path, alert: "No such domain." if domain.nil?
+
+    result = mobile.cancel_build(params[:build_id])
+    redirect_to mobile_app_path(domain), notice: notice_for(result, "Build cancelled.")
   end
 
   private
