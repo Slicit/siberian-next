@@ -1,39 +1,62 @@
 #!/bin/sh
 # Signs in, then walks every Backoffice page with the resulting cookie. The
 # cookie is scoped to .<domain>, so the same jar works on admin.<domain>.
-B=http://127.0.0.1:8080
+#
+# Over HTTPS through the Router, like every other smoke: the Backoffice has no
+# plain HTTP door, and a session cookie that is not Secure never arrives.
+DOMAIN="${SIBERIAN_DOMAIN:-siberian.test}"
+CA="${SIBERIAN_CA:-deploy/certs/ca.pem}"
+PASSWORD="${SIBERIAN_DEMO_PASSWORD:-siberian-demo}"
 J=/tmp/bo_jar.txt
 rm -f $J
 
-TOKEN=$(curl -s -c $J -H "Host: siberian.localhost" $B/login | grep -o 'name="authenticity_token" value="[^"]*"' | head -1 | sed 's/.*value="//; s/"//')
-curl -s -b $J -c $J -o /dev/null -H "Host: siberian.localhost" -X POST \
-  --data-urlencode "authenticity_token=$TOKEN" \
-  --data-urlencode "email=operator@siberian.localhost" \
-  --data-urlencode "password=siberian-demo" $B/login
+c() { curl -s --cacert "$CA" "$@"; }
+
+# Every fetch writes to a fresh file. A curl that never connects leaves the
+# previous run's page behind otherwise, and the greps below then report on a
+# stack that is not answering at all.
+fetch() {
+  rm -f /tmp/bo_page
+  c -b $J -o /tmp/bo_page -w "%{http_code}" "$1"
+}
+
+sign_in() {
+  jar=$1
+  email=$2
+  rm -f "$jar"
+  token=$(c -c "$jar" "https://$DOMAIN/login" \
+    | grep -o 'name="authenticity_token" value="[^"]*"' | head -1 | sed 's/.*value="//; s/"//')
+  c -b "$jar" -c "$jar" -o /dev/null -X POST \
+    --data-urlencode "authenticity_token=$token" \
+    --data-urlencode "email=$email" \
+    --data-urlencode "password=$PASSWORD" \
+    "https://$DOMAIN/login"
+}
+
+sign_in $J operator@siberian.localhost
 echo "signed in as operator"
 echo
 
 for path in / /modules /catalog /domains /interfaces /activity; do
-  code=$(curl -s -b $J -o /tmp/page -w "%{http_code}" -H "Host: admin.siberian.localhost" "$B$path")
-  title=$(grep -o '<title>[^<]*' /tmp/page | head -1 | sed 's/<title>//')
+  code=$(fetch "https://admin.$DOMAIN$path")
+  title=$(grep -o '<title>[^<]*' /tmp/bo_page | head -1 | sed 's/<title>//')
   printf "%-12s -> %s   %s\n" "$path" "$code" "$title"
 done
 
 echo
 echo "catalogue entries visible:"
-curl -s -b $J -H "Host: admin.siberian.localhost" $B/catalog | grep -oE 'Example (Notes|Mail Relay)' | sort -u | sed 's/^/   /'
+fetch "https://admin.$DOMAIN/catalog" > /dev/null
+grep -oE 'Example (Notes|Mail Relay)' /tmp/bo_page | sort -u | sed 's/^/   /'
 
 echo
 echo "review screen for example-relay:"
-curl -s -b $J -H "Host: admin.siberian.localhost" $B/catalog/example-relay > /tmp/review
-grep -oE 'mail.transport.v1|owner access to a new database \(deliveries\)|priority [0-9]+' /tmp/review | sort -u | sed 's/^/   /'
+fetch "https://admin.$DOMAIN/catalog/example-relay" > /dev/null
+grep -oE 'mail.transport.v1|owner access to a new database \(deliveries\)|priority [0-9]+' /tmp/bo_page \
+  | sort -u | sed 's/^/   /'
 
 echo
 echo "a non-operator:"
-rm -f /tmp/u_jar.txt
-T2=$(curl -s -c /tmp/u_jar.txt -H "Host: siberian.localhost" $B/login | grep -o 'name="authenticity_token" value="[^"]*"' | head -1 | sed 's/.*value="//; s/"//')
-curl -s -b /tmp/u_jar.txt -c /tmp/u_jar.txt -o /dev/null -H "Host: siberian.localhost" -X POST \
-  --data-urlencode "authenticity_token=$T2" --data-urlencode "email=user@siberian.localhost" \
-  --data-urlencode "password=siberian-demo" $B/login
-echo "   GET / -> $(curl -s -b /tmp/u_jar.txt -o /tmp/nu -w '%{http_code}' -H 'Host: admin.siberian.localhost' $B/)   (expect 403)"
-grep -oE 'not as an operator' /tmp/nu | head -1 | sed 's/^/   says: /'
+J=/tmp/bo_user_jar.txt
+sign_in $J user@siberian.localhost
+echo "   GET / -> $(fetch "https://admin.$DOMAIN/")   (expect 403)"
+grep -oE 'not as an operator' /tmp/bo_page | head -1 | sed 's/^/   says: /'
