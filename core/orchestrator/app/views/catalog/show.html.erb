@@ -1,0 +1,139 @@
+<% content_for :title, "Install #{@entry.title}" %>
+
+<div style="margin-bottom:1.2rem">
+  <%= link_to "Back to the catalogue", catalog_path, class: "muted" %>
+  <h1 style="margin-top:.4rem"><%= @entry.title %></h1>
+  <p class="muted mono" style="margin:0; font-size:.82rem">
+    <%= @entry.name %> · <%= @entry.version %>
+  </p>
+</div>
+
+<% if @entry.description.present? %>
+  <p class="muted"><%= @entry.description %></p>
+<% end %>
+
+<% unless @entry.valid? %>
+  <div class="alert">
+    <strong>This manifest cannot be installed.</strong>
+    <ul style="margin:.4rem 0 0">
+      <% @entry.problems.each do |problem| %><li><%= problem %></li><% end %>
+    </ul>
+  </div>
+<% end %>
+
+<% if @conflicts.any? %>
+  <div class="alert">
+    <strong>Conflicts with what is already installed.</strong>
+    <ul style="margin:.4rem 0 0">
+      <% @conflicts.each do |conflict| %><li><%= conflict %></li><% end %>
+    </ul>
+    <p style="margin:.5rem 0 0">
+      Two modules cannot claim the same interface exclusively. Remove the other
+      one first, or install a version that does not ask for exclusivity.
+    </p>
+  </div>
+<% end %>
+
+<div class="card">
+  <header>
+    <h2>What this module will be allowed to do</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      Everything below is granted at install and nothing else is reachable.
+      This list is the security model, so read it rather than scrolling past it.
+    </p>
+  </header>
+
+  <% requests = @manifest&.requested_permissions || [] %>
+  <% if requests.any? %>
+    <div class="stack" style="--gap:.6rem">
+      <% requests.each do |request| %>
+        <div class="row" style="align-items:flex-start; gap:.7rem">
+          <span class="badge <%= { high: 'danger', medium: 'warn', low: '' }[request[:severity]] %>">
+            <%= request[:kind] %>
+          </span>
+          <div>
+            <div><%= request[:summary] %></div>
+            <% if request[:detail] %>
+              <div class="faint mono" style="font-size:.76rem"><%= request[:detail] %></div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <p class="muted" style="margin:0">This module asks for nothing at all.</p>
+  <% end %>
+</div>
+
+<div class="card">
+  <header><h2>What it adds</h2></header>
+
+  <% features = @manifest&.feature_capabilities || [] %>
+  <% systems = @manifest&.system_capabilities || [] %>
+
+  <% if features.any? %>
+    <h3>To the app</h3>
+    <ul class="muted" style="margin:.2rem 0 1rem">
+      <% features.each do |capability| %>
+        <li><strong><%= capability["title"] %></strong>
+            in <span class="mono"><%= capability["area"] %></span></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <% if systems.any? %>
+    <h3>To the core</h3>
+    <ul class="muted" style="margin:.2rem 0 1rem">
+      <% systems.each do |capability| %>
+        <li>
+          implements <span class="mono"><%= capability["interface"] %></span>
+          at priority <%= capability["priority"] || 100 %><%= ", exclusively" if capability["exclusive"] %>
+        </li>
+      <% end %>
+    </ul>
+    <p class="muted" style="font-size:.85rem; margin:0">
+      A system capability answers core requests. Installing this changes where
+      the core sends that work.
+    </p>
+  <% end %>
+
+  <% if features.empty? && systems.empty? %>
+    <p class="muted" style="margin:0">Nothing. This module declares no capabilities.</p>
+  <% end %>
+</div>
+
+<div class="card">
+  <header><h2>Containers it will run</h2></header>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Service</th><th>Role</th><th>Image</th></tr></thead>
+      <tbody>
+        <% (@manifest&.containers || []).each do |container| %>
+          <tr>
+            <td><strong><%= container["service"] %></strong></td>
+            <td><span class="badge <%= container["role"] == "datastore" ? "warn" : "" %>"><%= container["role"] %></span></td>
+            <td class="mono" style="font-size:.8rem"><%= container["image"] %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <% if @entry.installed? %>
+    <p class="muted" style="margin:0">
+      Already installed. <%= link_to "Open it", module_path(@entry.name) %>
+    </p>
+  <% elsif @entry.valid? && @conflicts.empty? %>
+    <%= form_with url: install_catalog_entry_path(@entry.name), method: :post, class: "stack" do |form| %>
+      <label class="row" style="font-weight:500">
+        <input type="checkbox" name="approved" value="true" required style="width:auto">
+        <span>I have read the permissions above and approve them.</span>
+      </label>
+      <button type="submit" class="primary">Install <%= @entry.title %></button>
+    <% end %>
+  <% else %>
+    <p class="muted" style="margin:0">Installation is blocked until the problems above are resolved.</p>
+  <% end %>
+</div>

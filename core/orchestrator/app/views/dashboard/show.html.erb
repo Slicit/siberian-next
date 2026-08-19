@@ -1,0 +1,102 @@
+<% content_for :title, "Overview" %>
+
+<div class="spread" style="margin-bottom:1.2rem">
+  <div>
+    <h1>Overview</h1>
+    <p class="muted" style="margin:0">
+      <%= pluralize(@modules.size, "module") %> installed across
+      <%= pluralize(@domains.size, "domain") %>.
+    </p>
+  </div>
+  <%= link_to "Install a module", catalog_path, class: "button primary" %>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <header><h2>Core</h2></header>
+    <div class="stack" style="--gap:.5rem">
+      <% engine = @health.engine %>
+      <div class="spread">
+        <span class="row"><span class="dot <%= engine.reachable? ? 'ok' : 'danger' %>"></span>engine</span>
+        <span class="muted mono"><%= engine.url %> <%= engine.detail %></span>
+      </div>
+      <% @health.services.each do |service| %>
+        <div class="spread">
+          <span class="row"><span class="dot <%= service.reachable? ? 'ok' : 'danger' %>"></span><%= service.name %></span>
+          <span class="muted mono"><%= service.detail %></span>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="card">
+    <header><h2>Domains</h2></header>
+    <% if @domains.any? %>
+      <div class="stack" style="--gap:.45rem">
+        <% @domains.each do |domain| %>
+          <div class="spread">
+            <span class="mono"><%= domain.hostname %></span>
+            <% if domain.primary? %><span class="badge accent">primary</span><% end %>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="muted">No domains yet. Modules cannot be routed until there is one.</p>
+      <%= link_to "Add a domain", domains_path, class: "button" %>
+    <% end %>
+  </div>
+
+  <div class="card">
+    <header><h2>Catalogue</h2></header>
+    <% if @catalog_entries.any? %>
+      <p class="muted" style="margin-bottom:.6rem">
+        <%= pluralize(@catalog_entries.count(&:valid?), "module") %> available to install.
+      </p>
+      <%= link_to "Browse the catalogue", catalog_path, class: "button" %>
+    <% else %>
+      <p class="muted">The catalogue directory is empty or unreadable.</p>
+    <% end %>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <header class="spread">
+    <h2>Installed modules</h2>
+    <%= link_to "All modules", modules_path %>
+  </header>
+
+  <% if @modules.any? %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Module</th><th>Version</th><th>Status</th><th>Containers</th><th>Origin</th></tr>
+        </thead>
+        <tbody>
+          <% @modules.each do |installed| %>
+            <tr>
+              <td><%= link_to installed.title.presence || installed.name, module_path(installed.name) %>
+                  <div class="faint mono" style="font-size:.75rem"><%= installed.name %></div></td>
+              <td class="mono"><%= installed.version %></td>
+              <td><%= render "shared/status_badge", status: installed.status %></td>
+              <td class="mono"><%= installed.module_containers.size %></td>
+              <td class="mono faint"><%= installed.origin_for(@domains.first&.hostname.to_s) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="empty">
+      Nothing installed yet.
+      <div style="margin-top:.8rem"><%= link_to "Install the first module", catalog_path, class: "button primary" %></div>
+    </div>
+  <% end %>
+</div>
+
+<div class="card">
+  <header class="spread">
+    <h2>Recent activity</h2>
+    <%= link_to "Full log", activity_path %>
+  </header>
+  <%= render "activities/list", activities: @activities %>
+</div>

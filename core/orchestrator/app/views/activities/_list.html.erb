@@ -1,0 +1,28 @@
+<% if activities.any? %>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>When</th><th>Action</th><th>Module</th><th>Detail</th></tr></thead>
+      <tbody>
+        <% activities.each do |activity| %>
+          <tr>
+            <td class="muted mono" style="white-space:nowrap"><%= activity.created_at.strftime("%Y-%m-%d %H:%M:%S") %></td>
+            <td>
+              <span class="badge <%= activity.failed? ? 'danger' : '' %>"><%= activity.action %></span>
+            </td>
+            <td class="mono"><%= activity.installed_module&.name || "-" %></td>
+            <td class="muted">
+              <%= activity.detail.presence %>
+              <% if activity.context.present? %>
+                <span class="faint mono" style="font-size:.75rem">
+                  <%= activity.context.map { |k, v| "#{k}=#{Array(v).join(',')}" }.join("  ") %>
+                </span>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+<% else %>
+  <div class="empty">Nothing has happened yet.</div>
+<% end %>

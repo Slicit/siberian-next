@@ -1,0 +1,173 @@
+<% content_for :title, @module.title.presence || @module.name %>
+
+<div class="spread" style="margin-bottom:1.2rem">
+  <div>
+    <div class="row" style="gap:.6rem">
+      <h1 style="margin:0"><%= @module.title.presence || @module.name %></h1>
+      <%= render "shared/status_badge", status: @module.status %>
+    </div>
+    <p class="muted mono" style="margin:.3rem 0 0; font-size:.82rem">
+      <%= @module.name %> · <%= @module.version %> · uuid <%= @module.uuid %>
+    </p>
+  </div>
+
+  <div class="row">
+    <%= button_to "Refresh from engine", refresh_module_path(@module.name), class: "button" %>
+    <%= button_to "Remove", module_path(@module.name), method: :delete, class: "button danger",
+          form: { data: { turbo_confirm: "Remove #{@module.name}? Containers and routes go; files and databases stay." } } %>
+  </div>
+</div>
+
+<% if @module.last_error.present? %>
+  <div class="alert"><strong>Last error:</strong> <%= @module.last_error %></div>
+<% end %>
+
+<div class="card">
+  <header><h2>Containers</h2></header>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Service</th><th>Role</th><th>Image</th><th>State</th><th>Checked</th></tr></thead>
+      <tbody>
+        <% @module.module_containers.order(:service).each do |container| %>
+          <tr>
+            <td>
+              <strong><%= container.service %></strong>
+              <div class="faint mono" style="font-size:.74rem"><%= container.name %></div>
+            </td>
+            <td>
+              <span class="badge <%= container.datastore? ? 'warn' : '' %>"><%= container.role %></span>
+              <% if container.datastore? %>
+                <div class="faint" style="font-size:.72rem">never routable</div>
+              <% end %>
+            </td>
+            <td class="mono" style="font-size:.8rem"><%= container.image %></td>
+            <td><%= render "shared/status_badge", status: container.state %></td>
+            <td class="muted mono" style="font-size:.78rem">
+              <%= container.state_checked_at&.strftime("%H:%M:%S") || "never" %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <header>
+    <h2>Capabilities</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      System capabilities extend the core and are called over the internal
+      network. Features extend the product and appear in an area of the app.
+    </p>
+  </header>
+
+  <% features = @module.capabilities.features.ordered %>
+  <% systems = @module.capabilities.system.ordered %>
+
+  <% if features.any? %>
+    <h3 style="margin-top:.6rem">Features</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Capability</th><th>Area</th><th>Path</th></tr></thead>
+        <tbody>
+          <% features.each do |capability| %>
+            <tr>
+              <td><strong><%= capability.title %></strong>
+                  <div class="faint mono" style="font-size:.74rem"><%= capability.capability_id %></div></td>
+              <td><span class="badge accent"><%= capability.area %></span></td>
+              <td class="mono" style="font-size:.8rem"><%= capability.path %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <% if systems.any? %>
+    <h3 style="margin-top:1rem">System interfaces</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Interface</th><th>Endpoint</th><th>Priority</th><th>Winning?</th></tr></thead>
+        <tbody>
+          <% systems.each do |capability| %>
+            <% winner = @registry.resolve(capability.interface) %>
+            <tr>
+              <td><strong class="mono"><%= capability.interface %></strong>
+                  <div class="faint mono" style="font-size:.74rem"><%= capability.capability_id %></div></td>
+              <td class="mono" style="font-size:.8rem"><%= capability.endpoint %></td>
+              <td class="mono"><%= capability.priority %><%= " · exclusive" if capability.exclusive? %></td>
+              <td>
+                <% if winner && !winner.built_in? && winner.provider == @module.name %>
+                  <span class="badge ok">serving</span>
+                <% else %>
+                  <span class="badge">behind <%= winner&.provider || "nothing" %></span>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <% if features.empty? && systems.empty? %>
+    <div class="empty">This module declares no capabilities.</div>
+  <% end %>
+</div>
+
+<div class="card">
+  <header>
+    <h2>Granted permissions</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      Approved at install. Nothing outside this list is reachable by the module.
+    </p>
+  </header>
+
+  <% if @module.grants.any? %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Kind</th><th>Target</th><th>Access</th><th>Scope</th><th>Detail</th></tr></thead>
+        <tbody>
+          <% @module.grants.order(:kind).each do |grant| %>
+            <tr>
+              <td><span class="badge <%= grant.read_only? ? '' : 'warn' %>"><%= grant.kind %></span></td>
+              <td class="mono"><%= grant.target || "-" %></td>
+              <td class="mono"><%= grant.access %></td>
+              <td class="mono"><%= grant.scope %></td>
+              <td class="muted mono" style="font-size:.78rem">
+                <%= grant.details.map { |k, v| "#{k}=#{Array(v).join(',')}" }.join("  ") %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="empty">This module asked for nothing.</div>
+  <% end %>
+</div>
+
+<div class="card">
+  <header><h2>Routing</h2></header>
+  <div class="stack" style="--gap:.5rem">
+    <div class="spread">
+      <span class="muted">Base route</span>
+      <span class="mono"><%= @module.base_route %></span>
+    </div>
+    <div class="spread">
+      <span class="muted">Network</span>
+      <span class="mono"><%= @module.network_name %></span>
+    </div>
+    <% Domain.ordered.each do |domain| %>
+      <div class="spread">
+        <span class="muted">Origin on <%= domain.hostname %></span>
+        <span class="mono"><%= @module.origin_for(domain.hostname) %></span>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<div class="card">
+  <header><h2>Activity</h2></header>
+  <%= render "activities/list", activities: @activities %>
+</div>

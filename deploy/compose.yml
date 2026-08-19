@@ -60,6 +60,7 @@ services:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_orchestrator
       SIBERIAN_ENGINE: docker
+      SIBERIAN_AUTH_URL: http://auth:3000
       SIBERIAN_ROUTER_CONFIG_DIR: /var/lib/siberian/router
       SIBERIAN_ROUTER_CONTAINER: siberian-router-1
       # Where the Orchestrator looks for installable modules. A directory for

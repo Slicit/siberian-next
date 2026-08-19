@@ -1,0 +1,11 @@
+<%#
+  One place decides what a status looks like, so the same word never appears
+  green on one page and grey on another.
+%>
+<% klass = case status
+           when "running" then "ok"
+           when "degraded", "installing", "removing", "pending" then "warn"
+           when "failed", "dead" then "danger"
+           else ""
+           end %>
+<span class="badge <%= klass %>"><span class="dot <%= klass %>"></span><%= status %></span>

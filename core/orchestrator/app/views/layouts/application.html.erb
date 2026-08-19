@@ -1,29 +1,55 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title><%= content_for(:title) || "App" %></title>
+    <title><%= content_for(:title) ? "#{content_for(:title)} · Backoffice" : "Siberian Backoffice" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="App">
-    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="color-scheme" content="light dark">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
-
-    <%= yield :head %>
-
-    <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
-    <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
-
-    <link rel="icon" href="/icon.png" type="image/png">
-    <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/icon.png">
-
-    <%# Includes all stylesheet files in app/assets/stylesheets %>
-    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
-    <%= javascript_importmap_tags %>
+    <%= stylesheet_link_tag "siberian", "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags if respond_to?(:javascript_importmap_tags) %>
   </head>
 
   <body>
-    <%= yield %>
+    <div class="shell">
+      <aside>
+        <div class="brand">
+          <span class="mark">S</span>
+          <span>Backoffice</span>
+        </div>
+
+        <nav class="nav stack" style="--gap:1rem">
+          <div class="nav-group">
+            <div class="label">Operate</div>
+            <%= link_to "Overview", root_path, "aria-current": ("page" if current_page?(root_path)) %>
+            <%= link_to "Modules", modules_path, "aria-current": ("page" if controller_name == "modules") %>
+            <%= link_to "Catalogue", catalog_path, "aria-current": ("page" if controller_name == "catalog") %>
+          </div>
+
+          <div class="nav-group">
+            <div class="label">System</div>
+            <%= link_to "Domains", domains_path, "aria-current": ("page" if controller_name == "domains") %>
+            <%= link_to "Interfaces", interfaces_path, "aria-current": ("page" if controller_name == "interfaces") %>
+            <%= link_to "Activity", activity_path, "aria-current": ("page" if controller_name == "activities") %>
+          </div>
+        </nav>
+
+        <div style="margin-top:auto">
+          <% if current_user %>
+            <div class="faint" style="font-size:.78rem">Signed in as</div>
+            <div style="font-weight:600"><%= current_user.name %></div>
+            <div class="muted" style="font-size:.8rem"><%= current_user.email %></div>
+            <a class="muted" style="font-size:.8rem"
+               href="<%= request.scheme %>://<%= current_domain.to_s.delete_prefix('admin.') %>/logout">Sign out</a>
+          <% end %>
+        </div>
+      </aside>
+
+      <main>
+        <% if flash[:notice] %><div class="notice"><%= flash[:notice] %></div><% end %>
+        <% if flash[:alert] %><div class="alert"><%= flash[:alert] %></div><% end %>
+        <%= yield %>
+      </main>
+    </div>
   </body>
 </html>

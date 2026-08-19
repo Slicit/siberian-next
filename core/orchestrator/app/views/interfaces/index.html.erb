@@ -1,0 +1,52 @@
+<% content_for :title, "Interfaces" %>
+
+<div style="margin-bottom:1.2rem">
+  <h1>Interfaces</h1>
+  <p class="muted" style="margin:0">
+    What answers each core interface, best first. The core's own service is the
+    last resort rather than the first choice, so an installed module takes over
+    unless it asks not to.
+  </p>
+</div>
+
+<% @interfaces.each do |entry| %>
+  <div class="card">
+    <header class="spread">
+      <h2 class="mono" style="font-size:1rem"><%= entry[:name] %></h2>
+      <% winner = entry[:implementations].first %>
+      <% if winner %>
+        <span class="badge <%= winner.built_in? ? '' : 'ok' %>">
+          served by <%= winner.provider %>
+        </span>
+      <% else %>
+        <span class="badge danger">nothing implements this</span>
+      <% end %>
+    </header>
+
+    <% if entry[:implementations].any? %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Order</th><th>Provider</th><th>Priority</th><th>Endpoint</th></tr></thead>
+          <tbody>
+            <% entry[:implementations].each_with_index do |implementation, index| %>
+              <tr>
+                <td><%= index.zero? ? "serving" : "standby" %></td>
+                <td>
+                  <%= implementation.provider %>
+                  <% if implementation.built_in? %><span class="badge" style="margin-left:.3rem">core</span><% end %>
+                </td>
+                <td class="mono"><%= implementation.priority %></td>
+                <td class="mono faint" style="font-size:.78rem"><%= implementation.url %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <p class="muted" style="margin:0">
+        No implementation and no built-in fallback. Anything depending on this
+        interface is simply unavailable, which is a real answer rather than an error.
+      </p>
+    <% end %>
+  </div>
+<% end %>

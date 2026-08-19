@@ -1,0 +1,64 @@
+<% content_for :title, "Catalogue" %>
+
+<div style="margin-bottom:1.2rem">
+  <h1>Catalogue</h1>
+  <p class="muted" style="margin:0">
+    Modules available to install. Installing is two steps on purpose: the
+    permissions a module asks for are the security model, and an operator who
+    never sees them has not approved anything.
+  </p>
+</div>
+
+<% if @entries.any? %>
+  <div class="grid">
+    <% @entries.each do |entry| %>
+      <div class="card">
+        <div class="spread" style="margin-bottom:.4rem">
+          <h2 style="margin:0"><%= entry.title %></h2>
+          <% if entry.installed? %>
+            <span class="badge ok">installed</span>
+          <% elsif !entry.valid? %>
+            <span class="badge danger">invalid</span>
+          <% end %>
+        </div>
+        <div class="faint mono" style="font-size:.78rem; margin-bottom:.6rem">
+          <%= entry.name %><%= " · #{entry.version}" if entry.version %>
+        </div>
+
+        <% if entry.description.present? %>
+          <p class="muted" style="font-size:.88rem"><%= truncate(entry.description, length: 140) %></p>
+        <% end %>
+
+        <% if entry.valid? %>
+          <div class="row wrap" style="gap:.35rem; margin-bottom:.8rem">
+            <% if entry.manifest.feature_capabilities.any? %>
+              <span class="badge accent"><%= pluralize(entry.manifest.feature_capabilities.size, "feature") %></span>
+            <% end %>
+            <% if entry.manifest.system_capabilities.any? %>
+              <span class="badge warn"><%= pluralize(entry.manifest.system_capabilities.size, "interface") %></span>
+            <% end %>
+            <span class="badge"><%= pluralize(entry.manifest.containers.size, "container") %></span>
+          </div>
+          <% if entry.installed? %>
+            <%= link_to "Open", module_path(entry.name), class: "button" %>
+          <% else %>
+            <%= link_to "Review and install", catalog_entry_path(entry.name), class: "button primary" %>
+          <% end %>
+        <% else %>
+          <div class="alert" style="margin:0">
+            <% entry.problems.first(3).each do |problem| %>
+              <div style="font-size:.82rem"><%= problem %></div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+<% else %>
+  <div class="empty">
+    The catalogue is empty.
+    <div class="faint mono" style="margin-top:.5rem; font-size:.8rem">
+      <%= ENV.fetch("SIBERIAN_MODULE_CATALOG", "/var/lib/siberian/modules") %>
+    </div>
+  </div>
+<% end %>

@@ -1,0 +1,11 @@
+<% content_for :title, "Activity" %>
+
+<h1>Activity</h1>
+<p class="muted">
+  Append-only. Installing a module touches an engine, a database, a storage
+  service, and a router; when it goes wrong the question is always which step.
+</p>
+
+<div class="card">
+  <%= render "activities/list", activities: @activities %>
+</div>

@@ -1,0 +1,12 @@
+<% content_for :title, "Not an operator" %>
+
+<div class="card">
+  <h1>You are signed in, but not as an operator</h1>
+  <p class="muted">
+    The Backoffice manages modules, domains, and the core itself. Your account
+    (<span class="mono"><%= current_user&.email %></span>) does not have operator
+    access, so there is nothing here for it to show you.
+  </p>
+  <p class="muted">Ask an operator to grant you access, or sign in with a different account.</p>
+  <a class="button" href="<%= request.scheme %>://<%= current_domain.to_s.delete_prefix('admin.') %>/logout">Sign out</a>
+</div>

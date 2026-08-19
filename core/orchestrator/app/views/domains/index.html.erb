@@ -1,0 +1,74 @@
+<% content_for :title, "Domains" %>
+
+<div style="margin-bottom:1.2rem">
+  <h1>Domains</h1>
+  <p class="muted" style="margin:0">
+    Containers are installed once and shared across every domain. Domain
+    isolation happens in the data layer: each domain gets its own database and
+    its own storage bucket.
+  </p>
+</div>
+
+<div class="card">
+  <header><h2>Serving</h2></header>
+  <% if @domains.any? %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Hostname</th><th>Label</th><th>Data fingerprint</th><th></th></tr></thead>
+        <tbody>
+          <% @domains.each do |domain| %>
+            <tr>
+              <td>
+                <span class="mono"><%= domain.hostname %></span>
+                <% if domain.primary? %><span class="badge accent" style="margin-left:.4rem">primary</span><% end %>
+              </td>
+              <td class="muted"><%= domain.label %></td>
+              <td class="faint mono" style="font-size:.78rem"><%= domain.fingerprint %></td>
+              <td class="right">
+                <div class="row" style="justify-content:flex-end">
+                  <% unless domain.primary? %>
+                    <%= button_to "Make primary", domain_path(domain), method: :patch, class: "button" %>
+                  <% end %>
+                  <%= button_to "Remove", domain_path(domain), method: :delete, class: "button danger",
+                        form: { data: { turbo_confirm: "Remove #{domain.hostname}? Its data stays." } } %>
+                </div>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="empty">No domains yet. Modules cannot be routed until there is one.</div>
+  <% end %>
+</div>
+
+<div class="card">
+  <header><h2>Add a domain</h2></header>
+  <%= form_with model: @domain, url: domains_path, class: "stack" do |form| %>
+    <% if @domain.errors.any? %>
+      <div class="alert"><%= @domain.errors.full_messages.to_sentence %></div>
+    <% end %>
+
+    <div class="field">
+      <%= form.label :hostname, "Hostname" %>
+      <%= form.text_field :hostname, placeholder: "example.com", required: true %>
+      <div class="hint">
+        Modules are served at <span class="mono">&lt;module&gt;.apps.&lt;hostname&gt;</span>,
+        so this needs a wildcard DNS record and a wildcard certificate.
+      </div>
+    </div>
+
+    <div class="field">
+      <%= form.label :label, "Label" %>
+      <%= form.text_field :label, placeholder: "Production" %>
+    </div>
+
+    <label class="row" style="font-weight:500">
+      <%= form.check_box :primary, style: "width:auto" %>
+      <span>Make this the primary domain</span>
+    </label>
+
+    <button type="submit" class="primary">Add domain</button>
+  <% end %>
+</div>

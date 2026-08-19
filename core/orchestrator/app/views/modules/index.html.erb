@@ -1,0 +1,42 @@
+<% content_for :title, "Modules" %>
+
+<div class="spread" style="margin-bottom:1.2rem">
+  <div>
+    <h1>Modules</h1>
+    <p class="muted" style="margin:0"><%= pluralize(@modules.size, "module") %> installed.</p>
+  </div>
+  <%= link_to "Install a module", catalog_path, class: "button primary" %>
+</div>
+
+<% if @modules.any? %>
+  <div class="grid">
+    <% @modules.each do |installed| %>
+      <div class="card">
+        <div class="spread" style="margin-bottom:.5rem">
+          <h2 style="margin:0"><%= link_to installed.title.presence || installed.name, module_path(installed.name) %></h2>
+          <%= render "shared/status_badge", status: installed.status %>
+        </div>
+        <div class="faint mono" style="font-size:.78rem; margin-bottom:.7rem">
+          <%= installed.name %> · <%= installed.version %> · <%= installed.short_uuid %>
+        </div>
+        <% if installed.description.present? %>
+          <p class="muted" style="font-size:.88rem"><%= truncate(installed.description, length: 130) %></p>
+        <% end %>
+        <div class="row wrap" style="gap:.35rem">
+          <span class="badge"><%= pluralize(installed.module_containers.size, "container") %></span>
+          <% if installed.capabilities.features.any? %>
+            <span class="badge accent"><%= pluralize(installed.capabilities.features.size, "feature") %></span>
+          <% end %>
+          <% if installed.capabilities.system.any? %>
+            <span class="badge warn"><%= pluralize(installed.capabilities.system.size, "interface") %></span>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+<% else %>
+  <div class="empty">
+    Nothing installed yet.
+    <div style="margin-top:.8rem"><%= link_to "Browse the catalogue", catalog_path, class: "button primary" %></div>
+  </div>
+<% end %>
