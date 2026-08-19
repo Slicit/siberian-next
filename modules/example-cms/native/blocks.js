@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -148,17 +149,62 @@ function RemoteImage({ uri, style }) {
   );
 }
 
+// Links to other pages. The only block whose content is other pages, and the
+// only one that needs to do something when tapped, which is why the dispatcher
+// carries a handler down rather than each component reaching for navigation.
+export function NavBlock({ block, onOpen }) {
+  if (!block.links?.length) return <Missing kind="navigation" />;
+
+  return (
+    <View style={styles.figure}>
+      {block.links.map((link) => (
+        <Pressable key={link.slug} style={styles.link} onPress={() => onOpen?.(link.slug)}>
+          <Text style={styles.linkLabel}>{link.title}</Text>
+          <Text style={styles.linkChevron}>›</Text>
+        </Pressable>
+      ))}
+      <Caption>{block.caption}</Caption>
+    </View>
+  );
+}
+
+// Where a page leads, at the foot of it. Previous stays left and next stays
+// right even when only one exists, so neither has to be read before tapping.
+export function Pager({ next, previous, onOpen }) {
+  if (!next && !previous) return null;
+
+  return (
+    <View style={styles.pager}>
+      <View style={styles.pagerSide}>
+        {previous ? (
+          <Pressable onPress={() => onOpen?.(previous.slug)}>
+            <Text style={styles.pagerLabel}>‹ {previous.title}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={[styles.pagerSide, styles.pagerRight]}>
+        {next ? (
+          <Pressable onPress={() => onOpen?.(next.slug)}>
+            <Text style={styles.pagerLabel}>{next.title} ›</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 export const BLOCKS = {
   title: TitleBlock,
   text: TextBlock,
   image: ImageBlock,
   carousel: CarouselBlock,
-  video: VideoBlock
+  video: VideoBlock,
+  nav: NavBlock
 };
 
-export function Block({ block }) {
+export function Block({ block, onOpen }) {
   const Component = BLOCKS[block.kind] || Unknown;
-  return <Component block={block} />;
+  return <Component block={block} onOpen={onOpen} />;
 }
 
 const styles = StyleSheet.create({
@@ -173,5 +219,15 @@ const styles = StyleSheet.create({
   dots: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 8 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#d1d5db" },
   dotOn: { backgroundColor: "#2563eb" },
-  missing: { fontSize: 14, color: "#9ca3af", fontStyle: "italic", marginBottom: 14 }
+  missing: { fontSize: 14, color: "#9ca3af", fontStyle: "italic", marginBottom: 14 },
+  link: {
+    flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 10, marginBottom: 8
+  },
+  linkLabel: { flex: 1, fontSize: 15, fontWeight: "500" },
+  linkChevron: { fontSize: 18, color: "#9ca3af" },
+  pager: { flexDirection: "row", marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: "#f3f4f6" },
+  pagerSide: { flex: 1 },
+  pagerRight: { alignItems: "flex-end" },
+  pagerLabel: { fontSize: 15, fontWeight: "600", color: "#2563eb" }
 });
