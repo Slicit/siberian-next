@@ -49,6 +49,7 @@
             <% end %>
             <% if allow?("core.modules.read") %>
               <%= link_to "Storage", storage_path, "aria-current": ("page" if controller_name == "storage") %>
+              <%= link_to "Phone apps", mobile_path, "aria-current": ("page" if controller_name == "mobile") %>
               <%= link_to "Interfaces", interfaces_path, "aria-current": ("page" if controller_name == "interfaces") %>
             <% end %>
             <% if allow?("core.audit.read") %>
