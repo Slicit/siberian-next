@@ -16,7 +16,7 @@ import {
   View
 } from "react-native";
 
-import { Block } from "./blocks";
+import { Block, Pager } from "./blocks";
 
 export function PageNavigator({ siberian }) {
   const [pages, setPages] = useState(null);
@@ -46,7 +46,14 @@ export function PageNavigator({ siberian }) {
   if (pages === null) return <ActivityIndicator style={styles.centre} />;
 
   if (slug) {
-    return <PageView siberian={siberian} slug={slug} onBack={() => setSlug(null)} />;
+    return (
+      <PageView
+        siberian={siberian}
+        slug={slug}
+        onBack={() => setSlug(null)}
+        onOpen={setSlug}
+      />
+    );
   }
 
   return (
@@ -69,9 +76,10 @@ export function PageNavigator({ siberian }) {
   );
 }
 
-export function PageView({ siberian, slug, onBack }) {
+export function PageView({ siberian, slug, onBack, onOpen }) {
   const [page, setPage] = useState(null);
   const [blocks, setBlocks] = useState([]);
+  const [sides, setSides] = useState({});
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
@@ -82,6 +90,7 @@ export function PageView({ siberian, slug, onBack }) {
       const payload = await response.json();
       setPage(payload.page);
       setBlocks(payload.blocks || []);
+      setSides({ next: payload.next, previous: payload.prev });
       setError(null);
     } catch (problem) {
       setError(problem.message);
@@ -111,8 +120,10 @@ export function PageView({ siberian, slug, onBack }) {
       {blocks.length === 0 && !error ? (
         <Text style={styles.empty}>This page has no blocks yet.</Text>
       ) : (
-        blocks.map((block) => <Block key={block.id} block={block} />)
+        blocks.map((block) => <Block key={block.id} block={block} onOpen={onOpen} />)
       )}
+
+      <Pager next={sides.next} previous={sides.previous} onOpen={onOpen} />
     </ScrollView>
   );
 }

@@ -131,6 +131,7 @@ Every one of these drives the real stack. They are the fastest way to answer
 ./bin/smoke-domains    a domain allowance set before a module stores anything
 ./bin/smoke-mobile     the phone app for a domain, its capabilities, and its queue
 ./bin/smoke-cms        a page of blocks, in the browser and as JSON for the app
+./bin/smoke-push       an inbox, and read, archive and delete staying different
 ./bin/smoke-mail       enqueue, deliver, acknowledge, and a permanent rejection
 ./bin/smoke-backoffice every Backoffice page, as an operator and as a plain user
 ./bin/smoke-demo       the demo module end to end over HTTPS
