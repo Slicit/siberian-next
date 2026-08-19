@@ -54,6 +54,9 @@ Rules:
 - nginx refuses to start on a variable no `map` defines. A map whose entries another service writes has to have its block in config that is always present, with the entries pulled in by an `include` glob: an include matching nothing is not an error, but an undefined variable is, and the Router stays down on an installation with no modules.
 - An expo-* package installed as "*" is built for whichever SDK is newest, not the one in `package.json`. The build then fails in Gradle with `Plugin [id: expo-module-gradle-plugin] was not found`, which reads as a broken Android toolchain rather than as a version mismatch. `expo install` resolves versions against the installed SDK, which is what it is for.
 
+- Shared `lib/` code is required once at boot, not reloaded like `app/`. A constant added there is missing from any service process that started before it existed, and the symptom is a `NameError` naming a constant that is plainly in the file in front of you. `bin/reload` restarts the services that load it; three Backoffice pages served 500 for a while because only one service had been restarted after `MobileClient` moved into `lib/`.
+- A container mounts a host directory by inode, so switching branches on the box can delete and recreate the directory underneath a running container. The container keeps a mount of something that no longer exists: files it can see vanish, and `docker exec` refuses with "current working directory is outside of container mount namespace root", which reads like a security error rather than a stale mount. Recreate the container, not restart it, because a restart keeps the mount.
+
 ## Glossary
 
 <!-- Project-specific terms an outside reader would not know. -->
