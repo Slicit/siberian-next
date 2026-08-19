@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# The notification inbox: send, read, archive, unarchive, delete. The three
+# actions are deliberately different and this checks they stayed different.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-push.sh
