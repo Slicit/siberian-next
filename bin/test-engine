@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Integration suite for the engine driver. Creates real containers against a
+# real daemon, so it is kept out of bin/test-lib and out of the default CI run.
+#
+# The unit suite checks that the driver sends the right requests. This checks
+# that the daemon agrees with our reading of its API.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if ! docker info >/dev/null 2>&1; then
+  echo "No reachable container engine. This suite needs one." >&2
+  exit 1
+fi
+
+IMAGE="${RUBY_IMAGE:-ruby:3.3-slim}"
+
+# The driver reaches the daemon through the socket, so the socket comes with it.
+exec docker run --rm \
+  -v "$PWD:/repo" -w /repo \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --group-add "$(getent group docker | cut -d: -f3)" \
+  "$IMAGE" \
+  ruby -Itest -e 'Dir.glob("test/integration/**/*_test.rb").each { |f| require File.expand_path(f) }'
