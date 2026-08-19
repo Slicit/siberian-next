@@ -4,6 +4,10 @@
 # The engine abstraction is only real if something checks it. This is that
 # something, and it is cheap enough to run on every commit. See LOGBOOK.md,
 # Conventions: "Engine-specific code lives only in the driver."
+#
+# Comments are exempt. The constraint is about code, not prose: a comment
+# explaining why a value is engine-neutral is the opposite of a violation, and
+# a check that flags its own documentation is a check people learn to ignore.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -22,8 +26,14 @@ EXCLUDES=(
   --exclude=README.md
 )
 
-if hits=$(grep -rInE "$PATTERN" "${SEARCH_PATHS[@]}" "${EXCLUDES[@]}" 2>/dev/null); then
-  echo "Engine leak: container engine named outside lib/siberian_engine." >&2
+# grep prints file:line:content. A comment line has # or // or * as its first
+# non-space character in every language in this repository.
+COMMENT_LINE='^[^:]*:[0-9]+:[[:space:]]*(#|//|\*)'
+
+hits=$(grep -rInE "$PATTERN" "${SEARCH_PATHS[@]}" "${EXCLUDES[@]}" 2>/dev/null | grep -vE "$COMMENT_LINE" || true)
+
+if [ -n "$hits" ]; then
+  echo "Engine leak: container engine named in code outside lib/siberian_engine." >&2
   echo >&2
   echo "$hits" >&2
   echo >&2
