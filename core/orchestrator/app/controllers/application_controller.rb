@@ -70,7 +70,7 @@ class ApplicationController < ActionController::Base
   end
 
   def login_url_for(return_to)
-    domain = current_domain.to_s.delete_prefix("admin.")
+    domain = current_domain.to_s.delete_prefix("core.")
     "#{request.scheme}://#{domain}/login?return_to=#{CGI.escape(return_to)}"
   end
 

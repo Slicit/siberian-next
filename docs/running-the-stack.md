@@ -72,19 +72,30 @@ CA exists on a laptop by default.
    keeps its own.
 2. Add hosts entries pointing at the box. Wildcards are not possible in a hosts
    file, so **every module origin needs its own line**, which is the sharpest
-   rough edge in the setup:
+   rough edge in the setup. `bin/hosts-file` prints the current set, on the box,
+   from the domains and modules actually installed:
 
 ```
-192.168.1.86 siberian.test
-192.168.1.86 admin.siberian.test
-192.168.1.86 tasks.apps.siberian.test
-192.168.1.86 notes.apps.siberian.test
+./bin/hosts-file
 ```
+
+```
+# siberian-next, generated 2026-08-19 by bin/hosts-file
+192.168.1.86 siberian.test
+192.168.1.86 core.siberian.test
+192.168.1.86 example-relay.apps.siberian.test
+192.168.1.86 notes.apps.siberian.test
+192.168.1.86 tasks.apps.siberian.test
+# end siberian-next
+```
+
+   Rerun it after installing a module or adding a domain. On Windows the file
+   is `C:WindowsSystem32driverstchosts` and needs an Administrator editor.
 
 | Where | What |
 |---|---|
 | `https://siberian.test` | the product shell |
-| `https://admin.siberian.test` | the Backoffice, operators only |
+| `https://core.siberian.test` | the Backoffice, operators only |
 | `https://<module>.apps.siberian.test` | one module, its own origin |
 
 Demo accounts, seeded and deliberately obvious, password `siberian-demo`:
@@ -170,8 +181,9 @@ Deliberate, not forgotten:
 
 - **No SDKs.** Modules hand-roll their HTTP, which is the point of the contract
   being small, but not an argument against helping.
-- **No wildcard DNS.** Adding a module means editing a hosts file, which does
-  not scale past a handful and is the sharpest rough edge in the setup.
+- **No wildcard DNS.** Adding a module means editing a hosts file. `bin/hosts-file`
+  generates the block rather than leaving it to be remembered, but pasting it
+  still does not scale past a handful of modules.
 - **No Backoffice view of the mail queue or the database audit trail.** Both
   exist behind `/admin` endpoints and an operator currently needs curl to see
   why mail is not arriving, which is the moment they would least want to.
