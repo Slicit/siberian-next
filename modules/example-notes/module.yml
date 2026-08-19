@@ -1,85 +1,50 @@
-# Reference module. Exists to exercise the contract in lib/contracts, not to be
-# useful. It uses the shape described in LOGBOOK.md: a datastore, a runner, and
-# a small http container that serves the UI.
+# Reference module, in PHP.
+#
+# Its neighbour demo-tasks is in Python. Between them they are the argument for
+# the container boundary: the core has no opinion about either, and neither
+# imports anything that knows Siberian exists.
 schema_version: 1
 name: example-notes
-version: 0.1.0
-title: Example Notes
-description: Reference module covering install, routing, a database grant, and capability declaration.
+version: 1.0.0
+title: Notes
+description: Markdown notes with full CRUD, written in PHP to show the contract does not care about language.
 
 containers:
   - service: web
-    image: nginx:1.27-alpine
+    image: siberian/example-notes:1.0.0
     role: http
-    internal_port: 80
+    internal_port: 8080
     health:
       path: /up
       interval_seconds: 30
 
-  - service: app
-    image: php:8.3-fpm-alpine
-    role: worker
-
-  - service: cache
-    image: redis:7-alpine
-    role: datastore
-
 routes:
   base: /example-notes
   entry: web
-  origin: example-notes
+  origin: notes
 
 permissions:
   databases:
-    # Provisioned and owned by this module. One database per domain, which is
-    # how domain isolation works here. The module never sees a credential it
-    # was not granted at install time.
+    # Its own notes table, one database per domain. The module never sees a
+    # credential it was not granted at install time.
     - name: primary
       access: owner
       scope: per_domain
 
-    # Read against a database this module does not own. Granted table by table
-    # with a stated reason, because an operator cannot approve "read the
-    # configuration store" in the abstract. Every use is audited.
+    # A granted read of a table it does not own, named table by table with the
+    # reason an operator will see. Every read lands in the audit trail.
     - target: core.configuration
       access: read
       scope: global
       tables:
         - settings
-        - feature_flags
-      reason: Reads the locale and date format so notes render the way the rest of the product does.
-
-  storage:
-    # Private durable files, plus a public space for assets the Router serves
-    # directly at /-/public/<path>. No tmp space: this module has no use for one,
-    # so it does not get one.
-    spaces: [files, public]
-    quota_mb: 256
-
-  mail:
-    send: true
-
-  modules: []
+      reason: Reads the product name so the module reads as part of the product rather than a bolt-on.
 
 capabilities:
   # Extends the product the user sees. Listed by the Base App in an area.
   features:
-    # Listed in the Base App sidebar, under the entities area.
     - id: example_notes.note.viewer
       area: sidebar.entities
       title: Notes
-      path: /notes
+      path: /
       icon: note
-
-    # Not a page of its own. Offered to any module that needs to attach a note
-    # to something it owns, which is what auto-discovery composes against.
-    - id: example_notes.note.attacher
-      area: embed.attachment
-      title: Attach a note
-      path: /embeds/attach
-      accepts:
-        - core.subject.any
-
-  consumes:
-    - id: core.user.picker
-      optional: true

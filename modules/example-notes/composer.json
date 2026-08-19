@@ -1,0 +1,11 @@
+{
+  "name": "siberian/example-notes",
+  "description": "A notes module for Siberian, written in PHP.",
+  "require": {
+    "php": ">=8.2",
+    "league/commonmark": "^2.4"
+  },
+  "config": {
+    "optimize-autoloader": true
+  }
+}
