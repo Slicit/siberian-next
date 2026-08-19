@@ -106,6 +106,12 @@ server {
     include /etc/nginx/siberian/internal_headers.conf;
   }
 
+  location /database/ {
+    set $upstream_database "http://database:3000/";
+    proxy_pass $upstream_database;
+    include /etc/nginx/siberian/internal_headers.conf;
+  }
+
   location /orchestrator/ {
     set $upstream_orchestrator "http://orchestrator:3000/";
     proxy_pass $upstream_orchestrator;
