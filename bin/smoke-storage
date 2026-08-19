@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# End to end check of the Storage service against a real object store.
+#
+# Registers a module, provisions its bucket, then exercises every verb and
+# every refusal. Unit tests cannot cover this: the parts most likely to break
+# are the ones where Rails, Garage, and the S3 protocol have to agree.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+docker run --rm --network siberian_core \
+  -v "$PWD/bin/smoke-storage.sh:/smoke.sh:ro" \
+  curlimages/curl:latest sh /smoke.sh

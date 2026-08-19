@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_19_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_19_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -28,18 +28,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_120000) do
 
   create_table "capabilities", force: :cascade do |t|
     t.json "accepts", default: [], null: false
-    t.string "area", null: false
+    t.string "area"
     t.string "capability_id", null: false
     t.datetime "created_at", null: false
+    t.string "endpoint"
+    t.boolean "exclusive", default: false, null: false
     t.string "icon"
     t.bigint "installed_module_id", null: false
-    t.string "path", null: false
+    t.string "interface"
+    t.string "kind", default: "feature", null: false
+    t.string "path"
     t.integer "position", default: 0, null: false
+    t.integer "priority", default: 100, null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
     t.index ["area"], name: "index_capabilities_on_area"
     t.index ["capability_id"], name: "index_capabilities_on_capability_id", unique: true
     t.index ["installed_module_id"], name: "index_capabilities_on_installed_module_id"
+    t.index ["interface", "priority"], name: "index_capabilities_on_interface_and_priority"
+    t.index ["kind"], name: "index_capabilities_on_kind"
   end
 
   create_table "capability_requests", force: :cascade do |t|
