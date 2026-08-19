@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 branch: feat-core-storage
 ---
 
@@ -26,10 +26,10 @@ Out of scope for this feature:
 2. ~~Specify the module-facing API, the three spaces, and the bucket mapping.~~
 3. ~~Add the storage grant to the module manifest schema.~~
 4. ~~Put Garage on an internal-only network that only the Storage service joins.~~
-5. Generate the Storage Rails service.
-6. Implement the four verbs, plus list, against Garage.
-7. Bucket provisioning at install time, keyed on `(module, domain)`.
-8. Quota accounting and enforcement.
+5. ~~Generate the Storage Rails service.~~
+6. ~~Implement the four verbs, plus list, against Garage.~~
+7. ~~Bucket provisioning at install time, keyed on `(module, domain)`.~~
+8. ~~Quota accounting and enforcement.~~
 9. The `tmp` sweeper.
 10. Router rule for `/-/public/<path>`.
 
@@ -53,10 +53,18 @@ Out of scope for this feature:
 - **Why:** mirrors the Database service exactly, so there is one isolation rule in the system rather than two. The hash keeps the name inside the 63 character S3 limit without truncating the domain into ambiguity.
 - **Impact:** bucket provisioning happens at install time and again when a domain is added.
 
+## Outcome
+
+Shipped 2026-08-19. Both reference modules write and read files through it, and
+neither imports an S3 client. The `tmp` sweeper and the Router rule for
+`/-/public/<path>` are still unbuilt: no module has needed either yet, and
+building them before one does would be guessing.
+
 ## Links
 
 - Branch: `feat-core-storage`
-- PR: TBD
+- PR: none, merged directly to main
+- Shipped: 2026-08-19
 - Related ideas: none
 - Related features: `feat-monorepo-skeleton`
 - External: MinIO community edition archived 2026-02-13

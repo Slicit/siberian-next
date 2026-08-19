@@ -1,5 +1,5 @@
 ---
-status: active
+status: shipped
 branch: feat-monorepo-skeleton
 ---
 
@@ -64,10 +64,21 @@ Out of scope for this feature:
 - **Why:** the development machine has no Ruby and no container engine, and a project whose runtime is containers should not need a parallel host toolchain.
 - **Impact:** `bin/setup` checks for the engine only, and says so explicitly when it is missing.
 
+## Outcome
+
+Shipped 2026-08-19. The layout held: `core/` still mirrors the architecture one
+directory per container, and the engine driver has never leaked, which the check
+verifies on every commit rather than anyone remembering.
+
+The one thing the skeleton got wrong was assuming four Rails services. Storage
+and Database both became services of their own, and the generator now takes a
+list rather than a number.
+
 ## Links
 
 - Branch: `feat-monorepo-skeleton`
-- PR: TBD
+- PR: none, merged directly to main
+- Shipped: 2026-08-19
 - Related ideas: none
 - Related features: none
 - External: none

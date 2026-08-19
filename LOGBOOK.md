@@ -14,7 +14,7 @@ Two classes of containers.
 - **Configuration**: core data and configuration store.
 - **Auth**: out-of-the-box authentication exposed over API (OAuth, JWT, 2FA, and the rest of the modern set).
 - **Mailer**: out-of-the-box mail delivery exposed over API.
-- **Database**: PostgreSQL handler with an internal API that provisions and isolates databases. A module declares the access it needs at install or update time and the core mints scoped credentials automatically, on the Android permission model. A module may also request access to an existing database; default is read-only, with write granted deliberately.
+- **Database**: provisions one database and one Postgres role per `(module, domain)` pair and hands the module a DSN. The module then connects to Postgres directly: nothing sits in the hot path of a module reading its own data, because Postgres roles already are the isolation. Module data lives on its own cluster, separate from the one holding auth, orchestrator, and configuration. Reading a table the module does not own works the other way round, and deliberately so: those reads go through the service, table by table against grants an operator approved with a stated reason, and every one lands in the audit trail. A direct connection would be unobservable, which is what an audit trail cannot afford.
 - **Storage**: file storage for every module, over a plain HTTP API (`PUT`, `GET`, `DELETE` on `/v1/{space}/{path}`). Modules never see S3, never hold an object store credential, and never need an S3 SDK. Spaces are `files`, `tmp`, and `public`. One bucket per `(module, domain)` pair, same isolation rule as the Database service.
 
 **Third-party modules**: any number of containers per module (for example a Redis, a php-fpm runner, and a small Nginx to serve the app). Install registers the module, mounts its files, and assigns a UUID. Every container of that module is prefixed: `<uuid>-<module_name>-<service>`.
@@ -23,9 +23,18 @@ Two classes of containers.
 
 **SDKs**: the core ships first-party client SDKs for the common module languages, so a module author talks to the internal APIs and to other modules without hand-rolling HTTP.
 
-**Capabilities**: a module declares in its manifest the capabilities it exposes. The Base App has named areas, and a declared capability is listed or linked in the area it belongs to. Auto-discovery reads these declarations, which is what lets custom workflows be composed across modules without either side hardcoding the other.
+**Capabilities**, in two kinds, because they extend different things:
 
-**Composition**: the Base App wraps module UIs in iframes. That buys real isolation of styles and of intent. Each module is served from its own origin (`<module>.apps.<domain>`) so the frame boundary is enforced by the browser and not by convention, which matters because modules are third-party code. The auth cookie is scoped to the parent domain, so out-of-the-box auth still covers every frame and the usual iframe auth friction does not apply. Wildcard DNS and a wildcard certificate are a baseline requirement of the product anyway.
+- **System capabilities** extend the core. One implements a named interface the core already calls (`mail.transport.v1`, `auth.provider.v1`), so mail or authentication can be answered by a module instead of by the built-in service. No UI, no area; the core reaches it over the internal network and never learns which module answered. Two modules claiming one interface exclusively is an install-time conflict for an operator to resolve, not a silent decision about where the core sends mail.
+- **Feature capabilities** extend the product. A page or fragment the Base App lists in a named area. The shell asks for a title, an area, and a URL, and never learns a container name, a uuid, or a network, which is why installing a module requires no change to it.
+
+A module's `consumes` is matched against both kinds. An unmatched request is not an error; it is a feature that stays switched off.
+
+**Composition**: the Base App wraps module UIs in iframes. That buys real isolation of styles and of intent. Each module is served from its own origin (`<module>.apps.<domain>`) so the frame boundary is enforced by the browser and not by convention, which matters because modules are third-party code. The auth cookie is scoped to the parent domain, so out-of-the-box auth still covers every frame and the usual iframe auth friction does not apply.
+
+**TLS is not a production-only concern.** The session cookie must be `Secure` to travel into a module frame on another origin, so development runs over HTTPS too, behind a local CA. Wildcard DNS and a wildcard certificate are a baseline requirement of the product, and certificates match one label at a time: `*.<domain>` does not cover `<module>.apps.<domain>`, so both are always in the SAN list.
+
+**The internal door**: a module sits on its own network with only the Router attached, so it has no route to the core at all. It reaches the core at `http://core/auth/...`, `http://core/storage/...`, `http://core/database/...`, where `core` is an alias the Router answers to on every module network it joins. That is what makes "module traffic goes through the Router" true by construction rather than by convention.
 
 **Multi-domain**: the system serves multiple domains. Isolation is at the data layer, not the runtime layer: containers are installed once and shared across domains, while databases are per domain. The Database service mints credentials scoped to the `(module, domain)` pair, the Router and Auth propagate the current domain as request context, and the SDKs resolve the right credential so module authors never handle it by hand.
 
@@ -33,25 +42,34 @@ Two classes of containers.
 
 ## Stack
 
-- Two Ruby on Rails monoliths with Hotwire (Turbo, Stimulus): the Orchestrator (Backoffice) and the Base App (Admin)
-- Ruby on Rails for the Mailer and the Auth service, API first
-- Nginx for the Router
-- PostgreSQL for Configuration, for the Database service, and one isolated database per domain
-- Garage for object storage, reachable only by the Storage service
+- Ruby on Rails 8.1 for all six core services. The Orchestrator, Base App, and Auth serve HTML; the Mailer, Storage, and Database are API only
+- Nginx for the Router, terminating TLS and holding the only certificate
+- PostgreSQL twice over: a configuration cluster for the core's own databases, and a separate module data cluster modules connect to directly
+- Garage for object storage, on an internal-only network the Storage service alone joins
 - Container engine behind a driver interface: Docker first, Kubernetes or equivalent later
-- Monorepo: every core service, shared library, and SDK lives in this repository
+- Modules in any language. The two reference modules are PHP and Python
+- Monorepo: every core service, shared library, SDK, and reference module lives in this repository
 
 ## Repo layout
 
 ```
 core/            one directory per core container, each with its own Dockerfile
 lib/             shared Ruby for the core apps
+  siberian_engine/  the engine driver, the only code that knows Docker exists
+  contracts/        the module manifest schema and its parser
+  router/           the per-module nginx template the Orchestrator renders
+  ui/               one stylesheet the three core interfaces share
 sdk/             per-language module SDKs (ruby, php, python, node)
-modules/         first-party reference modules that exercise the contract
+modules/         reference modules that exercise the contract, in several languages
 deploy/          compose for development, Kubernetes manifests later
-bin/             development entry points
+  certs/            local CA and wildcard certificate, generated, never committed
+bin/             development entry points and smoke checks
 docs/
 ```
+
+Every `bin/smoke-*` drives a real stack rather than a mock. They exist because
+the failures worth catching here live in the seams between Rails, nginx,
+Postgres, and the engine, and no unit test stands in that seam.
 
 Core images build with the repository root as build context, so `lib/` can be copied in.
 
@@ -69,6 +87,9 @@ Core images build with the repository root as build context, so `lib/` can be co
 - **Engine-specific code lives only in the driver.** No Docker (or Kubernetes) concept leaks into core domain code. If a feature needs an engine capability, it goes through the driver interface or the interface grows.
 - **Module to module traffic goes through the Router**, addressed by short internal DNS name. Never hardcode container IPs or ports.
 - **Database access is brokered by the Database service.** No module holds a credential it was not granted at install or update time. Read-only is the default grant.
+- **Reaching into a database somebody else owns is granted table by table, with a stated reason.** A grant with no table list is a request for everything, and an operator cannot meaningfully approve that. Every use of such a grant is audited, refusals included.
+- **Development runs over HTTPS.** The session cookie must be `Secure` to reach a module frame, so plain HTTP is not a simpler version of the product, it is a broken one.
+- **Modules address the core at `http://core/...`**, never a service name directly. They have no route to one.
 
 ## Non-goals
 
@@ -79,10 +100,11 @@ Core images build with the repository root as build context, so `lib/` can be co
 
 ## Reading order for agents
 
-1. This file (`LOGBOOK.md`).
-2. `LOGBOOK/notes.md` for codebase patterns, gotchas, anti-patterns.
-3. The active feature file matching the current branch (`LOGBOOK/features/feat-<slug>.md`) if any.
-4. `LOGBOOK/features/INDEX.md` for the broader picture.
+1. This file (`LOGBOOK.md`) for what the system is.
+2. `docs/running-the-stack.md` for where it runs, how to bring it back, and how to check it works. Development happens on a Linux box rather than a laptop, and nothing else says so.
+3. `LOGBOOK/notes.md` for codebase patterns, gotchas, anti-patterns. Several of those cost hours to find.
+4. The active feature file matching the current branch (`LOGBOOK/features/feat-<slug>.md`) if any.
+5. `LOGBOOK/features/INDEX.md` for the broader picture.
 
 Do not read `LOGBOOK/ideas.md` unless the user explicitly asks; it is the human-owned inbox.
 
@@ -97,5 +119,6 @@ Do not read `LOGBOOK/ideas.md` unless the user explicitly asks; it is the human-
 ## Status
 
 - LOGBOOK adopted: 2026-08-19
-- Index regenerated: manual
-- Active feature count: see `LOGBOOK/features/INDEX.md`
+- Index regenerated: 2026-08-19
+- Last reviewed: 2026-08-19, after the beta. Architecture, Stack, Conventions, and Repo layout were all corrected against what had actually been built.
+- Feature count: see `LOGBOOK/features/INDEX.md`
