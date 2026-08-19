@@ -81,6 +81,15 @@ export async function assemble(plan, workspace) {
           orientation: "portrait",
           userInterfaceStyle: "automatic",
           primaryColor: plan.app.primary_color || undefined,
+          // Without this, prebuild writes a splashscreen drawable that refers
+          // to a colour resource it did not write, and the build fails in
+          // resource linking with "resource color/splashscreen_background not
+          // found", which reads as a corrupt template rather than as missing
+          // configuration.
+          splash: {
+            backgroundColor: plan.app.primary_color || "#ffffff",
+            resizeMode: "contain"
+          },
           android: {
             package: plan.app.bundle_identifier,
             versionCode: plan.app.build_number
