@@ -36,7 +36,10 @@ class DatabaseProvisioner
     end
 
     names = ProvisionedDatabase.names_for(registration.module_name, domain, logical_name)
-    password = SecureRandom.urlsafe_base64(24)
+
+    # A suspended record keeps its password, so reinstalling gives the module
+    # the same credentials back rather than silently invalidating any it cached.
+    password = existing&.encrypted_password.presence || SecureRandom.urlsafe_base64(24)
 
     @admin.provision(
       database_name: names[:database_name],

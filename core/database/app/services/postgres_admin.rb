@@ -130,11 +130,21 @@ class PostgresAdmin
     end
   end
 
+  # Asserts the role's desired state rather than only creating it when absent.
+  #
+  # A role that already exists is not necessarily usable: uninstalling a module
+  # leaves it NOLOGIN on purpose, so data outlives the module. Skipping an
+  # existing role therefore handed back credentials that were correct and could
+  # not log in, and Postgres reports that as "password authentication failed",
+  # which points at the password rather than at the account.
   def create_role(connection, role_name, password)
-    return if role_exists_in?(connection, role_name)
-
-    connection.exec("CREATE ROLE #{quote_ident(connection, role_name)} LOGIN " \
-                    "PASSWORD #{connection.escape_literal(password)}")
+    if role_exists_in?(connection, role_name)
+      connection.exec("ALTER ROLE #{quote_ident(connection, role_name)} WITH LOGIN " \
+                      "PASSWORD #{connection.escape_literal(password)}")
+    else
+      connection.exec("CREATE ROLE #{quote_ident(connection, role_name)} LOGIN " \
+                      "PASSWORD #{connection.escape_literal(password)}")
+    end
   end
 
   def create_database(connection, database_name, role_name)
