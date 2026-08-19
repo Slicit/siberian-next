@@ -94,13 +94,47 @@ device. It can only be enforced where it was always enforced, at the door.
 
 ## Plan
 
-1. The `mobile` service: app per domain, capability configuration, build queue.
-2. The capability catalogue, and the manifest surface for requiring one.
-3. The Backoffice: an app per domain, the capabilities behind it, build history.
-4. The `mobile-builder` container: assemble, prebuild, compile Android, archive iOS.
-5. `/m/<module>/` through the Router, with the module identity set by the Router.
-6. A smoke that queues a build for a domain and watches it come out.
+1. ~~The `mobile` service: app per domain, capability configuration, build queue.~~
+2. ~~The capability catalogue, and the manifest surface for requiring one.~~
+3. ~~The Backoffice: an app per domain, the capabilities behind it, build history.~~
+4. ~~The `mobile-builder` container: assemble, prebuild, compile Android, archive iOS.~~
+5. ~~`/m/<module>/` through the Router, with the module identity set by the Router.~~
+6. ~~A smoke that queues a build for a domain and watches it come out.~~
 
 ## Decisions
+
+### 2026-08-19
+
+- **Decision:** a new core service, `mobile`, plus a `mobile-builder` worker, rather than the Orchestrator running builds.
+- **Why:** a build takes minutes and a request takes milliseconds. The Mailer already answers this question the same way, and the Orchestrator is the one container holding the engine socket, which is the last thing that should also be running a third party's JavaScript through npm.
+- **Impact:** the builder holds no socket, no admin token, and no Storage credential. It claims one build, receives the plan for it, and can ask the service nothing else.
+
+- **Decision:** the native capabilities are a fixed catalogue in `lib/`, not a field a manifest fills in.
+- **Why:** each one is a package that has to be in the build, a config plugin that has to be applied, and in several cases a sentence Apple shows somebody before asking permission. None of that can arrive from a third party at install time.
+- **Impact:** adding a capability is a change to `lib/mobile_capabilities.rb` and nothing else. A manifest naming one that does not exist fails validation with the list.
+
+- **Decision:** a module requires a capability; an operator enables it. A requirement that is not met leaves the module as the WebView it would have had anyway.
+- **Why:** the storage quota rule again. A manifest is written by a third party, and every capability here is something the app can then do to somebody. If asking were enough to get it, the configuration page would be a suggestion.
+- **Impact:** the install review screen lists native requirements next to database and storage grants. An unmet requirement is not an error anywhere: it is a feature that stays switched off, and the Backoffice says which capability would switch it on.
+
+- **Decision:** modules ship React Native code, and the fallback is a WebView on the module's existing UI.
+- **Why:** asked for. A module that wants a native feel should be able to have one, and a module whose UI is a form does not improve by being compiled.
+- **Impact:** third-party JavaScript is inside the app binary. That is a real narrowing and it is written down rather than discovered: in a browser, module isolation is the origin and the browser enforces it, but an app has no origins and every module's code runs in one JavaScript context. Nothing on the device can stop module A calling module B's endpoint.
+
+- **Decision:** so the boundary moves to the door. Module endpoints are addressed at `/m/<module>/<path>`, and the Router sets the module identity from the path segment.
+- **Why:** it is the only place left that can enforce anything. A header the caller writes is not an identity, and the caller is code somebody else wrote.
+- **Impact:** the call is authorised as the user, against `module.<name>.use`, which the permission catalogue already carries, and a module's own data stays behind a database credential no other module holds. Two segments, because the Base App already answers `/m/<capability-id>` for a framed page and has no second segment; a regex location wins over a prefix one, so the two coexist without either knowing about the other.
+
+- **Decision:** iOS produces the configured Xcode project, not an `.ipa`.
+- **Why:** Apple's toolchain runs on macOS. This is not a design choice that can be revisited in a Dockerfile.
+- **Impact:** the Android path is real, end to end, on the box. The iOS button says what it does before it does it, and what comes out is what a macOS runner or EAS needs.
+
+- **Decision:** the artifact travels back through the Mobile service into Storage, rather than the builder uploading it.
+- **Why:** the builder runs third-party code, so it holds no credential that could reach another domain's files. Putting the app where every other file lives also means the quotas an operator already set govern it.
+- **Impact:** a domain that has filled its storage cannot store a new build of its app, and the refusal names the limit rather than failing somewhere in Gradle. The cost is that a 60 MB artifact transits Rails, which is fine at this scale and would not be at another.
+
+- **Decision:** the build plan is resolved when a build is queued and kept on the row.
+- **Why:** a build is a thing that happened. Explaining one after the configuration behind it has changed is otherwise guesswork.
+- **Impact:** changing a capability does not change a queued build. Asking again is how you get the new configuration, which is also what an operator expects from a queue.
 
 ## Outcome
