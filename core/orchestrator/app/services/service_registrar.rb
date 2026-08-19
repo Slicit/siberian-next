@@ -12,15 +12,17 @@ require "json"
 class ServiceRegistrar
   class Error < StandardError; end
 
-  Registration = Struct.new(:storage_token, :database_token, :mail_token, keyword_init: true)
+  Registration = Struct.new(:storage_token, :database_token, :mail_token, :mobile_token, keyword_init: true)
 
   def initialize(storage_url: ENV.fetch("SIBERIAN_STORAGE_URL", "http://storage:3000"),
                  database_url: ENV.fetch("SIBERIAN_DATABASE_URL_SERVICE", "http://database:3000"),
                  mailer_url: ENV.fetch("SIBERIAN_MAILER_URL", "http://mailer:3000"),
+                 mobile_url: ENV.fetch("SIBERIAN_MOBILE_URL", "http://mobile:3000"),
                  admin_token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
     @storage_url = storage_url
     @database_url = database_url
     @mailer_url = mailer_url
+    @mobile_url = mobile_url
     @admin_token = admin_token
   end
 
@@ -28,7 +30,8 @@ class ServiceRegistrar
     Registration.new(
       storage_token: register_storage(installed_module, manifest),
       database_token: register_database(installed_module, manifest),
-      mail_token: register_mailer(installed_module, manifest)
+      mail_token: register_mailer(installed_module, manifest),
+      mobile_token: register_mobile(installed_module, manifest)
     )
   end
 
@@ -97,6 +100,31 @@ class ServiceRegistrar
       daily_limit: manifest.mail_grant["daily_limit"]
     })
     body["token"]
+  end
+
+  # What this module contributes to a phone app, and what it says it needs to
+  # do it. Registered for every module, not only the ones shipping native code:
+  # a module with no native block still appears in the app as the WebView it
+  # would have had anyway, and the app has to know it exists to show it.
+  def register_mobile(installed_module, manifest)
+    body = post(@mobile_url, "/admin/modules", {
+      module_name: installed_module.name,
+      module_uuid: installed_module.uuid,
+      native_entry: manifest.native_entry,
+      fallback: manifest.native_fallback,
+      base_route: manifest.base_route,
+      origin: manifest.origin,
+      screens: manifest.native_screens,
+      # Sent as asked for. Whether any of it is on is decided per app, by an
+      # operator: an operator setting caps a manifest, never the reverse.
+      requires: manifest.required_native_capabilities
+    })
+    body["token"]
+  rescue Error
+    # A module still installs when the Mobile service is down. Phone apps are
+    # not a reason a module cannot be installed, and the next build reads this
+    # from the manifest again.
+    nil
   end
 
   def register_database(installed_module, manifest)

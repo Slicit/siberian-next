@@ -70,6 +70,7 @@ services:
       SIBERIAN_MAILER_URL: http://mailer:3000
       SIBERIAN_DATABASE_URL_SERVICE: http://database:3000
       SIBERIAN_STORAGE_URL: http://storage:3000
+      SIBERIAN_MOBILE_URL: http://mobile:3000
       SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
       # Joined to every module network so modules can reach Postgres directly.
       SIBERIAN_MODULEDB_CONTAINER: siberian-moduledb-1
