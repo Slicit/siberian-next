@@ -25,7 +25,7 @@ module Siberian
         entries: [
           { label: "Overview", route: :root_path, permission: nil, controller: "dashboard" },
           { label: "Modules", route: :modules_path, permission: "core.modules.read", controller: "modules" },
-          { label: "Catalogue", route: :catalog_path, permission: "core.modules.read", controller: "catalog" }
+          { label: "Catalogue", route: :catalog_path, permission: "core.modules.install", controller: "catalog" }
         ]
       },
       {
