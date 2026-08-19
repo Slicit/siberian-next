@@ -204,7 +204,12 @@ def public_media_url(path):
     if path.startswith("http://") or path.startswith("https://"):
         return path
 
-    return f"{request.scheme}://{request.host}/media/{path.lstrip('/')}"
+    # X-Forwarded-Proto, not request.scheme. The Router terminates TLS and
+    # proxies onward over plain HTTP, so the scheme this process sees is http
+    # while the page it is building is https: an http image URL on an https
+    # page is mixed content, and the browser drops it without drawing anything.
+    scheme = request.headers.get("X-Forwarded-Proto") or request.scheme
+    return f"{scheme}://{request.host}/media/{path.lstrip(chr(47))}"
 
 
 def serialise(block):
