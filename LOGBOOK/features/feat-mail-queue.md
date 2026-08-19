@@ -48,6 +48,10 @@ Out of scope for this feature:
 - **Why:** the interface already exists and the capability split promised exactly this. Resolving per attempt rather than per message means installing a transport module fixes a queue that is already backed up, without anybody re-queuing anything.
 - **Impact:** the Mailer asks the Orchestrator which implementation wins, and falls back to its built-in transport. A queue that is failing because the transport is gone drains itself once one is installed.
 
+- **Decision:** the queue is the database, claimed with `SKIP LOCKED`, rather than Redis and Sidekiq.
+- **Why:** the source of truth has to be a table regardless. The API answers per module and per domain, acknowledgement is durable state, and the question the feature exists to answer is "what happened to this message". Putting scheduling in Redis as well means two stores that can disagree, and the two ways they disagree are a message sent twice and a message lost, which are precisely the two outcomes a mail queue must not have. Rails 8 ships a database-backed queue as its default for the same reason. Sidekiq is better at concurrency and avoids polling; neither is the constraint at this volume.
+- **Impact:** one store, one truth, one place to look. `FOR UPDATE SKIP LOCKED` lets several workers claim without coordinating. If polling ever becomes the wrong shape, the executor can be replaced without touching the API, because the API reads the table rather than the scheduler.
+
 - **Decision:** backoff is exponential with jitter, capped, and ends in `dead` rather than looping forever.
 - **Why:** a message that will never send should stop consuming attempts and start being a visible problem. Jitter because a transport that just came back should not be hit by the whole backlog in the same second.
 - **Impact:** attempts are recorded individually, so "why did this take four hours" has an answer rather than a guess.

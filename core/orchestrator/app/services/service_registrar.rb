@@ -12,20 +12,23 @@ require "json"
 class ServiceRegistrar
   class Error < StandardError; end
 
-  Registration = Struct.new(:storage_token, :database_token, keyword_init: true)
+  Registration = Struct.new(:storage_token, :database_token, :mail_token, keyword_init: true)
 
   def initialize(storage_url: ENV.fetch("SIBERIAN_STORAGE_URL", "http://storage:3000"),
                  database_url: ENV.fetch("SIBERIAN_DATABASE_URL_SERVICE", "http://database:3000"),
+                 mailer_url: ENV.fetch("SIBERIAN_MAILER_URL", "http://mailer:3000"),
                  admin_token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
     @storage_url = storage_url
     @database_url = database_url
+    @mailer_url = mailer_url
     @admin_token = admin_token
   end
 
   def register(installed_module, manifest)
     Registration.new(
       storage_token: register_storage(installed_module, manifest),
-      database_token: register_database(installed_module, manifest)
+      database_token: register_database(installed_module, manifest),
+      mail_token: register_mailer(installed_module, manifest)
     )
   end
 
@@ -59,7 +62,8 @@ class ServiceRegistrar
 
   def revoke(installed_module)
     %W[#{@storage_url}/admin/modules/#{installed_module.name}
-       #{@database_url}/admin/modules/#{installed_module.name}].each do |url|
+       #{@database_url}/admin/modules/#{installed_module.name}
+       #{@mailer_url}/admin/modules/#{installed_module.name}].each do |url|
       delete(url)
     rescue StandardError => e
       Rails.logger.warn("could not revoke #{url}: #{e.message}")
@@ -77,6 +81,20 @@ class ServiceRegistrar
       spaces: manifest.storage_spaces,
       quota_mb: manifest.storage_grant["quota_mb"] || 512,
       tmp_ttl_hours: manifest.storage_grant["tmp_ttl_hours"] || 168
+    })
+    body["token"]
+  end
+
+  # A module that asked to send mail gets a queue token. A module that did not
+  # gets nothing, and its calls to the Mailer are refused by the token check
+  # rather than by anything remembering the manifest.
+  def register_mailer(installed_module, manifest)
+    return nil unless manifest.mail_grant && manifest.mail_grant["send"]
+
+    body = post(@mailer_url, "/admin/modules", {
+      module_name: installed_module.name,
+      module_uuid: installed_module.uuid,
+      daily_limit: manifest.mail_grant["daily_limit"]
     })
     body["token"]
   end

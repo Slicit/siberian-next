@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# The mail worker. Its own process, and in production its own container: a
+# stuck delivery should not be able to take the API down with it.
+require_relative "../config/environment"
+
+DeliveryWorker.new.run

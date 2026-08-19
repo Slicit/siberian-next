@@ -1,10 +1,23 @@
 Rails.application.routes.draw do
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
+  # Module-facing. A module hands over a message and stops thinking about it,
+  # then polls for outcomes and acknowledges them. Everything is scoped to the
+  # calling module and the Router's domain header.
+  scope "/v1" do
+    post "messages", to: "messages#create"
+    get "messages", to: "messages#index"
+    post "messages/ack", to: "messages#acknowledge_many"
+    get "messages/:id", to: "messages#show"
+    delete "messages/:id", to: "messages#destroy"
+    post "messages/:id/ack", to: "messages#acknowledge"
+    post "messages/:id/retry", to: "messages#retry_message"
+    get "stats", to: "messages#stats"
+  end
 
-  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
-  # Can be used by load balancers and uptime monitors to verify that the app is live.
-  get "up" => "rails/health#show", as: :rails_health_check
+  namespace :admin do
+    post "modules", to: "modules#create"
+    delete "modules/:module_name", to: "modules#destroy"
+    get "queue", to: "modules#queue"
+  end
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+  get "up", to: "rails/health#show", as: :rails_health_check
 end
