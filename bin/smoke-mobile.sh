@@ -44,7 +44,7 @@ echo "4. a module that requires a capability says which"
 grep -oE 'Required by [a-z-]+' $P | sort -u | sed 's/^/   /'
 
 echo "5. how each module would appear"
-grep -oE '>(native|its web UI|none)<' $P | tr -d '<>' | sort | uniq -c | sed 's/^/  /'
+grep -A1 "span class=\"badge" $P | sed "s/^ *//" | grep -xE "native|its web UI|none" | sort | uniq -c | sed "s/^/  /"
 
 echo
 echo "6. ask for an Android build"
