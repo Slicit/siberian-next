@@ -223,3 +223,83 @@ input:focus, select:focus, textarea:focus {
 /* The frame a module renders in. No chrome of ours leaks through it. */
 .frame-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
 .frame-wrap iframe { display: block; width: 100%; height: min(76vh, 900px); border: 0; }
+
+/* Breadcrumbs ------------------------------------------------------------- */
+
+/* Every page says where it is, at every level. A page reached from a list and
+   a page reached from a link looked identical before this, so the way back was
+   the browser button and the way up was guesswork. */
+.breadcrumb { margin: 0 0 1rem; font-size: .84rem; }
+.breadcrumb ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .1rem; }
+.breadcrumb li { display: flex; align-items: center; }
+
+.breadcrumb li + li::before {
+  content: "›";
+  margin: 0 .45rem;
+  color: var(--text-faint);
+  font-size: 1.05em;
+  line-height: 1;
+}
+
+.breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  padding: .1rem .15rem;
+  border-radius: var(--radius-sm);
+}
+.breadcrumb a:hover { color: var(--accent); text-decoration-color: var(--accent); }
+.breadcrumb .here { color: var(--text); font-weight: 600; }
+.breadcrumb .step { color: var(--text-muted); }
+
+/* Actions ----------------------------------------------------------------- */
+
+/* Buttons carried no weight against a white card, so the thing a page is for
+   looked the same as the text around it. */
+button, .button { box-shadow: 0 1px 1px rgb(16 24 40 / 5%); transition: background .12s, border-color .12s, color .12s; }
+button:hover, .button:hover { border-color: var(--border-strong); }
+button:focus-visible, .button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary, .button.primary { box-shadow: 0 1px 2px rgb(31 111 235 / 25%); }
+
+/* A destructive action should look destructive before it is pressed, not only
+   in the sentence that asks whether you meant it. */
+button.danger, .button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+button.danger:hover, .button.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* Toggles ----------------------------------------------------------------- */
+
+/* A switch that reads "Turn off" tells you what pressing it does and not what
+   the state is, which is the wrong half. The colour carries the state: green
+   for on, and the button says what happens next. */
+button.toggle, .button.toggle { min-width: 6.2rem; justify-content: center; }
+button.toggle.on, .button.toggle.on {
+  color: var(--ok); border-color: var(--ok); background: var(--ok-soft);
+}
+button.toggle.on:hover, .button.toggle.on:hover { background: var(--ok); border-color: var(--ok); color: #fff; }
+button.toggle.off, .button.toggle.off {
+  color: var(--text-muted); border-color: var(--border-strong); background: var(--surface-2);
+}
+button.toggle.off:hover, .button.toggle.off:hover { background: var(--surface); color: var(--text); }
+
+/* The state itself, beside the switch, so it reads without decoding a verb. */
+.state { display: inline-flex; align-items: center; gap: .35rem; font-size: .8rem; font-weight: 600; }
+.state.on { color: var(--ok); }
+.state.off { color: var(--text-faint); }
+
+/* Confirmation ------------------------------------------------------------ */
+
+dialog.confirm {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0; max-width: 26rem; width: calc(100% - 2rem);
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+}
+dialog.confirm::backdrop { background: rgb(16 24 40 / 45%); }
+dialog.confirm .body { padding: 1.1rem 1.2rem .4rem; }
+dialog.confirm h2 { margin: 0 0 .4rem; font-size: 1.02rem; }
+dialog.confirm p { margin: 0; color: var(--text-muted); font-size: .9rem; }
+dialog.confirm .actions { display: flex; justify-content: flex-end; gap: .5rem; padding: 1.1rem 1.2rem 1.2rem; }

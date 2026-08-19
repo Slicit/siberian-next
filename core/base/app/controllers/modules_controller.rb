@@ -18,6 +18,8 @@ class ModulesController < ApplicationController
     end
 
     @groups = directory.grouped(domain: current_domain, only: method(:visible_capabilities))
+    @breadcrumb_section = @capability.area.to_s.split(".").last.to_s.capitalize.presence || "Modules"
+    @breadcrumb_leaf = @capability.title
 
     # A module page can be deep-linked: /m/<capability>/notes/42 renders the
     # module at /notes/42 rather than at its front door.

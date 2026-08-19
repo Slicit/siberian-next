@@ -22,6 +22,7 @@ class MobileController < ApplicationController
     @domain = Domain.find_by(id: params[:id])
     return redirect_to mobile_path, alert: "No such domain." if @domain.nil?
 
+    @breadcrumb_leaf = @domain.hostname
     @app = mobile.app(@domain.hostname)
     @app = nil unless @app && @app["ok"]
     @catalogue = Array(mobile.apps&.[]("catalogue"))

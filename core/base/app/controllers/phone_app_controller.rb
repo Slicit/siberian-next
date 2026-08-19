@@ -10,6 +10,7 @@ class PhoneAppController < ApplicationController
   before_action :require_permission!
 
   def show
+    @breadcrumb_section = "Phone app"
     load_app
   end
 
@@ -17,6 +18,7 @@ class PhoneAppController < ApplicationController
   # is a separate action from the one that applies it: what a person accepts is
   # exactly what they were shown.
   def suggest
+    @breadcrumb_section = "Phone app"
     @description = params[:description].to_s
 
     result = mobile.suggest(current_domain, @description)

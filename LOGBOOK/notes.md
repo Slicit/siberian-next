@@ -57,6 +57,8 @@ Rules:
 - Shared `lib/` code is required once at boot, not reloaded like `app/`. A constant added there is missing from any service process that started before it existed, and the symptom is a `NameError` naming a constant that is plainly in the file in front of you. `bin/reload` restarts the services that load it; three Backoffice pages served 500 for a while because only one service had been restarted after `MobileClient` moved into `lib/`.
 - A container mounts a host directory by inode, so switching branches on the box can delete and recreate the directory underneath a running container. The container keeps a mount of something that no longer exists: files it can see vanish, and `docker exec` refuses with "current working directory is outside of container mount namespace root", which reads like a security error rather than a stale mount. Recreate the container, not restart it, because a restart keeps the mount.
 
+- A menu built from conditionals in a template drifts from the pages it links to, and the drift is invisible: a link that asks for more than its page requires simply is not there. `lib/navigation.rb` holds the entries as data and `test/navigation_test.rb` reads the controllers and asserts each entry asks for exactly what its page requires.
+
 ## Glossary
 
 <!-- Project-specific terms an outside reader would not know. -->

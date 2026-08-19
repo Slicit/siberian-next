@@ -10,6 +10,7 @@ class ModulesController < ApplicationController
   end
 
   def show
+    @breadcrumb_leaf = @module.title.presence || @module.name
     @activities = @module.activities.recent.limit(25)
     @registry = InterfaceRegistry.new
     # How this module appears in each domain's phone app, which is a question
