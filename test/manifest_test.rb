@@ -427,4 +427,69 @@ class ManifestTest < Minitest::Test
   def test_origin_defaults_to_the_module_name
     assert_equal "example-notes", manifest.origin
   end
+
+  # The native app -------------------------------------------------------
+
+  def test_a_module_that_declares_nothing_native_still_falls_back_to_a_webview
+    refute manifest.ships_native?
+    assert_equal "webview", manifest.native_fallback
+    assert_empty manifest.required_native_capabilities
+  end
+
+  def test_native_screens_and_requirements_are_read
+    with_native = manifest(<<~YAML)
+      capabilities:
+        features:
+          - id: example_notes.note.viewer
+            area: sidebar.entities
+            title: Notes
+            path: /
+      native:
+        entry: native/index.js
+        requires: [haptics, secure_storage]
+        screens:
+          - capability: example_notes.note.viewer
+            component: NoteList
+    YAML
+
+    assert with_native.ships_native?
+    assert_equal "native/index.js", with_native.native_entry
+    assert_equal %w[haptics secure_storage], with_native.required_native_capabilities
+    assert_empty with_native.structural_errors
+  end
+
+  def test_a_capability_the_core_cannot_build_is_refused
+    bad = manifest(<<~YAML)
+      native:
+        requires: [telepathy]
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "telepathy"
+  end
+
+  def test_a_native_screen_must_render_a_capability_this_module_provides
+    bad = manifest(<<~YAML)
+      native:
+        entry: native/index.js
+        screens:
+          - capability: somebody_else.thing.viewer
+            component: Thing
+    YAML
+
+    refute bad.valid?
+    assert_includes bad.structural_errors.join, "which this module does not provide"
+  end
+
+  # A required capability is a request an operator sees next to the database
+  # and storage grants, never something the manifest switches on.
+  def test_a_required_capability_appears_as_something_to_approve
+    request = manifest(<<~YAML).requested_permissions.find { |r| r[:kind] == "native" }
+      native:
+        requires: [location]
+    YAML
+
+    assert_equal :high, request[:severity]
+    assert_includes request[:summary], "location and gps"
+  end
 end
