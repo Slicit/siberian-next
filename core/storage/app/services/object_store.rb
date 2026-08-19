@@ -1,0 +1,125 @@
+# frozen_string_literal: true
+
+require "aws-sdk-s3"
+
+# The S3 half of storage: putting, getting, deleting, and listing objects.
+#
+# This class and GarageAdmin are the only code in the repository that knows an
+# object store is involved. Everything above them deals in spaces and paths.
+class ObjectStore
+  class NotFound < StandardError; end
+  class Error < StandardError; end
+
+  Stored = Struct.new(:key, :size, :content_type, :etag, :last_modified, keyword_init: true)
+
+  def initialize(bucket)
+    @bucket = bucket
+  end
+
+  def put(space, path, body, content_type: nil)
+    key = @bucket.key_for(space, path)
+    io = body.respond_to?(:read) ? body : StringIO.new(body.to_s)
+
+    result = client.put_object(
+      bucket: @bucket.name,
+      key: key,
+      body: io,
+      content_type: content_type.presence || "application/octet-stream"
+    )
+
+    Stored.new(key: key, size: io.size, content_type: content_type, etag: result.etag)
+  rescue Aws::S3::Errors::ServiceError => e
+    raise Error, e.message
+  end
+
+  def get(space, path)
+    key = @bucket.key_for(space, path)
+    object = client.get_object(bucket: @bucket.name, key: key)
+    [object.body.read, object.content_type, object.content_length]
+  rescue Aws::S3::Errors::NoSuchKey
+    raise NotFound, path
+  rescue Aws::S3::Errors::ServiceError => e
+    raise Error, e.message
+  end
+
+  def head(space, path)
+    key = @bucket.key_for(space, path)
+    object = client.head_object(bucket: @bucket.name, key: key)
+    Stored.new(
+      key: key,
+      size: object.content_length,
+      content_type: object.content_type,
+      etag: object.etag,
+      last_modified: object.last_modified
+    )
+  rescue Aws::S3::Errors::NotFound, Aws::S3::Errors::NoSuchKey
+    raise NotFound, path
+  end
+
+  def delete(space, path)
+    client.delete_object(bucket: @bucket.name, key: @bucket.key_for(space, path))
+    true
+  rescue Aws::S3::Errors::ServiceError => e
+    raise Error, e.message
+  end
+
+  def list(space, prefix: nil, limit: 100, cursor: nil)
+    response = client.list_objects_v2(
+      bucket: @bucket.name,
+      prefix: @bucket.key_for(space, prefix.to_s),
+      max_keys: limit,
+      continuation_token: cursor.presence
+    )
+
+    {
+      objects: response.contents.map do |object|
+        {
+          path: object.key.delete_prefix("#{space}/"),
+          size: object.size,
+          etag: object.etag,
+          last_modified: object.last_modified
+        }
+      end,
+      cursor: response.next_continuation_token,
+      truncated: response.is_truncated
+    }
+  rescue Aws::S3::Errors::ServiceError => e
+    raise Error, e.message
+  end
+
+  # Used by the sweeper and by quota accounting. Garage has no lifecycle rules,
+  # so expiry is something this service does rather than something it configures.
+  def each_object(space, older_than: nil)
+    cursor = nil
+    loop do
+      page = list(space, limit: 1000, cursor: cursor)
+      page[:objects].each do |object|
+        next if older_than && object[:last_modified] && object[:last_modified] > older_than
+
+        yield object
+      end
+      cursor = page[:cursor]
+      break unless page[:truncated]
+    end
+  end
+
+  def total_bytes
+    total = 0
+    ModuleRegistration::SPACES.each do |space|
+      each_object(space) { |object| total += object[:size].to_i }
+    end
+    total
+  end
+
+  private
+
+  def client
+    @client ||= Aws::S3::Client.new(
+      access_key_id: @bucket.access_key_id,
+      secret_access_key: @bucket.secret_access_key,
+      endpoint: ENV.fetch("GARAGE_ENDPOINT", "http://garage:3900"),
+      region: ENV.fetch("GARAGE_REGION", "garage"),
+      force_path_style: true
+    )
+  end
+end

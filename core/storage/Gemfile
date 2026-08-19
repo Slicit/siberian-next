@@ -39,3 +39,7 @@ group :development, :test do
   # Static analysis for security vulnerabilities [https://brakemanscanner.org/]
   gem "brakeman", require: false
 end
+
+# The Storage service is the one place allowed to know S3 exists, so this is
+# the one place the SDK belongs. Modules never see it: they get four HTTP verbs.
+gem "aws-sdk-s3", "~> 1"
