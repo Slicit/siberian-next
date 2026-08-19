@@ -287,9 +287,16 @@ module Siberian
           url = "http://127.0.0.1:#{spec.internal_port}#{spec.health.path}"
           interval = (spec.health.interval_seconds || 30)
 
-          # wget covers busybox images, curl covers the rest. An image with
-          # neither should declare its own HEALTHCHECK instead.
-          probe = "wget -q -O /dev/null #{url} || curl -fsS -o /dev/null #{url}"
+          # wget covers busybox images and curl covers the rest. An image with
+          # neither gets no verdict rather than a permanent one: a missing
+          # binary exits 127, which the engine cannot tell apart from a dead
+          # app, so a module whose image ships no HTTP client would report
+          # unhealthy forever while serving every request. Falling back to
+          # "it is running" is the same answer `healthy?` already gives a
+          # container that declared no healthcheck at all.
+          probe = "if command -v wget >/dev/null 2>&1; then wget -q -O /dev/null #{url}; " \
+                  "elif command -v curl >/dev/null 2>&1; then curl -fsS -o /dev/null #{url}; " \
+                  "else exit 0; fi"
 
           {
             "Test" => ["CMD-SHELL", probe],

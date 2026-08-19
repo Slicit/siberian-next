@@ -198,6 +198,22 @@ class DockerDriverTest < Minitest::Test
     assert_includes check["Test"].last, "http://127.0.0.1:80/up"
   end
 
+  def test_a_probe_with_no_http_client_in_the_image_does_not_report_unhealthy
+    @http.on(:get, "/images/nginx%3A1.27-alpine/json", TestSupport.response({}))
+    @http.on(:post, "/containers/create", TestSupport.response({ "Id" => "x" }))
+
+    @driver.create(spec(health: Engine::Health.new(path: "/up")), network: "net")
+
+    # A missing wget and a missing curl exit 127, which the engine counts as a
+    # failed probe and cannot tell apart from a dead app. The image belongs to
+    # a third party, so the probe checks before it runs and says nothing when
+    # it cannot ask.
+    probe = created_body["Healthcheck"]["Test"].last
+    assert_includes probe, "command -v wget"
+    assert_includes probe, "command -v curl"
+    assert_includes probe, "else exit 0"
+  end
+
   def test_attaching_a_container_that_is_already_attached_is_already_exists
     # The engine answers 403 here rather than the 409 it uses elsewhere, so the
     # message is the only thing that distinguishes it from a real refusal.
