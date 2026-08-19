@@ -50,6 +50,14 @@ Out of scope for this feature:
 - **Why:** a native screen draws an image without a session, so a URL that needs one is a URL that shows nothing. Serving it through the module rather than handing out an object store URL keeps the module the only thing that knows where its files are.
 - **Impact:** the URL depends on which door the request arrived through, which the Router already makes knowable by setting the module name on the app door and nowhere else.
 
+- **Decision:** pages link to pages two ways, and both are explicit.
+- **Why:** they answer different questions. A navigation block is a list somebody chose to put on a page; next and previous are a path for somebody reading straight through. Taking the path from the menu ordering would conflate them, and a page can sit fourth in the menu and still be the one that follows the first.
+- **Impact:** a `nav` block holds slugs, and a page carries `next_slug` and `prev_slug`. Neither can name the page it is on, and both resolve to titles on the server so a deleted page stops being a link somebody can tap and land nowhere.
+
+- **Decision:** the picker is an input bound to a `datalist`.
+- **Why:** a select cannot be filtered and a combo box built by hand is a script, in a module that has none. A datalist filters as somebody types, shows the title beside the slug, and submits the slug.
+- **Impact:** one helper serves the nav block and both ends of the path, so they cannot behave differently.
+
 ## Outcome
 
 Shipped 2026-08-20. A page with one of every block renders in the browser, and
@@ -60,6 +68,10 @@ The proof that the two faces are one module is in the artifact: the JavaScript
 bundle inside the built APK carries `PageNavigator`, `CarouselBlock` and
 `VideoBlock` along with the `api/pages` call, next to `TaskList` from the other
 native module.
+
+Linking came later and added two more block-shaped things: a navigation block
+and a path through the pages. Both are driven by the smoke, which checks that a
+page is never offered a link to itself and that the picker lists the others.
 
 Building a module that had never been installed before found four bugs that
 reinstalling an existing one never would: media URLs built from the wrong
