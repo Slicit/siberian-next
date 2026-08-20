@@ -111,11 +111,37 @@ Core images build with the repository root as build context, so `lib/` can be co
 
 Do not read `LOGBOOK/ideas.md` unless the user explicitly asks; it is the human-owned inbox.
 
+## Before changing anything
+
+Ask what else the change touches, before making it. Every expensive hour in this
+project so far has been a change that was correct on its own and wrong next to
+something else.
+
+- **What else reads or writes this?** A stylesheet, a shared client, a template,
+  a volume, a generated file. `lib/` is loaded at boot by six services, and a
+  volume outlives every image built after it.
+- **What did the thing I removed also do?** Deleting build workspaces stopped
+  the disk filling and made every build reinstall a thousand packages. Caching
+  those packages fixed that and broke device builds, because the cache was
+  written with absolute paths into a workspace the first fix deletes. Both were
+  right alone.
+- **Does something already cover the path I did not touch?** The regression
+  above was found by `bin/smoke-mobile`, which queues an Android build, and not
+  by any of the checking done on the preview that caused it.
+- **Would this fail quietly?** A menu with one fewer entry, a splash that fell
+  back to stock artwork, a smoke reporting on a page it never fetched. Prefer a
+  change that fails loudly to one that degrades politely, and when a fallback is
+  genuinely wanted, say in a comment why it is narrow.
+
+Then run the whole sweep rather than the smoke for the thing you changed. It
+costs a few minutes and it is the only part of this list that is not judgement.
+
 ## Writing guidance for agents
 
 - Append to the current feature's `## Decisions` log when making non-trivial choices. Use today's date.
 - Propose additions to `notes.md` when you discover a transferable pattern, gotcha, or anti-pattern. Show a diff and wait for confirmation.
 - Never edit `LOGBOOK.md` (this file) without showing the proposed change first.
+- Run `./bin/check` and the full smoke sweep before merging, not only the check for the thing that changed.
 - Never modify `ideas.md` without an explicit user request.
 - Use `git mv` for renames and archive moves.
 
