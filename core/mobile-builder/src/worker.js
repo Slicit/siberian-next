@@ -108,7 +108,15 @@ async function build({ build_id: id, plan }) {
 
     // Cached only after both installs, so a half-installed tree is never what
     // the next build starts from.
-    await cp(path.join(workspace, "node_modules"), cached, { recursive: true }).catch((error) =>
+    //
+    // verbatimSymlinks matters more than it looks. node_modules/.bin is a
+    // directory of relative symlinks, and without this Node resolves each one
+    // and writes it as an absolute path into the workspace that happened to
+    // create the cache. That workspace is deleted when its build finishes, so
+    // every later build restores a .bin full of links to nothing and dies with
+    // "expo: not found", which reads as a broken image rather than a cache
+    // that poisoned itself.
+    await cp(path.join(workspace, "node_modules"), cached, { recursive: true, verbatimSymlinks: true }).catch((error) =>
       log.push(`could not cache node_modules: ${error.message}`)
     );
   }
