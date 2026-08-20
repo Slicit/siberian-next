@@ -10,6 +10,15 @@ class MobileController < ApplicationController
   requires "core.modules.read"
   requires "core.mobile.manage", only: %i[save update_capability build cancel upload_splash remove_splash]
 
+  # Rails refuses to serve a JavaScript response to a request that is not XHR,
+  # which is a real protection against leaking somebody's data through a script
+  # tag on another site. It decides the response is JavaScript from the path
+  # ending in .js, so proxying a static bundle trips it: the browser asks for
+  # the file the page it just loaded told it to, and gets a 422 error page with
+  # a JavaScript content type. Nothing here renders anything per user; it is a
+  # file that came out of a build.
+  skip_after_action :verify_same_origin_request, only: %i[preview], raise: false
+
   def index
     @domains = Domain.ordered
     @report = mobile.apps
@@ -67,7 +76,8 @@ class MobileController < ApplicationController
 
     result = mobile.queue_build(domain: domain.hostname,
                                 platform: params[:platform].presence || "android",
-                                requested_by: current_user&.email)
+                                requested_by: current_user&.email,
+                                preview_base_url: mobile_preview_path(domain))
 
     if result && result["ok"]
       place = result["position"] ? ", number #{result['position']} in line" : ""
@@ -101,6 +111,22 @@ class MobileController < ApplicationController
     else
       redirect_to mobile_app_path(domain), alert: refusal(result)
     end
+  end
+
+  # The exported preview, proxied.
+  #
+  # Proxied rather than linked so the preview has one address on the domain the
+  # Backoffice already sits on: an iframe pointing at another origin would need
+  # a certificate, a hosts entry, and a reason.
+  def preview
+    domain = Domain.find_by(id: params[:id])
+    return head :not_found if domain.nil?
+
+    found = mobile.preview(domain.hostname, params[:path].presence || "index.html")
+    return head :not_found if found.nil?
+
+    body, content_type = found
+    send_data body, type: content_type.presence || "application/octet-stream", disposition: "inline"
   end
 
   def remove_splash

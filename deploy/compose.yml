@@ -17,6 +17,9 @@ x-rails-env: &rails_env
 
 services:
   configuration:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_only}
@@ -32,6 +35,9 @@ services:
     networks: [core]
 
   router:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       context: ..
       dockerfile: core/router/Dockerfile
@@ -58,6 +64,9 @@ services:
         aliases: [router, core, modules]
 
   orchestrator:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       <<: *rails_build
       args:
@@ -94,6 +103,9 @@ services:
     networks: [core]
 
   base:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       <<: *rails_build
       args:
@@ -113,6 +125,9 @@ services:
     networks: [core]
 
   auth:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       <<: *rails_build
       args:
@@ -129,6 +144,9 @@ services:
     networks: [core]
 
   mailer:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       <<: *rails_build
       args:
@@ -150,6 +168,9 @@ services:
   # separate processes so a delivery that hangs cannot take the queue endpoints
   # down with it, and so they restart and scale separately.
   mailer-worker:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       <<: *rails_build
       args:
@@ -170,6 +191,9 @@ services:
     networks: [core]
 
   mobile:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       <<: *rails_build
       args:
@@ -201,6 +225,9 @@ services:
   # It holds no engine socket and no admin token. It claims one build, receives
   # the plan for that build, and can ask this service nothing else.
   mobile-builder:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       context: ..
       dockerfile: core/mobile-builder/Dockerfile
@@ -225,6 +252,9 @@ services:
     networks: [core]
 
   storage:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       <<: *rails_build
       args:
@@ -246,6 +276,9 @@ services:
     networks: [core, storage]
 
   moduledb:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: ${MODULEDB_PASSWORD:-moduledb_dev_only}
@@ -263,6 +296,9 @@ services:
     networks: [core]
 
   database:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     build:
       <<: *rails_build
       args:
@@ -286,6 +322,9 @@ services:
     networks: [core]
 
   garage:
+    # The box is a virtual machine on a host that can go down. Without this
+    # nothing comes back, and the stack stays off until somebody notices.
+    restart: unless-stopped
     image: dxflrs/garage:v2.3.0
     volumes:
       - ../core/storage/garage/garage.toml:/etc/garage.toml:ro

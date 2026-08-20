@@ -31,4 +31,13 @@ RUN if [ -f Gemfile ]; then bundle install; fi
 COPY core/${SERVICE}/ /app/
 
 EXPOSE 3000
-CMD ["bin/rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+
+# The pid file is removed before the server starts.
+#
+# Rails writes tmp/pids/server.pid and refuses to boot if it already exists. A
+# container that was killed rather than stopped leaves one behind, and in a new
+# container the pid it names is 1, which always exists: the service then
+# crash-loops with "A server is already running", which reads as two servers
+# rather than as a file nobody deleted. It happened to two services when the
+# host this box runs on went down.
+CMD ["sh", "-c", "rm -f tmp/pids/server.pid && exec bin/rails server -b 0.0.0.0 -p 3000"]

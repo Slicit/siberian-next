@@ -58,6 +58,23 @@ docker image prune -f >/dev/null 2>&1 \
   && say "pruned dangling images" \
   || say "image prune failed"
 
+# Under pressure, prune harder.
+#
+# The age filter above is the right default: recent cache is worth keeping
+# because a rebuild that starts from nothing is twenty minutes somebody waits
+# for. But an age filter has no ceiling, and a full `up --build` produces twelve
+# gigabytes of cache that is minutes old, which is exactly what it will not
+# touch. The disk filled twice; the second time an npm install died with ENOSPC
+# in the middle of a build.
+#
+# So: gentle every night, thorough when the disk is actually running out.
+free_mb=$(avail)
+if [ "$free_mb" -lt "${FLOOR_MB:-8000}" ]; then
+  say "only ${free_mb} MB free, below the ${FLOOR_MB:-8000} MB floor, so pruning harder"
+  docker builder prune -f >/dev/null 2>&1 && say "pruned all dangling build cache"
+  docker image prune -af --filter "until=24h" >/dev/null 2>&1 && say "pruned images unused for a day"
+fi
+
 # Build workspaces, but never while something is building. The builder cleans
 # up after itself; this is for the case where it was killed halfway.
 building=$(cd "$REPO" 2>/dev/null && docker compose --env-file .env -f deploy/compose.yml \

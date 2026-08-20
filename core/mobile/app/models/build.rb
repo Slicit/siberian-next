@@ -24,7 +24,11 @@ class Build < ApplicationRecord
 
   ANDROID = "android"
   IOS = "ios"
-  PLATFORMS = [ANDROID, IOS].freeze
+  # Not a platform anybody installs. The same project exported through React
+  # Native for Web, so somebody can look at the app they configured without
+  # waiting for a device: a preview of something else would be worth nothing.
+  WEB = "web"
+  PLATFORMS = [ANDROID, IOS, WEB].freeze
 
   MAX_ATTEMPTS = 3
   BASE_BACKOFF = 5 * 60

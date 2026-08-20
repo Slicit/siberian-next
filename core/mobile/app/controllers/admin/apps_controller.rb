@@ -121,6 +121,28 @@ module Admin
       render json: { errors: [e.message] }, status: :insufficient_storage
     end
 
+    # GET /admin/apps/:domain/preview/*path
+    #
+    # The exported site, one file at a time. Served from here rather than linked
+    # from Storage so the preview has one address, and so the Backoffice can
+    # frame it without learning where the object store is.
+    def preview
+      app = MobileApp.find_by(domain: params[:domain])
+      return head :not_found if app.nil?
+
+      relative = params[:path].presence || "index.html"
+      return head :bad_request if relative.include?("..")
+
+      body, content_type = StorageAccess.new.fetch(
+        domain: app.domain,
+        path: "files/previews/#{app.bundle_identifier}/#{relative}"
+      )
+
+      return head :not_found if body.nil?
+
+      send_data body, type: content_type.presence || "application/octet-stream", disposition: "inline"
+    end
+
     # DELETE /admin/apps/:domain/splash
     #
     # Forgets the reference. The object stays in Storage, where a build that

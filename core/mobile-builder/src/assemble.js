@@ -17,7 +17,10 @@ const BASE_DEPENDENCIES = {
   react: "18.2.0",
   "react-native": "0.74.5",
   "@react-navigation/native": "^6.1.17",
-  "@react-navigation/native-stack": "^6.9.26"
+  "@react-navigation/native-stack": "^6.9.26",
+  // The bottom bar. A tab per feature is what a phone app looks like, and a
+  // stack alone made every module a row in a list somebody had to go back to.
+  "@react-navigation/bottom-tabs": "^6.5.20"
 };
 
 // Installed with `expo install` rather than pinned, because their version is
@@ -25,7 +28,19 @@ const BASE_DEPENDENCIES = {
 // an expo-* package means one built against a newer SDK: the build then fails
 // deep in Gradle with a missing plugin, which reads as a toolchain problem
 // rather than as a version mismatch.
-const SDK_MANAGED = ["react-native-webview", "react-native-safe-area-context", "react-native-screens"];
+const SDK_MANAGED = [
+  "react-native-webview",
+  "react-native-safe-area-context",
+  "react-native-screens",
+  // React Native for Web, so the same project can be exported as a site and
+  // previewed without a device. Same components, same shell, same generated
+  // module registry: a preview of something else would be worth nothing.
+  "react-dom",
+  "react-native-web",
+  // The web entry point Metro needs to serve a React Native project as a site.
+  // Absent, expo export refuses by name, which is the good kind of failure.
+  "@expo/metro-runtime"
+];
 
 // A capability is a package plus, for some of them, a config plugin entry that
 // carries the sentence the operating system shows. Apple rejects a build that
@@ -104,6 +119,18 @@ export async function assemble(plan, workspace, assets = {}) {
             package: plan.app.bundle_identifier,
             versionCode: plan.app.build_number
           },
+          // Metro rather than webpack: the same bundler the device build uses,
+          // so the preview and the app cannot diverge over which one resolved
+          // a module differently.
+          // "single" and not "static": static rendering pre-renders each route
+          // through expo-router, which this shell does not use, and the export
+          // then fails resolving expo-router/node/render.js. A single page app
+          // is what a React Navigation shell is anyway.
+          web: { bundler: "metro", output: "single" },
+          // Where the export will be served from. Without it every asset is
+          // requested from the root of whatever host framed the preview, and
+          // the panel renders a blank page with four 404s behind it.
+          experiments: plan.preview?.base_url ? { baseUrl: plan.preview.base_url } : undefined,
           ios: {
             bundleIdentifier: plan.app.bundle_identifier,
             buildNumber: String(plan.app.build_number)

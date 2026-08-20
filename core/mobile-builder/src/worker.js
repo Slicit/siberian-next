@@ -5,7 +5,8 @@
 // rewrite, but until somebody needs that this stays the simplest thing that
 // cannot lose a build.
 import { spawn } from "node:child_process";
-import { readFile, readdir, rm, stat } from "node:fs/promises";
+import { access, cp, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { assemble, applyAndroidSplashAnimation } from "./assemble.js";
 
@@ -15,6 +16,14 @@ const POLL = Number(process.env.BUILDER_POLL_INTERVAL || 10) * 1000;
 const WORKSPACES = process.env.BUILDER_WORKSPACE || "/workspace";
 
 const authorized = (extra = {}) => ({ Authorization: `Bearer ${TOKEN}`, ...extra });
+
+// Installed dependencies, kept between builds and keyed by what was asked for.
+//
+// Inside the workspace volume rather than beside the npm cache, because a copy
+// within one filesystem can be hardlinked and a copy across two cannot: this is
+// the difference between seconds and the minutes npm install takes every time.
+// The leading dot keeps it out of the sweep, which removes builds.
+const MODULE_CACHE = path.join(WORKSPACES, ".modules");
 
 async function claim() {
   const response = await fetch(`${MOBILE}/internal/builds/claim`, {
@@ -44,6 +53,7 @@ function run(command, args, options) {
 
 async function build({ build_id: id, plan }) {
   const workspace = path.join(WORKSPACES, String(id));
+  await mkdir(MODULE_CACHE, { recursive: true });
   const log = [];
   const started = Date.now();
 
@@ -66,13 +76,56 @@ async function build({ build_id: id, plan }) {
   const { sdkManaged } = await assemble(plan, workspace, assets);
   log.push(`assembled ${plan.modules.length} module(s), ${plan.capabilities.length} capability(ies)`);
 
-  await step("npm install", "npm", ["install", "--no-audit", "--no-fund"]);
+  // Dependencies, from cache when the same set has been installed before.
+  //
+  // Every build installs about a thousand packages, and deleting the workspace
+  // afterwards means doing it again from nothing: that was most of the ten
+  // minutes a preview took. The set only changes when a capability is switched
+  // on or a module starts shipping native code, so it is keyed by exactly that
+  // and copied in with hardlinks, which costs a directory walk rather than a
+  // download.
+  const key = createHash("sha1")
+    .update(JSON.stringify({ deps: plan.capabilities.map((c) => c.package).sort(), sdk: sdkManaged.slice().sort() }))
+    .digest("hex")
+    .slice(0, 12);
 
-  // `expo install` rather than a version in package.json. The SDK decides what
-  // version of an expo-* package belongs with it, and installing the newest
-  // instead fails much later, in Gradle, looking like a broken toolchain.
-  if (sdkManaged.length > 0) {
-    await step("expo install", "npx", ["expo", "install", ...sdkManaged]);
+  const cached = path.join(MODULE_CACHE, key);
+  const warm = await exists(cached);
+
+  if (warm) {
+    await step("restore dependencies", "cp", ["-al", cached, path.join(workspace, "node_modules")], { cwd: WORKSPACES });
+    log.push(`restored node_modules from cache ${key}`);
+  } else {
+    await step("npm install", "npm", ["install", "--no-audit", "--no-fund", "--prefer-offline"]);
+
+    // `expo install` rather than a version in package.json. The SDK decides
+    // what version of an expo-* package belongs with it, and installing the
+    // newest instead fails much later, in Gradle, looking like a broken
+    // toolchain.
+    if (sdkManaged.length > 0) {
+      await step("expo install", "npx", ["expo", "install", ...sdkManaged]);
+    }
+
+    // Cached only after both installs, so a half-installed tree is never what
+    // the next build starts from.
+    await cp(path.join(workspace, "node_modules"), cached, { recursive: true }).catch((error) =>
+      log.push(`could not cache node_modules: ${error.message}`)
+    );
+  }
+
+
+  // The preview. Not a device build at all: the same project rendered through
+  // React Native for Web and exported as a static site, so somebody can look at
+  // the app while they are still deciding what it should contain.
+  //
+  // Before prebuild, and instead of it: there are no native projects to
+  // generate for the web, and asking prebuild for that platform is asking for
+  // something it does not have. No compile either, which is the only reason
+  // this is quick enough to be worth looking at.
+  if (plan.platform === "web") {
+    await step("expo export", "npx", ["expo", "export", "--platform", "web", "--output-dir", "dist"]);
+
+    return { directory: path.join(workspace, "dist"), log: log.join("\n\n"), started };
   }
 
   await step("expo prebuild", "npx", ["expo", "prebuild", "--platform", plan.platform, "--no-install"]);
@@ -148,6 +201,55 @@ async function report(id, outcome, body) {
   });
 }
 
+// The preview, file by file.
+//
+// A static export is a directory, and the builder holds no Storage credential,
+// so each file goes back through the Mobile service the way the artifact does.
+// Many small files rather than one archive, because unzipping on the other side
+// would mean a zip library in a service with no other use for one.
+async function uploadDirectory(id, directory) {
+  const walk = async (here, prefix = "") => {
+    const entries = await readdir(here, { withFileTypes: true });
+    let count = 0;
+
+    for (const entry of entries) {
+      const full = path.join(here, entry.name);
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory()) {
+        count += await walk(full, relative);
+        continue;
+      }
+
+      const response = await fetch(
+        `${MOBILE}/internal/builds/${id}/preview?path=${encodeURIComponent(relative)}`,
+        { method: "POST", headers: authorized({ "Content-Type": contentType(entry.name) }), body: await readFile(full) }
+      );
+
+      if (!response.ok) throw new Error(`the preview file ${relative} was not accepted: ${response.status}`);
+      count += 1;
+    }
+
+    return count;
+  };
+
+  return walk(directory);
+}
+
+// Guessed from the name, because in a static site a stylesheet served as
+// octet-stream is a page with no styles and no error anywhere.
+function contentType(name) {
+  const kinds = {
+    ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
+    ".json": "application/json", ".map": "application/json", ".svg": "image/svg+xml",
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+    ".webp": "image/webp", ".ttf": "font/ttf", ".woff": "font/woff", ".woff2": "font/woff2"
+  };
+
+  const at = name.lastIndexOf(".");
+  return (at >= 0 && kinds[name.slice(at).toLowerCase()]) || "application/octet-stream";
+}
+
 async function upload(id, file, type, durationMs, log) {
   const body = await readFile(file);
 
@@ -182,6 +284,15 @@ async function discard(id) {
 // Anything here at startup belonged to a build this process was running, and
 // this process has just started. Removing the children rather than the
 // directory, because the directory is a mount point.
+async function exists(target) {
+  try {
+    await access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function sweep() {
   let left;
 
@@ -191,11 +302,15 @@ async function sweep() {
     return;
   }
 
-  for (const entry of left) {
+  // Anything beginning with a dot is not a build. The dependency cache lives
+  // here so it shares a filesystem with the workspaces it is hardlinked into.
+  const builds = left.filter((entry) => !entry.startsWith("."));
+
+  for (const entry of builds) {
     await rm(path.join(WORKSPACES, entry), { recursive: true, force: true }).catch(() => {});
   }
 
-  if (left.length > 0) console.log(`swept ${left.length} workspace(s) left by a previous run`);
+  if (builds.length > 0) console.log(`swept ${builds.length} workspace(s) left by a previous run`);
 }
 
 async function once() {
@@ -206,9 +321,20 @@ async function once() {
 
   try {
     const result = await build(claimed);
-    await stat(result.file);
-    await upload(claimed.build_id, result.file, result.type, Date.now() - result.started, result.log);
-    console.log(`build ${claimed.build_id} succeeded`);
+
+    if (result.directory) {
+      const files = await uploadDirectory(claimed.build_id, result.directory);
+      await report(claimed.build_id, "succeeded", {
+        artifact_path: "preview",
+        duration_ms: Date.now() - result.started,
+        log: result.log
+      });
+      console.log(`build ${claimed.build_id} previewed, ${files} file(s)`);
+    } else {
+      await stat(result.file);
+      await upload(claimed.build_id, result.file, result.type, Date.now() - result.started, result.log);
+      console.log(`build ${claimed.build_id} succeeded`);
+    }
   } catch (error) {
     const permanent = error instanceof BuildFailed && /prebuild|bundle_identifier|npm install/i.test(error.message);
     await report(claimed.build_id, "failed", {

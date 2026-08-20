@@ -1,6 +1,6 @@
 # Feature index
 
-_Generated: 2026-08-20, by hand. Sixteen features, all shipped._
+_Generated: 2026-08-20, by hand. Seventeen features, all shipped._
 
 ## Active
 
@@ -30,6 +30,7 @@ None.
 | [Housekeeping](feat-housekeeping.md) | The builder cleans up after itself, and the box prunes nightly | `deploy/maintenance/housekeeping.sh` |
 | [CMS module](feat-cms-module.md) | Pages from blocks, rendered in the browser and natively from one description | `bin/smoke-cms` |
 | [Push notifications](feat-push-module.md) | An inbox with read, archive and delete, and the first module to require a native capability | `bin/smoke-push` |
+| [App preview](feat-app-preview.md) | The app rendered through React Native for Web in a phone-shaped panel, and a shell with a bottom bar | `bin/smoke-mobile` |
 
 ## Abandoned
 

@@ -42,7 +42,15 @@ module Admin
 
       # Resolved now and kept, so a build can still be explained after the
       # configuration behind it has changed. A build is a thing that happened.
-      build.update!(configuration: BuildPlan.new(build).to_h(secrets: false))
+      plan = BuildPlan.new(build).to_h(secrets: false)
+
+      # A static export writes absolute asset paths, so it has to know where it
+      # will be served from before it is built. The interface that owns that
+      # address is the one that supplies it: this service does not know what
+      # route the Backoffice will frame it at.
+      plan[:preview] = { base_url: params[:preview_base_url] } if params[:preview_base_url].present?
+
+      build.update!(configuration: plan)
 
       render json: serialize(build).merge(position: Build.pending.where("id <= ?", build.id).count), status: :accepted
     rescue ActiveRecord::RecordInvalid => e
