@@ -5,7 +5,8 @@
 // rewrite, but until somebody needs that this stays the simplest thing that
 // cannot lose a build.
 import { spawn } from "node:child_process";
-import { readFile, readdir, rm, stat } from "node:fs/promises";
+import { access, cp, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { assemble, applyAndroidSplashAnimation } from "./assemble.js";
 
@@ -15,6 +16,14 @@ const POLL = Number(process.env.BUILDER_POLL_INTERVAL || 10) * 1000;
 const WORKSPACES = process.env.BUILDER_WORKSPACE || "/workspace";
 
 const authorized = (extra = {}) => ({ Authorization: `Bearer ${TOKEN}`, ...extra });
+
+// Installed dependencies, kept between builds and keyed by what was asked for.
+//
+// Inside the workspace volume rather than beside the npm cache, because a copy
+// within one filesystem can be hardlinked and a copy across two cannot: this is
+// the difference between seconds and the minutes npm install takes every time.
+// The leading dot keeps it out of the sweep, which removes builds.
+const MODULE_CACHE = path.join(WORKSPACES, ".modules");
 
 async function claim() {
   const response = await fetch(`${MOBILE}/internal/builds/claim`, {
@@ -44,6 +53,7 @@ function run(command, args, options) {
 
 async function build({ build_id: id, plan }) {
   const workspace = path.join(WORKSPACES, String(id));
+  await mkdir(MODULE_CACHE, { recursive: true });
   const log = [];
   const started = Date.now();
 
@@ -66,14 +76,43 @@ async function build({ build_id: id, plan }) {
   const { sdkManaged } = await assemble(plan, workspace, assets);
   log.push(`assembled ${plan.modules.length} module(s), ${plan.capabilities.length} capability(ies)`);
 
-  await step("npm install", "npm", ["install", "--no-audit", "--no-fund"]);
+  // Dependencies, from cache when the same set has been installed before.
+  //
+  // Every build installs about a thousand packages, and deleting the workspace
+  // afterwards means doing it again from nothing: that was most of the ten
+  // minutes a preview took. The set only changes when a capability is switched
+  // on or a module starts shipping native code, so it is keyed by exactly that
+  // and copied in with hardlinks, which costs a directory walk rather than a
+  // download.
+  const key = createHash("sha1")
+    .update(JSON.stringify({ deps: plan.capabilities.map((c) => c.package).sort(), sdk: sdkManaged.slice().sort() }))
+    .digest("hex")
+    .slice(0, 12);
 
-  // `expo install` rather than a version in package.json. The SDK decides what
-  // version of an expo-* package belongs with it, and installing the newest
-  // instead fails much later, in Gradle, looking like a broken toolchain.
-  if (sdkManaged.length > 0) {
-    await step("expo install", "npx", ["expo", "install", ...sdkManaged]);
+  const cached = path.join(MODULE_CACHE, key);
+  const warm = await exists(cached);
+
+  if (warm) {
+    await step("restore dependencies", "cp", ["-al", cached, path.join(workspace, "node_modules")], { cwd: WORKSPACES });
+    log.push(`restored node_modules from cache ${key}`);
+  } else {
+    await step("npm install", "npm", ["install", "--no-audit", "--no-fund", "--prefer-offline"]);
+
+    // `expo install` rather than a version in package.json. The SDK decides
+    // what version of an expo-* package belongs with it, and installing the
+    // newest instead fails much later, in Gradle, looking like a broken
+    // toolchain.
+    if (sdkManaged.length > 0) {
+      await step("expo install", "npx", ["expo", "install", ...sdkManaged]);
+    }
+
+    // Cached only after both installs, so a half-installed tree is never what
+    // the next build starts from.
+    await cp(path.join(workspace, "node_modules"), cached, { recursive: true }).catch((error) =>
+      log.push(`could not cache node_modules: ${error.message}`)
+    );
   }
+
 
   // The preview. Not a device build at all: the same project rendered through
   // React Native for Web and exported as a static site, so somebody can look at
@@ -245,6 +284,15 @@ async function discard(id) {
 // Anything here at startup belonged to a build this process was running, and
 // this process has just started. Removing the children rather than the
 // directory, because the directory is a mount point.
+async function exists(target) {
+  try {
+    await access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function sweep() {
   let left;
 
@@ -254,11 +302,15 @@ async function sweep() {
     return;
   }
 
-  for (const entry of left) {
+  // Anything beginning with a dot is not a build. The dependency cache lives
+  // here so it shares a filesystem with the workspaces it is hardlinked into.
+  const builds = left.filter((entry) => !entry.startsWith("."));
+
+  for (const entry of builds) {
     await rm(path.join(WORKSPACES, entry), { recursive: true, force: true }).catch(() => {});
   }
 
-  if (left.length > 0) console.log(`swept ${left.length} workspace(s) left by a previous run`);
+  if (builds.length > 0) console.log(`swept ${builds.length} workspace(s) left by a previous run`);
 }
 
 async function once() {

@@ -122,7 +122,11 @@ export async function assemble(plan, workspace, assets = {}) {
           // Metro rather than webpack: the same bundler the device build uses,
           // so the preview and the app cannot diverge over which one resolved
           // a module differently.
-          web: { bundler: "metro", output: "static" },
+          // "single" and not "static": static rendering pre-renders each route
+          // through expo-router, which this shell does not use, and the export
+          // then fails resolving expo-router/node/render.js. A single page app
+          // is what a React Navigation shell is anyway.
+          web: { bundler: "metro", output: "single" },
           // Where the export will be served from. Without it every asset is
           // requested from the root of whatever host framed the preview, and
           // the panel renders a blank page with four 404s behind it.
