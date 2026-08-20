@@ -70,6 +70,25 @@ module Siberian
     def queue_build(attributes) = request(Net::HTTP::Post, "/admin/builds", attributes)
     def cancel_build(id) = request(Net::HTTP::Post, "/admin/builds/#{id}/cancel", {})
 
+    # The exported preview, as bytes. Raw rather than parsed: it is a website,
+    # and every other call here is JSON.
+    def preview(domain, path)
+      uri = URI.join(@endpoint, "/admin/apps/#{CGI.escape(domain)}/preview/#{path}")
+      message = Net::HTTP::Get.new(uri)
+      message["Authorization"] = "Bearer #{@token}"
+
+      response = Net::HTTP.start(uri.hostname, uri.port, open_timeout: 3, read_timeout: 20) do |http|
+        http.request(message)
+      end
+
+      return nil unless response.code.to_i.between?(200, 299)
+
+      [response.body, response["Content-Type"]]
+    rescue StandardError => e
+      @logger&.warn("preview call failed: #{e.message}")
+      nil
+    end
+
     def reachable? = !apps.nil?
 
     private

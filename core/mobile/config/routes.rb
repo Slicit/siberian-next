@@ -13,6 +13,8 @@ Rails.application.routes.draw do
     post "apps/:domain/splash/animation", to: "apps#upload_splash_animation",
          constraints: { domain: %r{[^/]+} }, format: false
     delete "apps/:domain/splash", to: "apps#remove_splash", constraints: { domain: %r{[^/]+} }, format: false
+    get "apps/:domain/preview/*path", to: "apps#preview", constraints: { domain: %r{[^/]+} }, format: false
+    get "apps/:domain/preview", to: "apps#preview", constraints: { domain: %r{[^/]+} }, format: false
 
     get "modules", to: "modules#index"
     post "modules", to: "modules#create"
@@ -30,6 +32,7 @@ Rails.application.routes.draw do
     post "builds/claim", to: "builds#claim"
     patch "builds/:id", to: "builds#update"
     post "builds/:id/artifact", to: "builds#artifact"
+    post "builds/:id/preview", to: "builds#preview"
     get "builds/:id/asset/:kind", to: "builds#asset"
   end
 

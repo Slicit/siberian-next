@@ -63,6 +63,47 @@
 </div>
 
 <% if @app %>
+  <% preview_build = Array(@builds).find { |b| b["platform"] == "web" } %>
+  <div class="card">
+    <header>
+      <div class="spread">
+        <div>
+          <h2>Preview</h2>
+          <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+            The app itself, rendered through React Native for Web: the same
+            shell, the same generated module list, the same blocks. Not a
+            drawing of the app, which would only ever agree with it by accident.
+          </p>
+        </div>
+        <% if may_manage %>
+          <%= button_to "Refresh preview", build_mobile_app_path(@domain),
+                class: "button", params: { platform: "web" } %>
+        <% end %>
+      </div>
+    </header>
+
+    <% if preview_build && preview_build["state"] == "succeeded" %>
+      <div class="phone">
+        <iframe src="<%= mobile_preview_path(@domain) %>/index.html" title="App preview" loading="lazy"></iframe>
+      </div>
+      <p class="faint" style="font-size:.78rem; margin:.6rem 0 0">
+        Exported <%= preview_build["finished_at"] %>. It shows what a build made
+        then, not what the configuration says now: refresh it after changing
+        anything.
+      </p>
+    <% elsif preview_build && %w[queued building failed].include?(preview_build["state"]) %>
+      <div class="empty">
+        The preview is <%= preview_build["state"] %>. It takes a minute or two:
+        the same assembly a real build does, without the compile.
+      </div>
+    <% else %>
+      <div class="empty">
+        No preview yet. It exports the app as a small website, which is quick
+        enough to look at while deciding what the app should contain.
+      </div>
+    <% end %>
+  </div>
+
   <% splash = @app["splash"] || {} %>
   <div class="card">
     <header>

@@ -75,6 +75,20 @@ async function build({ build_id: id, plan }) {
     await step("expo install", "npx", ["expo", "install", ...sdkManaged]);
   }
 
+  // The preview. Not a device build at all: the same project rendered through
+  // React Native for Web and exported as a static site, so somebody can look at
+  // the app while they are still deciding what it should contain.
+  //
+  // Before prebuild, and instead of it: there are no native projects to
+  // generate for the web, and asking prebuild for that platform is asking for
+  // something it does not have. No compile either, which is the only reason
+  // this is quick enough to be worth looking at.
+  if (plan.platform === "web") {
+    await step("expo export", "npx", ["expo", "export", "--platform", "web", "--output-dir", "dist"]);
+
+    return { directory: path.join(workspace, "dist"), log: log.join("\n\n"), started };
+  }
+
   await step("expo prebuild", "npx", ["expo", "prebuild", "--platform", plan.platform, "--no-install"]);
 
   if (plan.platform === "ios") {
@@ -148,6 +162,55 @@ async function report(id, outcome, body) {
   });
 }
 
+// The preview, file by file.
+//
+// A static export is a directory, and the builder holds no Storage credential,
+// so each file goes back through the Mobile service the way the artifact does.
+// Many small files rather than one archive, because unzipping on the other side
+// would mean a zip library in a service with no other use for one.
+async function uploadDirectory(id, directory) {
+  const walk = async (here, prefix = "") => {
+    const entries = await readdir(here, { withFileTypes: true });
+    let count = 0;
+
+    for (const entry of entries) {
+      const full = path.join(here, entry.name);
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory()) {
+        count += await walk(full, relative);
+        continue;
+      }
+
+      const response = await fetch(
+        `${MOBILE}/internal/builds/${id}/preview?path=${encodeURIComponent(relative)}`,
+        { method: "POST", headers: authorized({ "Content-Type": contentType(entry.name) }), body: await readFile(full) }
+      );
+
+      if (!response.ok) throw new Error(`the preview file ${relative} was not accepted: ${response.status}`);
+      count += 1;
+    }
+
+    return count;
+  };
+
+  return walk(directory);
+}
+
+// Guessed from the name, because in a static site a stylesheet served as
+// octet-stream is a page with no styles and no error anywhere.
+function contentType(name) {
+  const kinds = {
+    ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
+    ".json": "application/json", ".map": "application/json", ".svg": "image/svg+xml",
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+    ".webp": "image/webp", ".ttf": "font/ttf", ".woff": "font/woff", ".woff2": "font/woff2"
+  };
+
+  const at = name.lastIndexOf(".");
+  return (at >= 0 && kinds[name.slice(at).toLowerCase()]) || "application/octet-stream";
+}
+
 async function upload(id, file, type, durationMs, log) {
   const body = await readFile(file);
 
@@ -206,9 +269,20 @@ async function once() {
 
   try {
     const result = await build(claimed);
-    await stat(result.file);
-    await upload(claimed.build_id, result.file, result.type, Date.now() - result.started, result.log);
-    console.log(`build ${claimed.build_id} succeeded`);
+
+    if (result.directory) {
+      const files = await uploadDirectory(claimed.build_id, result.directory);
+      await report(claimed.build_id, "succeeded", {
+        artifact_path: "preview",
+        duration_ms: Date.now() - result.started,
+        log: result.log
+      });
+      console.log(`build ${claimed.build_id} previewed, ${files} file(s)`);
+    } else {
+      await stat(result.file);
+      await upload(claimed.build_id, result.file, result.type, Date.now() - result.started, result.log);
+      console.log(`build ${claimed.build_id} succeeded`);
+    }
   } catch (error) {
     const permanent = error instanceof BuildFailed && /prebuild|bundle_identifier|npm install/i.test(error.message);
     await report(claimed.build_id, "failed", {

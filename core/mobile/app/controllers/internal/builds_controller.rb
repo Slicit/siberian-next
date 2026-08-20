@@ -45,6 +45,38 @@ module Internal
       send_data body, type: content_type.presence || "application/octet-stream", disposition: "inline"
     end
 
+    # POST /internal/builds/:id/preview?path=...
+    #
+    # One file of a static export. The builder holds no Storage credential, so
+    # the preview comes back the way the artifact does, and the path is a
+    # parameter rather than part of the route because it contains slashes and
+    # is somebody else's idea of a filename.
+    def preview
+      build = Build.find_by(id: params[:id], state: Build::BUILDING)
+      return render json: { error: "no build of yours by that id" }, status: :not_found if build.nil?
+
+      relative = params[:path].to_s
+      # Anything that could climb out of the preview directory is refused rather
+      # than cleaned: a path with .. in it is not a mistake worth guessing at.
+      if relative.empty? || relative.include?("..") || relative.start_with?("/")
+        return render json: { error: "that is not a path inside the export" }, status: :unprocessable_entity
+      end
+
+      body = request.body.read
+      return render json: { error: "no file in the request body" }, status: :bad_request if body.to_s.empty?
+
+      StorageAccess.new.store(
+        domain: build.domain,
+        path: "previews/#{build.mobile_app.bundle_identifier}/#{relative}",
+        body: body,
+        content_type: request.content_type.presence || "application/octet-stream"
+      )
+
+      head :created
+    rescue StorageAccess::Refused => e
+      render json: { error: e.message }, status: :insufficient_storage
+    end
+
     # POST /internal/builds/:id/artifact
     #
     # The finished app, streamed back rather than uploaded from the builder.
