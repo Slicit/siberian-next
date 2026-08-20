@@ -133,7 +133,12 @@ server {
   # Same origin as the page framing it, so 'self' rather than 'none'. The rule
   # below still holds for every other page here: what is relaxed is one path
   # that serves a static export, and only to the Backoffice itself.
-  location /mobile/ {
+  #
+  # Matched exactly, and as a regex. A prefix location of /mobile/ made nginx
+  # answer /mobile with a 301 to /mobile/, which broke the phone apps page for
+  # anything that does not follow redirects, and it also relaxed the framing
+  # rule for every page under /mobile rather than for the one that needs it.
+  location ~ "^/mobile/[0-9]+/preview" {
     set $upstream_admin "http://orchestrator:3000";
     proxy_pass $upstream_admin;
     include /etc/nginx/siberian/forwarded_headers.conf;
