@@ -138,6 +138,10 @@ server {
     proxy_pass $upstream_admin;
     include /etc/nginx/siberian/forwarded_headers.conf;
 
+    # One header, not Rails's plus ours. SAMEORIGIN says the same thing as the
+    # policy beside it, and saying it twice is how they drift apart.
+    proxy_hide_header X-Frame-Options;
+    add_header X-Frame-Options SAMEORIGIN always;
     add_header Content-Security-Policy "frame-ancestors 'self'" always;
     add_header X-Content-Type-Options nosniff always;
   }
@@ -148,6 +152,11 @@ server {
     include /etc/nginx/siberian/forwarded_headers.conf;
 
     # The Backoffice is never framed, by anything.
+    #
+    # Rails sends SAMEORIGIN of its own, and add_header appends rather than
+    # replaces: two X-Frame-Options headers is undefined, and a browser may
+    # take the weaker one or ignore both. Hidden first so exactly one goes out.
+    proxy_hide_header X-Frame-Options;
     add_header X-Frame-Options DENY always;
     add_header Content-Security-Policy "frame-ancestors 'none'" always;
   }
