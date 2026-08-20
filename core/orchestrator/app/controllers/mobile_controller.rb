@@ -10,6 +10,15 @@ class MobileController < ApplicationController
   requires "core.modules.read"
   requires "core.mobile.manage", only: %i[save update_capability build cancel upload_splash remove_splash]
 
+  # Rails refuses to serve a JavaScript response to a request that is not XHR,
+  # which is a real protection against leaking somebody's data through a script
+  # tag on another site. It decides the response is JavaScript from the path
+  # ending in .js, so proxying a static bundle trips it: the browser asks for
+  # the file the page it just loaded told it to, and gets a 422 error page with
+  # a JavaScript content type. Nothing here renders anything per user; it is a
+  # file that came out of a build.
+  skip_before_action :verify_same_origin_request, only: %i[preview], raise: false
+
   def index
     @domains = Domain.ordered
     @report = mobile.apps
