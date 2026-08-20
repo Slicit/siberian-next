@@ -36,7 +36,10 @@ const SDK_MANAGED = [
   // previewed without a device. Same components, same shell, same generated
   // module registry: a preview of something else would be worth nothing.
   "react-dom",
-  "react-native-web"
+  "react-native-web",
+  // The web entry point Metro needs to serve a React Native project as a site.
+  // Absent, expo export refuses by name, which is the good kind of failure.
+  "@expo/metro-runtime"
 ];
 
 // A capability is a package plus, for some of them, a config plugin entry that
