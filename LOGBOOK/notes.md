@@ -66,6 +66,8 @@ Rules:
 - Changing how a generated file is produced does not remove what the old way wrote. The upstream map moved from one file to a directory of them, and the superseded file sat in a Docker volume being included by the same glob, as a second map for the same variable frozen at whatever was installed the day it was last written. Delete the old artifact from the code that replaced it, because a volume outlives every image built after it.
 - `InstalledModule.live` is running or degraded, which excludes a module part way through being installed. Anything the installer does with `live` therefore leaves out the module it is installing: the upstream map missed it, and the module an operator had just installed was the one module unreachable at `/m/<name>/`.
 
+- Rails refuses to serve a JavaScript response to a request that is not XHR, and decides the response is JavaScript from the path ending in `.js`. Proxying a static bundle through a controller therefore returns a 422 error page with a JavaScript content type, which reads as a broken bundle rather than a refused one. The check is `verify_same_origin_request`, and it is an `after_action`: skipping it as a `before_action` does nothing, silently, especially with `raise: false`.
+
 ## Glossary
 
 <!-- Project-specific terms an outside reader would not know. -->
