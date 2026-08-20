@@ -17,7 +17,7 @@ class MobileController < ApplicationController
   # the file the page it just loaded told it to, and gets a 422 error page with
   # a JavaScript content type. Nothing here renders anything per user; it is a
   # file that came out of a build.
-  skip_before_action :verify_same_origin_request, only: %i[preview], raise: false
+  skip_after_action :verify_same_origin_request, only: %i[preview], raise: false
 
   def index
     @domains = Domain.ordered
