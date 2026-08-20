@@ -70,6 +70,30 @@ server {
     # Set here, never accepted from the client: a header a caller can write is
     # not an identity.
     proxy_set_header X-Siberian-Module $module_name;
+
+    # The preview runs on core.<domain> and calls modules here, which makes
+    # those calls cross-origin. One origin is allowed and it is named rather
+    # than reflected: a wildcard cannot carry credentials, and the session
+    # cookie is the whole point of the call.
+    #
+    # The cookie itself already travels, because Auth scopes it to .<domain>
+    # and issues it SameSite=None over TLS.
+    add_header Access-Control-Allow-Origin "https://core.${SIBERIAN_DOMAIN}" always;
+    add_header Access-Control-Allow-Credentials "true" always;
+    add_header Vary "Origin" always;
+
+    # A POST carrying JSON is not a simple request, so the browser asks first.
+    # Answered here rather than by every module: none of them should have to
+    # know the preview exists.
+    if ($request_method = OPTIONS) {
+      add_header Access-Control-Allow-Origin "https://core.${SIBERIAN_DOMAIN}" always;
+      add_header Access-Control-Allow-Credentials "true" always;
+      add_header Access-Control-Allow-Methods "GET, HEAD, POST, PATCH, PUT, DELETE, OPTIONS" always;
+      add_header Access-Control-Allow-Headers "Content-Type, Accept, X-Requested-With" always;
+      add_header Access-Control-Max-Age "600" always;
+      add_header Content-Length "0" always;
+      return 204;
+    }
   }
 
   # Sign in and out are served by Auth on the main domain, so the cookie it
@@ -104,12 +128,40 @@ server {
 
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
 
+  # The app preview, which the Backoffice frames in a panel.
+  #
+  # Same origin as the page framing it, so 'self' rather than 'none'. The rule
+  # below still holds for every other page here: what is relaxed is one path
+  # that serves a static export, and only to the Backoffice itself.
+  #
+  # Matched exactly, and as a regex. A prefix location of /mobile/ made nginx
+  # answer /mobile with a 301 to /mobile/, which broke the phone apps page for
+  # anything that does not follow redirects, and it also relaxed the framing
+  # rule for every page under /mobile rather than for the one that needs it.
+  location ~ "^/mobile/[0-9]+/preview" {
+    set $upstream_admin "http://orchestrator:3000";
+    proxy_pass $upstream_admin;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+
+    # One header, not Rails's plus ours. SAMEORIGIN says the same thing as the
+    # policy beside it, and saying it twice is how they drift apart.
+    proxy_hide_header X-Frame-Options;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Content-Security-Policy "frame-ancestors 'self'" always;
+    add_header X-Content-Type-Options nosniff always;
+  }
+
   location / {
     set $upstream_admin "http://orchestrator:3000";
     proxy_pass $upstream_admin;
     include /etc/nginx/siberian/forwarded_headers.conf;
 
     # The Backoffice is never framed, by anything.
+    #
+    # Rails sends SAMEORIGIN of its own, and add_header appends rather than
+    # replaces: two X-Frame-Options headers is undefined, and a browser may
+    # take the weaker one or ignore both. Hidden first so exactly one goes out.
+    proxy_hide_header X-Frame-Options;
     add_header X-Frame-Options DENY always;
     add_header Content-Security-Policy "frame-ancestors 'none'" always;
   }

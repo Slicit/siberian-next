@@ -36,9 +36,10 @@ server {
     # once per domain, so the right answer is already known at render time.
     proxy_set_header X-Siberian-Domain ${SIBERIAN_DOMAIN};
 
-    # Framed only by the Base App on the parent domain, never by another module
-    # and never by an outside site.
-    add_header Content-Security-Policy "frame-ancestors https://${SIBERIAN_DOMAIN}" always;
+    # Framed by the Base App on the parent domain, and by the Backoffice, which
+    # frames the app preview in a panel and so frames whatever the app frames.
+    # Never by another module and never by an outside site.
+    add_header Content-Security-Policy "frame-ancestors https://${SIBERIAN_DOMAIN} https://core.${SIBERIAN_DOMAIN}" always;
     add_header X-Content-Type-Options nosniff always;
 
     proxy_http_version 1.1;

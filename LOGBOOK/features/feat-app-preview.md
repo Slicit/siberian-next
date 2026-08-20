@@ -52,6 +52,15 @@ Shipped 2026-08-20, after four failed exports that each named their own cause:
 a missing `@expo/metro-runtime`, a host crash, a full disk, and `output:
 "static"` pre-rendering through `expo-router` which this shell does not use.
 
+The preview also had to be allowed to reach what it was previewing. Three rules
+refused it, each correct and each written before this page existed: the
+Backoffice refused to frame anything including itself, a module refused to be
+framed by anything but the product shell, and a native screen calling its own
+module was cross-origin because the preview runs on `core.<domain>`. The first
+two are narrowed to the exact paths that need them; the third is answered once
+at the door every such call already goes through, so no module has to learn
+that a preview exists.
+
 Verified rather than assumed. `index.html` serves at 200 with its script tag
 already prefixed `/mobile/2/preview/`, the bundle serves at 200 as
 `text/javascript`, and it contains `createBottomTabNavigator`, `iframe`,

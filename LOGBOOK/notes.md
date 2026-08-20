@@ -68,6 +68,9 @@ Rules:
 
 - Rails refuses to serve a JavaScript response to a request that is not XHR, and decides the response is JavaScript from the path ending in `.js`. Proxying a static bundle through a controller therefore returns a 422 error page with a JavaScript content type, which reads as a broken bundle rather than a refused one. The check is `verify_same_origin_request`, and it is an `after_action`: skipping it as a `before_action` does nothing, silently, especially with `raise: false`.
 
+- nginx `add_header` appends; it does not replace what the upstream already sent. Rails sends `X-Frame-Options: SAMEORIGIN` of its own, so a Router block adding `DENY` produced both, and two of that header is undefined: a browser may take the weaker one and quietly undo the rule. `proxy_hide_header` first, then add.
+- A prefix `location /thing/` makes nginx answer `/thing` with a 301 to `/thing/`. Anything that does not follow redirects, including most of the smokes, then sees an empty page rather than the one it asked for.
+
 ## Glossary
 
 <!-- Project-specific terms an outside reader would not know. -->
