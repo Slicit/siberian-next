@@ -8,6 +8,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 REPO="$(pwd)"
+# Whoever owns the checkout is who the sweep runs as. Taken from the tree rather
+# than assumed, so this is right on a box where the repository lives somewhere
+# other than one person's home directory.
+CHECK_USER="$(stat -c '%U' "$REPO")"
 CRON=/etc/cron.d/siberian-housekeeping
 CHECKS_CRON=/etc/cron.d/siberian-checks
 DAEMON=/etc/docker/daemon.json
@@ -36,13 +40,24 @@ sudo tee "$CHECKS_CRON" >/dev/null <<CRONTAB
 # After housekeeping rather than before it, because a smoke that queues an
 # Android build needs the disk that housekeeping just freed, and a sweep that
 # fails on a full disk reports on the disk rather than on the code.
+#
+# As $CHECK_USER and not as root, unlike housekeeping. The sweep needs nothing
+# root has: it drives the stack through the Docker socket, which this user
+# already reaches, and it writes one file.
+#
+# Running it as root actively broke it. The smokes keep working files at fixed
+# paths in /tmp, so a root run left root owned files there and the next run by
+# a person could not overwrite them: smoke-public-media then compared an empty
+# file and reported that the bytes came back wrong. One user, no collision.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-0 5 * * * root SIBERIAN_REPO=$REPO $REPO/deploy/maintenance/nightly-checks.sh >> $CHECKS_LOG 2>&1
+0 5 * * * $CHECK_USER SIBERIAN_REPO=$REPO $REPO/deploy/maintenance/nightly-checks.sh >> $CHECKS_LOG 2>&1
 CRONTAB
 sudo chmod 0644 "$CHECKS_CRON"
 
 sudo touch "$CHECKS_LOG"
+# Writable by the user cron will run this as, since it is not root.
+sudo chown "$CHECK_USER" "$CHECKS_LOG"
 sudo chmod 0644 "$CHECKS_LOG"
 
 # Written by the sweep, read by the Backoffice through a read only bind mount.
