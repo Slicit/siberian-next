@@ -69,6 +69,14 @@ services:
         # modules use to reach the core, and the door core services use to reach
         # a module. It is the only container on both sides, which is why.
         aliases: [router, core, modules]
+      # Reachability, not authority. The Router forwards signed S3 requests to
+      # Garage on s3.<domain> and holds no Garage credential of its own, so what
+      # it can read is exactly what the client already had a valid signature
+      # for. Garage refuses everything else, as it does for any caller.
+      #
+      # Without this the object store is unreachable from a browser, which
+      # makes a presigned URL a URL to nowhere.
+      storage:
 
   orchestrator:
     # The box is a virtual machine on a host that can go down. Without this
@@ -271,6 +279,11 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_storage
       GARAGE_ENDPOINT: http://garage:3900
       GARAGE_ADMIN_ENDPOINT: http://garage:3903
+      # Where a browser reaches the object store, which is the Router's s3
+      # door. Signed URLs are made against this because the host is part of the
+      # signature. Unset it and public media is streamed through this service
+      # instead, which still works and simply costs more.
+      GARAGE_PUBLIC_ENDPOINT: ${GARAGE_PUBLIC_ENDPOINT:-https://s3.${SIBERIAN_DOMAIN:-siberian.test}}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-storage_service_dev_only}
     volumes:
       - ../core/storage:/app

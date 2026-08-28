@@ -23,6 +23,17 @@
 class PublicFilesController < ApplicationController
   SPACE = "public"
 
+  # How long a signed URL is good for. Long enough that a browser reuses one
+  # across a page of images and a phone across a scroll, short enough that a
+  # URL copied out of a network log stops working the same afternoon.
+  REDIRECT_TTL = 3600
+
+  # The redirect is cached for slightly less than the URL it points at, so a
+  # cached redirect never outlives the signature it is holding. Getting this
+  # the wrong way round produces an image that works for an hour and then 403s
+  # from cache, which is a bug that only shows up later.
+  REDIRECT_MARGIN = 300
+
   before_action :require_domain!
 
   # GET /public/:module_name/*path
@@ -36,7 +47,23 @@ class PublicFilesController < ApplicationController
     return head :not_found unless registration.allows?(SPACE)
 
     bucket = BucketProvisioner.new.call(registration, @domain)
-    stored, body = ObjectStore.new(bucket).stream(SPACE, path)
+    store = ObjectStore.new(bucket)
+
+    # The object store can serve this itself. Sending the caller there means
+    # these bytes never enter this process at all, which is the difference
+    # between streaming a file and not touching it.
+    #
+    # A HEAD first, so that a missing object is a 404 from here rather than a
+    # redirect to a URL that answers with an S3 error document.
+    if ObjectStore.public_endpoint
+      store.head(SPACE, path)
+      expires_in = REDIRECT_TTL
+      response.headers["Cache-Control"] = "public, max-age=#{expires_in - REDIRECT_MARGIN}"
+      return redirect_to(store.presigned_get_url(SPACE, path, expires_in: expires_in),
+                         allow_other_host: true, status: :found)
+    end
+
+    stored, body = store.stream(SPACE, path)
 
     response.headers["Content-Length"] = stored.size.to_s
     response.headers["ETag"] = stored.etag.to_s
