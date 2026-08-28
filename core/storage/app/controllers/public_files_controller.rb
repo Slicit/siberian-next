@@ -47,7 +47,7 @@ class PublicFilesController < ApplicationController
     return head :not_found unless registration.allows?(SPACE)
 
     bucket = BucketProvisioner.new.call(registration, @domain)
-    store = ObjectStore.new(bucket)
+    store = StoredObjects.new(bucket)
 
     # The object store can serve this itself. Sending the caller there means
     # these bytes never enter this process at all, which is the difference
@@ -55,7 +55,7 @@ class PublicFilesController < ApplicationController
     #
     # A HEAD first, so that a missing object is a 404 from here rather than a
     # redirect to a URL that answers with an S3 error document.
-    if ObjectStore.public_endpoint
+    if StoredObjects.public_endpoint
       store.head(SPACE, path)
       expires_in = REDIRECT_TTL
       response.headers["Cache-Control"] = "public, max-age=#{expires_in - REDIRECT_MARGIN}"
@@ -78,9 +78,9 @@ class PublicFilesController < ApplicationController
     response.headers["Cache-Control"] = "public, max-age=300"
 
     self.response_body = body
-  rescue ObjectStore::NotFound
+  rescue StoredObjects::NotFound
     head :not_found
-  rescue ObjectStore::Error, GarageAdmin::Error
+  rescue StoredObjects::Error, Siberian::ObjectStore::Driver::Error
     head :bad_gateway
   end
 

@@ -2,11 +2,17 @@
 
 require "aws-sdk-s3"
 
-# The S3 half of storage: putting, getting, deleting, and listing objects.
+# The objects in one bucket: putting, getting, deleting, and listing.
 #
-# This class and GarageAdmin are the only code in the repository that knows an
-# object store is involved. Everything above them deals in spaces and paths.
-class ObjectStore
+# Shared by every backend rather than written per backend, because this half is
+# the S3 protocol and every object store worth supporting speaks it. What
+# differs is how a bucket and its credentials come into existence, and that is
+# behind `Siberian::ObjectStore.driver`.
+#
+# So this class knows an object store is involved and does not know which one.
+# It asks the driver where to send the request and signs with the credentials
+# the driver minted for this bucket.
+class StoredObjects
   class NotFound < StandardError; end
   class Error < StandardError; end
 
@@ -151,8 +157,9 @@ class ObjectStore
   # working when it expires.
   #
   # Signed against the public address rather than the internal one, because the
-  # host is part of what gets signed: a URL signed for `garage:3900` and then
-  # rewritten to a reachable host is a URL with a broken signature.
+  # host is part of what gets signed: a URL signed for an address only the
+  # inside of the stack can reach, then rewritten to a reachable one, is a URL
+  # with a broken signature.
   def presigned_get_url(space, path, expires_in:)
     Aws::S3::Presigner.new(client: public_client).presigned_url(
       :get_object,
@@ -162,25 +169,33 @@ class ObjectStore
     )
   end
 
-  # Whether the public door is configured at all. Without it there is nothing
-  # to sign against, and the caller should serve the bytes itself rather than
-  # hand out a URL to a host that does not resolve.
-  def self.public_endpoint
-    ENV["GARAGE_PUBLIC_ENDPOINT"].presence
+  # Whether there is a public address to sign against at all. Without one the
+  # caller serves the bytes itself rather than handing out a URL to a host that
+  # does not resolve.
+  def self.public_endpoint = driver.public_endpoint
+
+  # One driver for the process. Which backend is in use is a deployment
+  # decision read once at boot, not a question to ask per request.
+  def self.driver
+    @driver ||= Siberian::ObjectStore.driver
   end
+
+  # Tests, and anything that changes the environment underneath a running
+  # process.
+  def self.reset_driver! = @driver = nil
 
   private
 
+  def driver = self.class.driver
+
   def client
-    @client ||= build_client(ENV.fetch("GARAGE_ENDPOINT", "http://garage:3900"))
+    @client ||= build_client(driver.endpoint)
   end
 
-  # Same credentials, addressed the way the outside world reaches Garage. Used
-  # only for signing: nothing is ever fetched through this one from here.
+  # The same credentials, addressed the way the outside world reaches the store.
+  # Used only for signing: nothing is ever fetched through this one from here.
   def public_client
-    @public_client ||= build_client(
-      self.class.public_endpoint || ENV.fetch("GARAGE_ENDPOINT", "http://garage:3900")
-    )
+    @public_client ||= build_client(driver.public_endpoint || driver.endpoint)
   end
 
   def build_client(endpoint)
@@ -188,8 +203,8 @@ class ObjectStore
       access_key_id: @bucket.access_key_id,
       secret_access_key: @bucket.secret_access_key,
       endpoint: endpoint,
-      region: ENV.fetch("GARAGE_REGION", "garage"),
-      force_path_style: true
+      region: driver.region,
+      force_path_style: driver.force_path_style?
     )
   end
 end

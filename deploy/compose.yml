@@ -64,6 +64,10 @@ services:
       # 413 that explained neither. Not unlimited, because a body big enough to
       # be a problem should still be stopped at the door.
       SIBERIAN_MAX_UPLOAD: ${SIBERIAN_MAX_UPLOAD:-1024m}
+      # Where the object store answers S3 from inside the stack, for the s3
+      # door. Self hosted by default; a managed store replaces this and the
+      # door stops being needed at all, since the internet reaches it already.
+      SIBERIAN_OBJECT_STORE_ADDRESS: ${SIBERIAN_OBJECT_STORE_ADDRESS:-http://garage:3900}
     ports:
       - "${SIBERIAN_HTTP_PORT:-80}:80"
       - "${SIBERIAN_HTTPS_PORT:-443}:443"

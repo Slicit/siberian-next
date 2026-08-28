@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Fails if anything outside lib/object_store names an object store backend.
+#
+# The same idea as bin/check-engine-leak, for the boundary LOGBOOK states as
+# "The object store is addressed as S3, never as Garage". An abstraction is only
+# real if something checks it, and the way this one would rot is obvious: a
+# feature needs something Garage happens to offer, somebody reaches for it in a
+# controller, and the day AWS replaces Garage that line is the reason it cannot.
+#
+# S3 itself is deliberately not in the pattern. The data plane is the S3
+# protocol on purpose, every backend worth supporting speaks it, and naming it
+# is not a leak. What must not appear is a particular product.
+#
+# Comments are exempt, for the reason the engine check gives: a comment saying
+# why a value is backend-neutral is the opposite of a violation.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+PATTERN='garage|Garage|GARAGE|minio|MinIO|ceph|Ceph'
+SEARCH_PATHS=(core lib)
+EXCLUDES=(
+  --exclude-dir=object_store
+  # The backend's own configuration file, which exists only on a deployment
+  # that runs that backend. Exempt for the reason Dockerfiles are exempt from
+  # the engine check: it is the thing being configured, not code choosing it.
+  --exclude-dir=garage
+  --exclude=object_store.rb
+  --exclude-dir=node_modules
+  --exclude-dir=tmp
+  --exclude-dir=log
+  --exclude=README.md
+)
+
+COMMENT_LINE='^[^:]*:[0-9]+:[[:space:]]*(#|//|\*)'
+
+hits=$(grep -rInE "$PATTERN" "${SEARCH_PATHS[@]}" "${EXCLUDES[@]}" 2>/dev/null | grep -vE "$COMMENT_LINE" || true)
+
+if [ -n "$hits" ]; then
+  echo "Storage leak: an object store backend named in code outside lib/object_store." >&2
+  echo >&2
+  echo "$hits" >&2
+  echo >&2
+  echo "Route it through Siberian::ObjectStore::Driver, or grow the interface." >&2
+  exit 1
+fi
+
+echo "No storage leak: core/ and lib/ name no object store backend outside the driver."

@@ -55,7 +55,7 @@ module Admin
       bucket = BucketProvisioner.new.call(registration, params.require(:domain))
 
       render json: { module_name: registration.module_name, domain: bucket.domain, bucket: bucket.name }
-    rescue GarageAdmin::Error => e
+    rescue Siberian::ObjectStore::Driver::Error => e
       render json: { error: e.message }, status: :bad_gateway
     end
 

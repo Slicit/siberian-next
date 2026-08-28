@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
-# Creates the bucket and the scoped key for one (module, domain) pair.
+# Creates the bucket and the key for one (module, domain) pair.
 #
-# The key is granted access to exactly one bucket. A key that can reach only one
-# bucket cannot reach another domain's data even if it leaks, which is the whole
-# reason keys are per bucket rather than per module.
+# Asks the object store driver for both and does not know which backend answers.
+# Garage mints a key that reaches exactly one bucket, which is why keys are per
+# bucket rather than per module: one that leaks cannot reach another domain's
+# data. A backend that cannot scope a credential that tightly says so on the
+# way back, and that is recorded rather than assumed.
 class BucketProvisioner
-  def initialize(admin: GarageAdmin.new)
-    @admin = admin
+  def initialize(driver: Siberian::ObjectStore.driver)
+    @driver = driver
   end
 
   def call(registration, domain)
@@ -24,19 +26,28 @@ class BucketProvisioner
     quota = DomainQuota.for(domain)
     allowance = [registration.quota_mb, quota.default_bucket_quota].compact.min
 
-    bucket_id = @admin.create_bucket(name)
-    key = @admin.create_key("#{name}-key")
-    @admin.allow_key(bucket_id: bucket_id, access_key_id: key[:access_key_id],
-                     read: true, write: true, owner: true)
+    provisioned = @driver.provision(name)
 
     bucket = existing || registration.buckets.build(domain: domain)
     bucket.update!(
       name: name,
       quota_mb: allowance,
-      bucket_id: bucket_id,
-      access_key_id: key[:access_key_id],
-      secret_access_key: key[:secret_access_key]
+      bucket_id: provisioned.handle,
+      access_key_id: provisioned.access_key_id,
+      secret_access_key: provisioned.secret_access_key
     )
+
+    unless provisioned.scoped?
+      # Worth saying once per bucket rather than never. On a backend that
+      # cannot mint a credential per bucket, the isolation between one domain's
+      # files and another's rests on this service alone, which is a different
+      # and weaker promise than the one Garage makes.
+      Rails.logger.info(
+        "#{@driver.name}: #{name} shares an account credential; " \
+        "bucket isolation is enforced by this service rather than by the store"
+      )
+    end
+
     bucket
   end
 
@@ -44,8 +55,11 @@ class BucketProvisioner
   # operator says otherwise: reinstalling and finding the files gone is a worse
   # surprise than a bucket left behind.
   def destroy(bucket)
-    @admin.delete_key(bucket.access_key_id) if bucket.access_key_id.present?
-    @admin.delete_bucket(bucket.bucket_id) if bucket.bucket_id.present?
+    @driver.deprovision(
+      name: bucket.name,
+      handle: bucket.bucket_id,
+      access_key_id: bucket.access_key_id
+    )
     bucket.destroy!
     true
   end
