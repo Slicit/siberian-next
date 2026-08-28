@@ -10,10 +10,18 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends curl \
  && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir flask==3.0.3 "psycopg[binary]==3.2.1" gunicorn==22.0.0
+RUN pip install --no-cache-dir flask==3.0.3 "psycopg[binary]==3.2.1" \
+      "psycopg_pool==3.2.2" gunicorn==22.0.0
 
 WORKDIR /app
-COPY app.py /app/app.py
+
+# The first-party SDK, copied in rather than installed from an index. The build
+# context is the repository root, the same as it is for the core images and for
+# the same reason: shared code that only exists inside one directory's context
+# cannot be shared.
+COPY sdk/python/siberian /app/siberian
+
+COPY modules/demo-tasks/app.py /app/app.py
 
 EXPOSE 8080
 

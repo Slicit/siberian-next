@@ -12,10 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev unzip
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
-COPY composer.json /app/composer.json
+COPY modules/example-notes/composer.json /app/composer.json
 RUN composer install --no-dev --no-interaction --quiet
 
-COPY public /app/public
+COPY modules/example-notes/public /app/public
 
 EXPOSE 8080
 

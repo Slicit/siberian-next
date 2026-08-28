@@ -4,6 +4,17 @@ Rails.application.routes.draw do
   # header, never from the path: a module has no field in which to name another
   # module's files.
   scope "/v1" do
+    # An address for an object, instead of the object.
+    #
+    # Declared before the generic `:space` routes below, which would otherwise
+    # read "urls" as a space name and answer 404 for a space nobody has.
+    #
+    # This is what lets a module stay out of its own byte path for private
+    # files, the way the public path already does for public ones: the module
+    # decides whether this caller may have the file, and then sends them to the
+    # object store rather than fetching it and copying it out.
+    get "urls/:space/*path", to: "files#signed_url", format: false
+
     get ":space", to: "files#index"
     get ":space/*path", to: "files#show", format: false
     # The router has no head DSL method; it would collide with the controller

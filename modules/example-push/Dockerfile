@@ -14,7 +14,7 @@ RUN apt-get update \
 RUN pip install --no-cache-dir flask==3.0.3 "psycopg[binary]==3.2.1" gunicorn==22.0.0
 
 WORKDIR /app
-COPY app.py /app/app.py
+COPY modules/example-push/app.py /app/app.py
 
 EXPOSE 8080
 

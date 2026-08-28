@@ -8,6 +8,13 @@
 class FilesController < ApplicationController
   include ModuleAuthentication
 
+  # How long a signed URL lasts unless the module asks for something else.
+  # Bounded on both sides: a URL that expires before the browser has followed
+  # the redirect is useless, and one that lasts a week is a credential.
+  DEFAULT_URL_TTL = 900
+  MIN_URL_TTL = 30
+  MAX_URL_TTL = 86_400
+
   before_action :check_space
 
   # PUT /v1/:space/*path
@@ -49,6 +56,41 @@ class FilesController < ApplicationController
     response.headers["X-Content-Type-Options"] = "nosniff"
 
     self.response_body = body
+  rescue ObjectStore::NotFound
+    render json: { error: "not found" }, status: :not_found
+  end
+
+  # GET /v1/urls/:space/*path
+  #
+  # A signed URL for one of this module's own objects, so the module can send a
+  # browser to the object store instead of fetching the file and copying it out
+  # of its own process.
+  #
+  # The authorisation question is the module's, not this service's: only the
+  # module knows whether this visitor owns that task. What this guarantees is
+  # narrower and is the part worth guaranteeing: the URL is for the calling
+  # module's bucket on the calling domain, it reaches exactly one object, and it
+  # stops working.
+  def signed_url
+    ttl = params.fetch(:expires_in, DEFAULT_URL_TTL).to_i.clamp(MIN_URL_TTL, MAX_URL_TTL)
+
+    # A URL for an object that is not there would be a link to an S3 error
+    # document, which is a worse answer than saying so now.
+    stored = store.head(space, path)
+
+    unless ObjectStore.public_endpoint
+      # Nothing to sign against. Saying so is better than returning a URL that
+      # names a host only the inside of the stack can reach.
+      return render json: { error: "this deployment has no public object store address" },
+                    status: :not_implemented
+    end
+
+    render json: {
+      url: store.presigned_get_url(space, path, expires_in: ttl),
+      expires_in: ttl,
+      size: stored.size,
+      content_type: stored.content_type
+    }
   rescue ObjectStore::NotFound
     render json: { error: "not found" }, status: :not_found
   end

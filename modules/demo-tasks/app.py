@@ -2,60 +2,53 @@
 
 The point of this file is the contract, not the to-do list. It talks to the core
 over plain HTTP with the credentials it was handed at install, connects to its
-own Postgres database directly, and never imports an SDK or an S3 client.
+own Postgres database directly, and never sees an S3 client.
 
 What it exercises:
 
   auth      who is looking at this page, from the cookie the browser already has
   database  its own tables, over a direct connection with issued credentials
   system    a granted read of core.configuration.settings, which is audited
-  storage   an attachment per task, written, read back, and deleted with the task
+  storage   an attachment per task, written, handed out as a URL, and deleted
+            with the task
+
+It uses the first-party SDK, which is optional and always will be: the contract
+is HTTP and a DSN, and a module that hand-rolls both is exactly as valid. What
+the SDK is here for is that the hand-rolled version of this file got three
+things wrong, and every module copying it inherited all three: a new Postgres
+connection per request, `CREATE TABLE IF NOT EXISTS` on every page view, and an
+HTTP round trip to Auth for every mention of the current user.
 """
 
 import os
-import io
-import json
-import urllib.request
-import urllib.error
 
-import psycopg
-from flask import Flask, request, redirect, url_for, Response, send_file
+from flask import Flask, request, redirect, url_for, Response
 from markupsafe import escape
+
+from siberian import Module, Refused
 
 app = Flask(__name__)
 
-CORE = os.environ.get("SIBERIAN_CORE_URL", "http://core")
-DATABASE_TOKEN = os.environ.get("SIBERIAN_DATABASE_TOKEN", "")
-STORAGE_TOKEN = os.environ.get("SIBERIAN_STORAGE_TOKEN", "")
-SESSION_COOKIE = "siberian_session"
+# Applied once per domain, not once per request. The statements are the same
+# ones that used to sit in the connection helper; what changed is when they run.
+SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS tasks (
+      id          serial PRIMARY KEY,
+      user_email  text NOT NULL,
+      title       text NOT NULL,
+      done        boolean NOT NULL DEFAULT false,
+      archived    boolean NOT NULL DEFAULT false,
+      attachment  text,
+      created_at  timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    # Added after the first release. IF NOT EXISTS rather than a migration
+    # runner, because a module owning one table does not need one.
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false",
+]
 
-_dsn_cache = {}
-
-
-# --- talking to the core ----------------------------------------------------
-
-def core_call(path, token, method="GET", body=None, content_type=None, raw=False):
-    """One helper for every core call. No SDK, no signing, no client library."""
-    req = urllib.request.Request(f"{CORE}{path}", method=method, data=body)
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
-    # The domain travels with every request. The Router set it on the way in and
-    # the core needs it on the way out to resolve per-domain data.
-    req.add_header("X-Siberian-Domain", current_domain())
-    if content_type:
-        req.add_header("Content-Type", content_type)
-
-    try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            payload = response.read()
-            return payload if raw else json.loads(payload or b"{}")
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", "replace")[:300]
-        raise RuntimeError(f"{method} {path} -> {error.code}: {detail}") from error
-
-
-def current_domain():
-    return request.headers.get("X-Siberian-Domain") or request.host.split(":")[0]
+siberian = Module("demo-tasks", schema=SCHEMA)
 
 
 def current_user():
@@ -64,28 +57,19 @@ def current_user():
     The browser already carries the session cookie, because the module is framed
     on a subdomain of the domain it was set on. The module cannot read it as a
     credential; it hands it to Auth, which is the only service that can.
+
+    Cached for 30 seconds by the SDK, which is the same ceiling the core
+    services use and the reason a page can ask this four times without paying
+    for it four times.
     """
-    token = request.cookies.get(SESSION_COOKIE)
-    if not token:
-        return None
-
-    req = urllib.request.Request(f"{CORE}/auth/internal/session")
-    req.add_header("X-Siberian-Session", token)
-    req.add_header("X-Siberian-Domain", current_domain())
-    try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            payload = json.loads(response.read() or b"{}")
-    except Exception:
-        return None
-
-    return payload.get("user") if payload.get("authenticated") else None
+    return siberian.current_user()
 
 
 def product_settings():
     """A granted read of a table this module does not own. Audited by the core."""
     try:
-        payload = core_call("/database/v1/system/core.configuration/settings", DATABASE_TOKEN)
-        return {row["key"]: row["value"] for row in payload.get("rows", [])}
+        rows = siberian.granted_read("core.configuration", "settings")
+        return {row["key"]: row["value"] for row in rows}
     except Exception:
         # A module that will not render because an optional read failed is worse
         # than a module that renders with defaults.
@@ -95,37 +79,14 @@ def product_settings():
 # --- its own database -------------------------------------------------------
 
 def db():
-    """A direct connection, with the credentials the core issued at install.
+    """A pooled connection, with the credentials the core issued at install.
 
-    Nothing proxies this. The core handed over a DSN and got out of the way.
+    Nothing proxies this. The core handed over a DSN and got out of the way;
+    the SDK keeps one pool per domain so that staying out of the way does not
+    mean a fresh TCP connection and an authentication round trip per page view.
     """
-    domain = current_domain()
-    if domain not in _dsn_cache:
-        _dsn_cache[domain] = core_call("/database/v1/credentials", DATABASE_TOKEN)["url"]
-
-    connection = psycopg.connect(_dsn_cache[domain], autocommit=True)
-    ensure_schema(connection)
-    return connection
-
-
-def ensure_schema(connection):
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS tasks (
-              id          serial PRIMARY KEY,
-              user_email  text NOT NULL,
-              title       text NOT NULL,
-              done        boolean NOT NULL DEFAULT false,
-              archived    boolean NOT NULL DEFAULT false,
-              attachment  text,
-              created_at  timestamptz NOT NULL DEFAULT now()
-            )
-            """
-        )
-        # Added after the first release. IF NOT EXISTS rather than a migration
-        # runner, because a module owning one table does not need one.
-        cursor.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false")
+    siberian.db.migrate()
+    return siberian.db.connection()
 
 
 def owned_task(connection, task_id, email):
@@ -217,19 +178,18 @@ def index():
     settings = product_settings()
     brand = settings.get("brand_name", "the product")
 
-    connection = db()
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT id, title, done, attachment, created_at FROM tasks "
-            "WHERE user_email = %s AND archived = %s ORDER BY done, id DESC",
-            (user["email"], showing_archived),
-        )
-        rows = cursor.fetchall()
-        cursor.execute(
-            "SELECT count(*) FROM tasks WHERE user_email = %s AND archived = true", (user["email"],)
-        )
-        archived_count = cursor.fetchone()[0]
-    connection.close()
+    with db() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, title, done, attachment, created_at FROM tasks "
+                "WHERE user_email = %s AND archived = %s ORDER BY done, id DESC",
+                (user["email"], showing_archived),
+            )
+            rows = cursor.fetchall()
+            cursor.execute(
+                "SELECT count(*) FROM tasks WHERE user_email = %s AND archived = true", (user["email"],)
+            )
+            archived_count = cursor.fetchone()[0]
 
     items = []
     for task_id, title, done, attachment, created_at in rows:
@@ -309,10 +269,10 @@ def create():
 
     title = (request.form.get("title") or "").strip()
     if title:
-        connection = db()
-        with connection.cursor() as cursor:
-            cursor.execute("INSERT INTO tasks (user_email, title) VALUES (%s, %s)", (user["email"], title))
-        connection.close()
+        with db() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("INSERT INTO tasks (user_email, title) VALUES (%s, %s)",
+                               (user["email"], title))
 
     return redirect(url_for("index"))
 
@@ -323,12 +283,12 @@ def toggle(task_id):
     if not user:
         return signed_out()
 
-    connection = db()
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE tasks SET done = NOT done WHERE id = %s AND user_email = %s", (task_id, user["email"])
-        )
-    connection.close()
+    with db() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE tasks SET done = NOT done WHERE id = %s AND user_email = %s",
+                (task_id, user["email"])
+            )
     return redirect(request.referrer or url_for("index"))
 
 
@@ -348,13 +308,12 @@ def set_archived(task_id, archived):
     if not user:
         return signed_out()
 
-    connection = db()
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE tasks SET archived = %s WHERE id = %s AND user_email = %s",
-            (archived, task_id, user["email"]),
-        )
-    connection.close()
+    with db() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE tasks SET archived = %s WHERE id = %s AND user_email = %s",
+                (archived, task_id, user["email"]),
+            )
 
     return redirect(url_for("index", archived="1" if not archived else None))
 
@@ -371,9 +330,8 @@ def confirm_delete(task_id):
     if not user:
         return signed_out()
 
-    connection = db()
-    task = owned_task(connection, task_id, user["email"])
-    connection.close()
+    with db() as connection:
+        task = owned_task(connection, task_id, user["email"])
 
     if not task:
         return redirect(url_for("index"))
@@ -409,30 +367,27 @@ def destroy(task_id):
     if not user:
         return signed_out()
 
-    connection = db()
-    task = owned_task(connection, task_id, user["email"])
+    with db() as connection:
+        task = owned_task(connection, task_id, user["email"])
 
-    if not task:
-        connection.close()
-        return redirect(url_for("index"))
+        if not task:
+            return redirect(url_for("index"))
 
-    _, _, _, _, attachment = task
+        _, _, _, _, attachment = task
 
-    # The file goes with the task. A module that deletes rows and leaves files
-    # behind quietly bills its owner for storage nothing can reach.
-    if attachment:
-        try:
-            core_call(
-                f"/storage/v1/files/tasks/{task_id}/{attachment}", STORAGE_TOKEN, method="DELETE"
-            )
-        except Exception:
-            # The row still goes. A file the storage service could not delete is
-            # a smaller problem than a task that refuses to die.
-            pass
+        # The file goes with the task. A module that deletes rows and leaves
+        # files behind quietly bills its owner for storage nothing can reach.
+        if attachment:
+            try:
+                siberian.storage.delete(f"tasks/{task_id}/{attachment}")
+            except Exception:
+                # The row still goes. A file the storage service could not
+                # delete is a smaller problem than a task that refuses to die.
+                pass
 
-    with connection.cursor() as cursor:
-        cursor.execute("DELETE FROM tasks WHERE id = %s AND user_email = %s", (task_id, user["email"]))
-    connection.close()
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM tasks WHERE id = %s AND user_email = %s",
+                           (task_id, user["email"]))
 
     return redirect(url_for("index"))
 
@@ -449,41 +404,56 @@ def attach(task_id):
 
     name = os.path.basename(uploaded.filename)[:120]
 
-    core_call(
-        f"/storage/v1/files/tasks/{task_id}/{name}",
-        STORAGE_TOKEN,
-        method="PUT",
-        body=uploaded.read(),
-        content_type=uploaded.mimetype or "application/octet-stream",
-    )
-
-    connection = db()
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE tasks SET attachment = %s WHERE id = %s AND user_email = %s",
-            (name, task_id, user["email"]),
+    try:
+        siberian.storage.put(
+            f"tasks/{task_id}/{name}",
+            uploaded.read(),
+            content_type=uploaded.mimetype or "application/octet-stream",
         )
-    connection.close()
+    except Refused as refusal:
+        # A full quota is not a crash. It is a sentence somebody can act on,
+        # and the operator who can raise it is a different person from the one
+        # looking at this page.
+        return render(
+            f"<h1>That file could not be stored</h1>"
+            f"<p class='muted'>{escape(str(refusal))}</p>"
+            f"<p><a class='button' href='{url_for('index')}'>Back</a></p>",
+            title="Attachment refused",
+        )
+
+    with db() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE tasks SET attachment = %s WHERE id = %s AND user_email = %s",
+                (name, task_id, user["email"]),
+            )
 
     return redirect(request.referrer or url_for("index"))
 
 
 @app.get("/tasks/<int:task_id>/file")
 def download(task_id):
+    """The attachment, fetched from the object store rather than through here.
+
+    This used to read the whole file into this process and copy it out again,
+    which is two extra copies of every byte and a whole file in the module's
+    memory for as long as the download takes.
+
+    The authorisation question is still this module's, and it is answered first:
+    only the person who owns the task gets a URL at all. What Storage guarantees
+    is the narrower half, that the URL reaches exactly one object and expires.
+    """
     user = current_user()
     if not user:
         return signed_out()
 
-    connection = db()
-    task = owned_task(connection, task_id, user["email"])
-    connection.close()
+    with db() as connection:
+        task = owned_task(connection, task_id, user["email"])
 
     if not task or not task[4]:
         return redirect(url_for("index"))
 
-    name = task[4]
-    content = core_call(f"/storage/v1/files/tasks/{task_id}/{name}", STORAGE_TOKEN, raw=True)
-    return send_file(io.BytesIO(content), download_name=name, as_attachment=True)
+    return redirect(siberian.storage.signed_url(f"tasks/{task_id}/{task[4]}"))
 
 
 if __name__ == "__main__":
