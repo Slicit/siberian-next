@@ -7,7 +7,8 @@
 # backed up without anybody re-queuing anything.
 module Internal
   class InterfacesController < ActionController::API
-    before_action :authenticate_internal!
+    include Siberian::ServiceAuthentication
+    permit_services :mailer
 
     # GET /internal/interfaces/:name
     def show
@@ -30,12 +31,5 @@ module Internal
 
     private
 
-    def authenticate_internal!
-      expected = ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only")
-      given = request.headers["Authorization"].to_s.delete_prefix("Bearer ").strip
-      return if ActiveSupport::SecurityUtils.secure_compare(given, expected)
-
-      render json: { error: "internal token required" }, status: :unauthorized
-    end
   end
 end

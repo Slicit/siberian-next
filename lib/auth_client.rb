@@ -3,6 +3,7 @@
 require "net/http"
 require "json"
 require_relative "permissions"
+require_relative "service_identity"
 
 module Siberian
   # Asks Auth who is signed in and what they may do.
@@ -32,7 +33,7 @@ module Siberian
     end
 
     def initialize(endpoint: ENV.fetch("SIBERIAN_AUTH_URL", "http://auth:3000"),
-                   admin_token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"),
+                   admin_token: Siberian::ServiceIdentity.token_for(:auth),
                    cache: self.class.shared_cache)
       @endpoint = endpoint
       @admin_token = admin_token

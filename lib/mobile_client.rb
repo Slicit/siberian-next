@@ -2,6 +2,7 @@
 
 require "net/http"
 require "json"
+require_relative "service_identity"
 require "cgi"
 
 module Siberian
@@ -13,7 +14,7 @@ module Siberian
   # capability list, and the queue; this only asks.
   class MobileClient
     def initialize(endpoint: ENV.fetch("SIBERIAN_MOBILE_URL", "http://mobile:3000"),
-                   token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"),
+                   token: Siberian::ServiceIdentity.token_for(:mobile),
                    logger: nil)
       @endpoint = endpoint
       @token = token

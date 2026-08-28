@@ -12,6 +12,8 @@ shared_lib = [
 if shared_lib
   $LOAD_PATH.unshift(File.expand_path(shared_lib.to_s))
   require "contracts"
+  require "service_identity"
+  require "service_authentication"
 else
   Rails.logger&.warn("Shared lib/ not found. Manifest parsing and the engine driver are unavailable.")
 end

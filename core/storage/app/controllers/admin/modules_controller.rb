@@ -8,7 +8,8 @@
 # operator first.
 module Admin
   class ModulesController < ApplicationController
-    before_action :authenticate_admin!
+    include Siberian::ServiceAuthentication
+    permit_services :orchestrator, :mobile
 
     # GET /admin/modules
     #
@@ -70,12 +71,5 @@ module Admin
 
     private
 
-    def authenticate_admin!
-      expected = ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only")
-      given = request.headers["Authorization"].to_s.delete_prefix("Bearer ").strip
-      return if ActiveSupport::SecurityUtils.secure_compare(given, expected)
-
-      render json: { error: "admin token required" }, status: :unauthorized
-    end
   end
 end

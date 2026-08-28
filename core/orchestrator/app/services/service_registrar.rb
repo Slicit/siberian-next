@@ -17,13 +17,11 @@ class ServiceRegistrar
   def initialize(storage_url: ENV.fetch("SIBERIAN_STORAGE_URL", "http://storage:3000"),
                  database_url: ENV.fetch("SIBERIAN_DATABASE_URL_SERVICE", "http://database:3000"),
                  mailer_url: ENV.fetch("SIBERIAN_MAILER_URL", "http://mailer:3000"),
-                 mobile_url: ENV.fetch("SIBERIAN_MOBILE_URL", "http://mobile:3000"),
-                 admin_token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
+                 mobile_url: ENV.fetch("SIBERIAN_MOBILE_URL", "http://mobile:3000"))
     @storage_url = storage_url
     @database_url = database_url
     @mailer_url = mailer_url
     @mobile_url = mobile_url
-    @admin_token = admin_token
   end
 
   def register(installed_module, manifest)
@@ -186,7 +184,7 @@ class ServiceRegistrar
   def get(base, path)
     uri = URI.join(base, path)
     request = Net::HTTP::Get.new(uri)
-    request["Authorization"] = "Bearer #{@admin_token}"
+    request["Authorization"] = "Bearer #{token_for_base(base)}"
 
     response = Net::HTTP.start(uri.hostname, uri.port, open_timeout: 5, read_timeout: 15) do |http|
       http.request(request)
@@ -204,7 +202,7 @@ class ServiceRegistrar
   def post(base, path, payload)
     uri = URI.join(base, path)
     request = Net::HTTP::Post.new(uri)
-    request["Authorization"] = "Bearer #{@admin_token}"
+    request["Authorization"] = "Bearer #{token_for_base(base)}"
     request["Content-Type"] = "application/json"
     request.body = JSON.generate(payload)
 
@@ -224,7 +222,27 @@ class ServiceRegistrar
   def delete(url)
     uri = URI.parse(url)
     request = Net::HTTP::Delete.new(uri)
-    request["Authorization"] = "Bearer #{@admin_token}"
+    request["Authorization"] = "Bearer #{token_for_base(url)}"
     Net::HTTP.start(uri.hostname, uri.port, open_timeout: 3, read_timeout: 10) { |http| http.request(request) }
+  end
+
+  # Which service is at this address, and therefore which token to present.
+  #
+  # Matched on the configured base URLs rather than on the hostname, so a
+  # deployment that moves a service somewhere unexpected still gets the right
+  # credential. A URL that matches nothing gets no token rather than a
+  # plausible one: presenting the Storage credential to a stranger because the
+  # address was unrecognised is how a secret leaks.
+  def token_for_base(url)
+    service = {
+      @storage_url => :storage,
+      @database_url => :database,
+      @mailer_url => :mailer,
+      @mobile_url => :mobile
+    }.find { |base, _| url.to_s.start_with?(base.to_s) }&.last
+
+    raise Error, "no core service configured at #{url}" if service.nil?
+
+    Siberian::ServiceIdentity.token_for(service)
   end
 end

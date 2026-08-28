@@ -24,7 +24,7 @@ class CapabilityDirectory
   }.freeze
 
   def initialize(endpoint: ENV.fetch("SIBERIAN_ORCHESTRATOR_URL", "http://orchestrator:3000"),
-                 token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
+                 token: Siberian::ServiceIdentity.token_for(:orchestrator))
     @endpoint = endpoint
     @token = token
   end

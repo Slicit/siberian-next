@@ -7,7 +7,8 @@
 # calling: this endpoint trusts the service, the service checks the person.
 module Internal
   class UsersController < ActionController::API
-    before_action :authenticate_admin!
+    include Siberian::ServiceAuthentication
+    permit_services :orchestrator
     before_action :set_user, only: %i[show update destroy assign_role unassign_role grant revoke]
 
     def index
@@ -141,12 +142,5 @@ module Internal
       }
     end
 
-    def authenticate_admin!
-      expected = ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only")
-      given = request.headers["Authorization"].to_s.delete_prefix("Bearer ").strip
-      return if ActiveSupport::SecurityUtils.secure_compare(given, expected)
-
-      render json: { error: "admin token required" }, status: :unauthorized
-    end
   end
 end

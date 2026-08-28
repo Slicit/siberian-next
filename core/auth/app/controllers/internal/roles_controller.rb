@@ -6,7 +6,8 @@
 # they exist and exactly why every holder is invalidated on save.
 module Internal
   class RolesController < ActionController::API
-    before_action :authenticate_admin!
+    include Siberian::ServiceAuthentication
+    permit_services :orchestrator
     before_action :set_role, only: %i[update destroy]
 
     def index
@@ -88,12 +89,5 @@ module Internal
       }
     end
 
-    def authenticate_admin!
-      expected = ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only")
-      given = request.headers["Authorization"].to_s.delete_prefix("Bearer ").strip
-      return if ActiveSupport::SecurityUtils.secure_compare(given, expected)
-
-      render json: { error: "admin token required" }, status: :unauthorized
-    end
   end
 end
