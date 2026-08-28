@@ -116,17 +116,22 @@ class S3DriverTest < ActiveSupport::TestCase
 
   # Naming an endpoint is what says "not AWS", and every self hosted gateway
   # needs path style addressing while AWS has deprecated it.
+  #
+  # The host below is deliberately no particular product. What the driver reacts
+  # to is that an endpoint was named at all, and writing a real backend's name
+  # here would suggest it reacts to which one.
   test "path style is inferred from whether an endpoint was named" do
-    assert driver(endpoint: "http://minio:9000").force_path_style?
+    assert driver(endpoint: "http://objects.internal:9000").force_path_style?
     refute driver.force_path_style?
   end
 
   test "the inference can be overridden" do
-    refute driver(endpoint: "http://gateway:9000", force_path_style: false).force_path_style?
+    refute driver(endpoint: "http://objects.internal:9000", force_path_style: false).force_path_style?
   end
 
   test "the public endpoint falls back to the endpoint" do
-    assert_equal "http://gateway:9000", driver(endpoint: "http://gateway:9000").public_endpoint
+    assert_equal "http://objects.internal:9000",
+                 driver(endpoint: "http://objects.internal:9000").public_endpoint
   end
 
   test "provisioning without credentials says so rather than handing back nils" do
