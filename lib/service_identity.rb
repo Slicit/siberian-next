@@ -1,7 +1,11 @@
 # frozen_string_literal: true
 
 require "digest"
-require "active_support/security_utils"
+# OpenSSL rather than ActiveSupport::SecurityUtils, which says the same thing:
+# lib/ is shared by six Rails services and also loaded by `bin/test-lib` in a
+# bare Ruby container, so anything in here that needs Rails to load is a file
+# that cannot be tested.
+require "openssl"
 
 module Siberian
   # Which core service is calling, and what it may therefore do.
@@ -107,10 +111,10 @@ module Siberian
       def secure_equal?(given, expected)
         return false if expected.nil? || expected.empty?
 
-        # Both are hashed to a fixed length first: secure_compare raises on
-        # strings of different lengths, and raising is itself a length oracle.
-        ActiveSupport::SecurityUtils.secure_compare(
-          ::Digest::SHA256.digest(given), ::Digest::SHA256.digest(expected)
+        # Hashed to a fixed length first, because the fixed length comparison
+        # raises on differing lengths and raising is itself a length oracle.
+        OpenSSL.fixed_length_secure_compare(
+          ::Digest::SHA256.digest(given.to_s), ::Digest::SHA256.digest(expected.to_s)
         )
       end
     end
