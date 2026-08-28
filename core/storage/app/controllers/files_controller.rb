@@ -32,10 +32,23 @@ class FilesController < ApplicationController
   end
 
   # GET /v1/:space/*path
+  #
+  # Streamed rather than sent whole. `send_data` needs the entire object as a
+  # String first, which put every byte of every download into this process's
+  # heap: one 67 MB artifact being fetched by three clients was 200 MB of Rails.
   def show
-    body, content_type, length = store.get(space, path)
-    response.headers["Content-Length"] = length.to_s
-    send_data body, type: content_type.presence || "application/octet-stream", disposition: "inline"
+    stored, body = store.stream(space, path)
+
+    response.headers["Content-Length"] = stored.size.to_s
+    response.headers["ETag"] = stored.etag.to_s
+    response.headers["Last-Modified"] = stored.last_modified&.httpdate.to_s
+    response.headers["Content-Type"] = stored.content_type.presence || "application/octet-stream"
+    # Third-party bytes served from a core origin. Without this a module can
+    # upload an HTML file and have it run as this service.
+    response.headers["Content-Disposition"] = "inline"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    self.response_body = body
   rescue ObjectStore::NotFound
     render json: { error: "not found" }, status: :not_found
   end

@@ -87,8 +87,10 @@ module Internal
       build = Build.find_by(id: params[:id], state: Build::BUILDING)
       return render json: { error: "no build of yours by that id" }, status: :not_found if build.nil?
 
-      body = request.body.read
-      return render json: { error: "no artifact in the request body" }, status: :bad_request if body.to_s.empty?
+      # Handed on as a stream. Reading it here would put the whole APK in this
+      # process before Storage had seen a byte of it.
+      body = request.body
+      return render json: { error: "no artifact in the request body" }, status: :bad_request if empty_body?(body)
 
       stored = StorageAccess.new.store(
         domain: build.domain,
@@ -141,6 +143,15 @@ module Internal
     end
 
     private
+
+    # Whether there is anything to store, without consuming the stream.
+    # Content-Length is what the sender promised; a Rack input that reports a
+    # size of zero has nothing in it either way.
+    def empty_body?(io)
+      return true if request.content_length.to_i.zero? && !request.headers["Transfer-Encoding"].present?
+
+      io.respond_to?(:size) && io.size.to_i.zero?
+    end
 
     def with_current_secrets(build)
       plan = build.configuration.deep_dup

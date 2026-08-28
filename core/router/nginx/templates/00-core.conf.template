@@ -96,6 +96,35 @@ server {
     }
   }
 
+  # Public module media, straight from Storage.
+  #
+  # Without this a module serves its own images by fetching them from Storage
+  # and copying them out through its own process, so every image is read whole
+  # into a language runtime that has no reason to see it. The module hands out
+  # this URL instead and never touches the bytes.
+  #
+  # No token travels, and none is needed: this reaches the `public` space and
+  # nothing else, for a module that was granted that space at install. The
+  # domain comes from the Host header the same way it does everywhere else, so
+  # one domain cannot be used to read another's objects.
+  #
+  # A regex rather than a prefix location, so it wins over `location /` the way
+  # the /m/ rule does, and so the module name is a captured segment rather than
+  # something Storage has to parse out of a path.
+  location ~ "^/-/public/([a-z0-9][a-z0-9-]*)/(.+)$" {
+    set $public_module $1;
+    set $public_path $2;
+
+    set $upstream_public "http://storage:3000";
+    proxy_pass $upstream_public/public/$public_module/$public_path$is_args$args;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+
+    # Large objects stream through rather than being spooled to disk here
+    # first, which is the whole point of Storage having stopped buffering them.
+    proxy_buffering off;
+    proxy_request_buffering off;
+  }
+
   # Sign in and out are served by Auth on the main domain, so the cookie it
   # sets is scoped to the domain every module frame sits under. The Base App
   # never sees a password.
@@ -127,6 +156,31 @@ server {
   ssl_certificate_key /etc/nginx/certs/server-key.pem;
 
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+
+  # The same public media path the product domain serves, because the preview
+  # renders here and a CMS block's image has one URL wherever it is shown.
+  #
+  # The domain is named rather than taken from the Host header: buckets belong
+  # to ${SIBERIAN_DOMAIN}, and $host here is core.${SIBERIAN_DOMAIN}, which owns
+  # no buckets at all. Reusing forwarded_headers.conf would send the wrong one
+  # and every image would 404 with nothing to say why.
+  location ~ "^/-/public/([a-z0-9][a-z0-9-]*)/(.+)$" {
+    set $public_module $1;
+    set $public_path $2;
+
+    set $upstream_public "http://storage:3000";
+    proxy_pass $upstream_public/public/$public_module/$public_path$is_args$args;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Siberian-Domain ${SIBERIAN_DOMAIN};
+    proxy_http_version 1.1;
+
+    proxy_buffering off;
+    proxy_request_buffering off;
+  }
 
   # The app preview, which the Backoffice frames in a panel.
   #
@@ -202,6 +256,22 @@ server {
     rewrite ^/storage/(.*)$ /$1 break;
     proxy_pass $upstream_storage;
     include /etc/nginx/siberian/internal_headers.conf;
+
+    # nginx defaults this to 1m, which silently made the Storage service's
+    # quotas a fiction: a module could be granted 512 MB and still be unable to
+    # store a photograph, because the door refused anything over a megabyte
+    # with a 413 that mentions neither quotas nor this limit.
+    #
+    # Quotas are where a size limit belongs, because an operator sets those per
+    # bucket and per domain and can see them. This is only here to stop a body
+    # so large that refusing it politely is itself the problem, so it is set
+    # well above the default bucket grant rather than tuned to it.
+    client_max_body_size ${SIBERIAN_MAX_UPLOAD};
+
+    # Streamed to Storage as it arrives. Without this nginx spools the entire
+    # upload to disk before opening a connection upstream, which is the same
+    # buffering this service stopped doing, moved one hop out.
+    proxy_request_buffering off;
   }
 
   location /database/ {

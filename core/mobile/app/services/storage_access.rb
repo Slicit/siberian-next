@@ -39,7 +39,7 @@ class StorageAccess
       raise Refused, refusal_of(response)
     end
 
-    { path: "files/#{path}", bytes: body.bytesize }
+    { path: "files/#{path}", bytes: byte_count(body) }
   end
 
   # Reads one back. The builder never holds this credential, so an asset it
@@ -101,14 +101,44 @@ class StorageAccess
     request(Net::HTTP::Put, path, body, headers)
   end
 
+  # An IO is streamed rather than read. A finished Android build is tens of
+  # megabytes, and `message.body = io.read` would hold all of it here on top of
+  # the copy Storage is holding on the other end.
+  #
+  # Net::HTTP insists on knowing the length up front when given a stream,
+  # because without one it would have to buffer to find out, which is the thing
+  # being avoided.
   def request(verb, path, body, headers)
     uri = URI.join(@endpoint, path)
     message = verb.new(uri)
     headers.each { |key, value| message[key] = value }
-    message.body = body if body
+
+    if body.respond_to?(:read)
+      message.body_stream = body
+      message["Content-Length"] = size_of(body).to_s
+    elsif body
+      message.body = body
+    end
 
     Net::HTTP.start(uri.hostname, uri.port, open_timeout: 5, read_timeout: 120) do |http|
       http.request(message)
     end
+  end
+
+  # What was actually sent, for the build record and the quota figure. An IO has
+  # been consumed by the time this is asked, so it reports its length rather
+  # than its contents.
+  def byte_count(body)
+    return body.bytesize unless body.respond_to?(:read)
+
+    size_of(body)
+  end
+
+  def size_of(io)
+    return io.size if io.respond_to?(:size) && io.size
+
+    # A Rack input with no size is rare but not impossible. Falling back to
+    # reading it defeats the streaming, so it is worth being loud about.
+    raise Refused, "cannot upload a stream of unknown length"
   end
 end

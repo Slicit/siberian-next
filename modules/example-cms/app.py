@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 
 import psycopg
-from flask import Flask, jsonify, redirect, request, send_file, url_for
+from flask import Flask, jsonify, redirect, request, url_for
 from markupsafe import escape
 
 app = Flask(__name__)
@@ -23,6 +23,11 @@ app = Flask(__name__)
 CORE = os.environ.get("SIBERIAN_CORE_URL", "http://core")
 DATABASE_TOKEN = os.environ.get("SIBERIAN_DATABASE_TOKEN", "")
 STORAGE_TOKEN = os.environ.get("SIBERIAN_STORAGE_TOKEN", "")
+
+# This module's own name, which is the segment the Router's public media path
+# is addressed by. It matches `name:` in module.yml; a module that renamed
+# itself in one place and not the other would serve broken images.
+MODULE_NAME = "example-cms"
 SESSION_COOKIE = "siberian_session"
 
 _dsn_cache = {}
@@ -244,16 +249,27 @@ def public_media_url(path):
     # page is mixed content, and the browser drops it without drawing anything.
     scheme = request.headers.get("X-Forwarded-Proto") or request.scheme
 
-    # Which door this request came through decides the prefix. Framed in a
-    # browser the module is its own origin and the path is bare; from the phone
-    # app it is reached at /m/<module>/, and a URL without that prefix points at
-    # the product shell, which has no idea what /media means. The Router sets
-    # the module name on the app door and nowhere else, which is what makes the
-    # difference knowable here.
-    module = request.headers.get("X-Siberian-Module")
-    prefix = f"/m/{module}" if module else ""
+    # An address on the product domain, served by the Router straight out of
+    # Storage. This module never sees the bytes.
+    #
+    # It used to proxy them: every image was fetched from Storage into this
+    # process and copied out again, which put an entire file in Python's memory
+    # for no reason other than that the URL pointed here. It also meant the
+    # content type had to be guessed from the file extension, because the real
+    # one was lost on the way through.
+    #
+    # Absolute, and on the domain rather than on request.host, because the same
+    # URL has to work from three places that do not share an origin: framed in
+    # the browser this module answers on <module>.apps.<domain>, the phone app
+    # reaches it at /m/<module>/, and the preview runs on core.<domain>. Only
+    # the product domain serves /-/public, so naming it is what makes one URL
+    # correct everywhere instead of three URLs that are each correct once.
+    #
+    # The domain is the header the Router sets, which is the domain being
+    # served rather than whatever host this process was addressed by.
+    domain = request.headers.get("X-Siberian-Domain") or request.host
 
-    return f"{scheme}://{request.host}{prefix}/media/{path.lstrip(chr(47))}"
+    return f"{scheme}://{domain}/-/public/{MODULE_NAME}/{path.lstrip(chr(47))}"
 
 
 def serialise(block, titles=None):
@@ -322,36 +338,6 @@ def api_page(slug):
     })
 
 
-@app.get("/media/<path:path>")
-def media(path):
-    """Block media, proxied out of the public space.
-
-    Proxied rather than linked directly because a module has no business
-    handing out an object store URL, and because the phone and the browser then
-    fetch the same address.
-    """
-    try:
-        payload = core_call(f"/storage/v1/public/{path}", STORAGE_TOKEN, raw=True)
-    except RuntimeError:
-        return {"error": "not found"}, 404
-
-    import io
-
-    guessed = "image/jpeg"
-    lowered = path.lower()
-    for suffix, kind in (
-        (".png", "image/png"),
-        (".gif", "image/gif"),
-        (".webp", "image/webp"),
-        (".svg", "image/svg+xml"),
-        (".mp4", "video/mp4"),
-        (".webm", "video/webm"),
-    ):
-        if lowered.endswith(suffix):
-            guessed = kind
-            break
-
-    return send_file(io.BytesIO(payload), mimetype=guessed, download_name=os.path.basename(path))
 
 
 # --- the web face -----------------------------------------------------------
