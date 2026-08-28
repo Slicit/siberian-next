@@ -45,7 +45,21 @@ class Database:
 
         self._pools = {}
         self._migrated = set()
-        self._lock = threading.Lock()
+
+        # Two locks, never nested, because one was a deadlock.
+        #
+        # With a single lock, the first request for a domain took it to
+        # migrate, then called the pool helper, which took the same lock to
+        # create the pool. `threading.Lock` is not reentrant, so the request
+        # waited on itself forever: the module answered nothing, the Router
+        # gave up at sixty seconds, and the container looked healthy the whole
+        # time because its health path touches neither.
+        #
+        # Keeping them apart is what makes the nesting impossible rather than
+        # merely absent: the pool is created before the migration lock is
+        # taken, and neither critical section calls into the other.
+        self._pool_lock = threading.Lock()
+        self._migrate_lock = threading.Lock()
 
     def dsn(self, domain=None):
         """The connection string the core issued for this (module, domain).
@@ -85,14 +99,17 @@ class Database:
         if domain in self._migrated:
             return
 
-        with self._lock:
+        # Outside the migration lock, deliberately. See the note on the locks.
+        pool = self._pool_for(domain)
+
+        with self._migrate_lock:
             # Checked again inside the lock: two requests for a new domain
             # arriving together would otherwise both run the DDL, and while
             # `IF NOT EXISTS` makes that harmless it also makes it pointless.
             if domain in self._migrated:
                 return
 
-            with self._pool_for(domain).connection() as connection:
+            with pool.connection() as connection:
                 with connection.cursor() as cursor:
                     for statement in statements:
                         cursor.execute(statement)
@@ -100,10 +117,12 @@ class Database:
             self._migrated.add(domain)
 
     def close(self):
-        with self._lock:
+        with self._pool_lock:
             for pool in self._pools.values():
                 pool.close()
             self._pools.clear()
+
+        with self._migrate_lock:
             self._migrated.clear()
 
     def _pool_for(self, domain):
@@ -111,7 +130,7 @@ class Database:
         if pool is not None:
             return pool
 
-        with self._lock:
+        with self._pool_lock:
             pool = self._pools.get(domain)
             if pool is not None:
                 return pool
