@@ -47,12 +47,10 @@ class Reconciler
 
   def initialize(registrar: ServiceRegistrar.new,
                  routes: RouteReconciler.new,
-                 auth_url: ENV.fetch("SIBERIAN_AUTH_URL", "http://auth:3000"),
-                 admin_token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
+                 roles: RoleCatalogue.new)
     @registrar = registrar
     @routes = routes
-    @auth_url = auth_url
-    @admin_token = admin_token
+    @roles = roles
   end
 
   def call
@@ -153,32 +151,13 @@ class Reconciler
   end
 
   def reconcile_roles
-    body = auth_post("/internal/roles/reconcile")
-    changed = Hash(body["added"]).flat_map do |role, permissions|
+    changed = @roles.reconcile!.flat_map do |role, permissions|
       Array(permissions).map { |permission| "role #{role}: #{permission}" }
     end
 
     Step.new(name: :roles, changed: changed, drifted: [], errors: [])
   rescue StandardError => e
     Step.new(name: :roles, changed: [], drifted: [], errors: ["roles: #{e.message}"])
-  end
-
-  def auth_post(path)
-    uri = URI.join(@auth_url, path)
-    request = Net::HTTP::Post.new(uri)
-    request["Authorization"] = "Bearer #{@admin_token}"
-    request["Content-Type"] = "application/json"
-    request.body = "{}"
-
-    response = Net::HTTP.start(uri.hostname, uri.port, open_timeout: 5, read_timeout: 15) do |http|
-      http.request(request)
-    end
-
-    unless response.code.to_i.between?(200, 299)
-      raise "#{uri} returned #{response.code}: #{response.body.to_s[0, 200]}"
-    end
-
-    response.body.to_s.empty? ? {} : JSON.parse(response.body)
   end
 
   def summary(result)
