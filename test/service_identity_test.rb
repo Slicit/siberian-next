@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require "service_identity"
+require "lib/service_identity"
 
 # Who is calling, and what they may therefore do.
 #
