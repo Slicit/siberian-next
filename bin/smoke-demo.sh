@@ -49,9 +49,19 @@ echo "smoke attachment" > /tmp/sib_attach.txt
 echo "attach a file    -> $(c -b "$JAR" -o /dev/null -w '%{http_code}' -X POST \
   -F "file=@/tmp/sib_attach.txt" "https://tasks.apps.$DOMAIN/tasks/$ID/attach")"
 
-echo "read it back     -> $(c -b "$JAR" -o /tmp/sib_back -w '%{http_code}' \
-  "https://tasks.apps.$DOMAIN/tasks/$ID/file")"
+# Followed, because the module no longer serves this itself: it checks that the
+# task belongs to whoever is asking and then sends them to the object store with
+# a URL that reaches one object and expires. The redirect is the visible part of
+# the module having stopped copying bytes through its own process, and the
+# content check is what proves the redirect actually leads somewhere.
+rm -f /tmp/sib_back
+code=$(c -b "$JAR" -o /dev/null -w '%{http_code}' "https://tasks.apps.$DOMAIN/tasks/$ID/file")
+echo "read it back     -> $code   (expect 302, the module hands out an address)"
+code=$(c -L -b "$JAR" -o /tmp/sib_back -w '%{http_code}' "https://tasks.apps.$DOMAIN/tasks/$ID/file")
+echo "   following it  -> $code"
 echo "   content: $(cat /tmp/sib_back)"
+grep -q "smoke attachment" /tmp/sib_back \
+  || { echo "   FAIL: the signed URL did not lead to the file"; exit 1; }
 
 # The menu is on every page, and it was not: the phone app page loaded without
 # it and every module vanished from the shell with nothing reporting a thing.
