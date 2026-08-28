@@ -31,12 +31,58 @@ class Role < ApplicationRecord
       role.update!(
         description: attributes[:description],
         permissions: attributes[:permissions],
+        seeded_permissions: attributes[:permissions],
         seeded: true
       )
     end
   end
 
+  # Delivers permissions the catalogue gained after this role was last seeded.
+  #
+  # `seed_defaults!` deliberately skips a role that already exists, which is
+  # what stops it trampling an operator's edits, and also what stops a new
+  # permission ever reaching an installation that has already been seeded.
+  # Neither re-seeding wholesale nor adding every catalogue permission the role
+  # lacks is right: the first discards the operator's opinion, the second
+  # re-adds exactly what the operator removed.
+  #
+  # The difference against the previous snapshot is the only set that is
+  # unambiguous, because a permission in it did not exist the last time anybody
+  # could have had an opinion about it.
+  #
+  # Returns what it added, per role, so the caller can say what happened.
+  def self.reconcile_seeded!
+    added = {}
+
+    Siberian::Permissions::SEEDED_ROLES.each do |name, attributes|
+      role = find_by(name: name, seeded: true)
+      next if role.nil?
+
+      catalogue = Array(attributes[:permissions]).map(&:to_s)
+      previous = role.seeded_permission_list
+      fresh = catalogue - previous
+      # Anything already covered is not an addition. A role holding `*` gains
+      # nothing from a new permission, and saying it did would be noise.
+      grants = fresh.reject { |permission| role.grants?(permission) }
+
+      # The snapshot moves to the current catalogue either way. A permission
+      # this role already covers has still been offered, and offering it twice
+      # would re-add it after an operator narrowed the wildcard.
+      if grants.empty?
+        role.update!(seeded_permissions: catalogue) if previous != catalogue
+        next
+      end
+
+      role.update!(permissions: role.permission_list + grants, seeded_permissions: catalogue)
+      added[role.name] = grants
+    end
+
+    added
+  end
+
   def permission_list = Array(permissions).map(&:to_s)
+
+  def seeded_permission_list = Array(seeded_permissions).map(&:to_s)
 
   def grants?(permission)
     Siberian::Permissions::Set.new(permission_list).allow?(permission)

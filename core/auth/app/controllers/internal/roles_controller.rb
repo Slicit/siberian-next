@@ -16,6 +16,20 @@ module Internal
       }
     end
 
+    # POST /internal/roles/reconcile
+    #
+    # Called by the Orchestrator's reconciler. Adding a permission to the
+    # catalogue is a code change; delivering it to the roles of an installation
+    # that was seeded before it existed is this.
+    def reconcile
+      added = Role.reconcile_seeded!
+
+      render json: {
+        added: added,
+        roles: Role.ordered.map { |role| serialize(role) }
+      }
+    end
+
     def create
       role = Role.new(role_params)
 

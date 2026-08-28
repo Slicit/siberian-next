@@ -6,6 +6,8 @@
     <p class="muted" style="margin:0"><%= pluralize(@modules.size, "module") %> installed.</p>
   </div>
   <div class="row">
+    <%= button_to "Reconcile", reconcile_state_path, class: "button",
+          form: { data: { turbo_confirm: "Put routing, service registrations, and the permission catalogue back in step with what is installed?" } } %>
     <%= button_to "Repair routing", reconcile_routes_path, class: "button",
           form: { data: { turbo_confirm: "Reattach the Router to every module network and rewrite its config?" } } %>
     <%= link_to "Install a module", catalog_path, class: "button primary" %>

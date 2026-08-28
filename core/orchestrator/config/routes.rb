@@ -10,6 +10,10 @@ Rails.application.routes.draw do
 
   post "routes/reconcile", to: "routes#reconcile", as: :reconcile_routes
 
+  # Routing plus every other piece of state that is derived once and can go
+  # stale: service registrations and the permission catalogue.
+  post "state/reconcile", to: "state#reconcile", as: :reconcile_state
+
   get "catalog", to: "catalog#index", as: :catalog
   get "catalog/:name", to: "catalog#show", as: :catalog_entry
   post "catalog/:name/install", to: "catalog#create", as: :install_catalog_entry

@@ -135,4 +135,16 @@ class FakeRouter
     write(installed_module, domains)
     reload
   end
+
+  # The map from module name to upstream, rewritten whole on every install,
+  # uninstall, and reconcile.
+  #
+  # Recorded as names rather than ignored, because "which modules are
+  # addressable as /m/<name>/" is a thing tests need to assert about and the
+  # real RouterConfig rewrites this list rather than appending to it.
+  def refresh_upstreams!(installed_modules)
+    @upstreams = Array(installed_modules).map(&:name)
+  end
+
+  def upstreams = @upstreams ||= []
 end
