@@ -6,6 +6,8 @@ Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 
 ## 2026-08-22
 
+- The object store facade is stated but not yet enforced by an interface. `GarageAdmin` speaks Garage's admin API for bucket and key creation, which AWS and OVH answer differently, and the endpoints are still named `GARAGE_ENDPOINT` and `GARAGE_PUBLIC_ENDPOINT`. The reads and writes are already plain S3 and would move unchanged; provisioning is the part that needs a driver, the way the container engine has one. (trigger: gap, source: feat-public-media decision 2026-08-22, agent: claude-code)
+- Presigned uploads, so a large file never transits the Storage service on the way in either. The read path no longer carries bytes; the write path still does. The obstacle is that quota is checked while the bytes are in flight, so a presigned PUT needs a declared size at mint time and a confirmation afterwards, which is the same trust the current check already places in `Content-Length`. (trigger: out-of-scope, source: feat-public-media Intent 2026-08-22, agent: claude-code)
 - A full review of bottlenecks and proposed next major changes is in `docs/review-2026-08-22.md`: the box hardware, buffered byte paths, the per-request DDL pattern in reference modules, drift as a class, the flat admin token, development mode, and a proposal to make reconciliation the installation model. (trigger: review, source: project review 2026-08-22, agent: claude-code)
 
 ## 2026-08-19
