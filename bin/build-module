@@ -22,5 +22,12 @@ dir="modules/$name"
 image=$(grep -m1 "image:" "$dir/module.yml" | sed 's/.*image: *//; s/ *$//')
 echo "Building $image from $dir"
 
-docker build -t "$image" "$dir"
+# The repository root is the build context, not the module directory, so a
+# module can copy the SDK in. Core images already build this way so they can
+# copy `lib/`, and the reason is the same: shared code that only exists inside
+# one directory's context cannot be shared.
+#
+# The cost is that a module Dockerfile refers to its own files by their path
+# from the root (`COPY modules/<name>/app.py`), which is why they all say that.
+docker build -t "$image" -f "$dir/Dockerfile" .
 echo "Built $image"
