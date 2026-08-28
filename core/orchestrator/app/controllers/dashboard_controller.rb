@@ -8,6 +8,7 @@ class DashboardController < ApplicationController
     @domains = allow?("core.domains.manage") ? Domain.ordered : []
     @activities = allow?("core.audit.read") ? Activity.recent.includes(:installed_module).limit(8) : []
     @health = CoreHealth.new
+    @checks = NightlyChecks.new
     @catalog_entries = allow?("core.modules.install") ? catalog.entries : []
     @registry = InterfaceRegistry.new
   end

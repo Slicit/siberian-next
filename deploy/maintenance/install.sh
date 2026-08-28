@@ -9,8 +9,10 @@ cd "$(dirname "$0")/../.."
 
 REPO="$(pwd)"
 CRON=/etc/cron.d/siberian-housekeeping
+CHECKS_CRON=/etc/cron.d/siberian-checks
 DAEMON=/etc/docker/daemon.json
 LOG=/var/log/siberian-housekeeping.log
+CHECKS_LOG=/var/log/siberian-checks.log
 
 echo "Installing the housekeeping cron entry..."
 sudo tee "$CRON" >/dev/null <<CRONTAB
@@ -27,6 +29,25 @@ sudo chmod 0644 "$CRON"
 sudo touch "$LOG"
 sudo chmod 0644 "$LOG"
 
+echo "Installing the nightly check cron entry..."
+sudo tee "$CHECKS_CRON" >/dev/null <<CRONTAB
+# Siberian Next nightly checks. Installed from $REPO/deploy/maintenance/install.sh
+#
+# After housekeeping rather than before it, because a smoke that queues an
+# Android build needs the disk that housekeeping just freed, and a sweep that
+# fails on a full disk reports on the disk rather than on the code.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+0 5 * * * root SIBERIAN_REPO=$REPO $REPO/deploy/maintenance/nightly-checks.sh >> $CHECKS_LOG 2>&1
+CRONTAB
+sudo chmod 0644 "$CHECKS_CRON"
+
+sudo touch "$CHECKS_LOG"
+sudo chmod 0644 "$CHECKS_LOG"
+
+# Written by the sweep, read by the Backoffice through a read only bind mount.
+mkdir -p "$REPO/deploy/checks"
+
 # Logs are capped for containers created after this lands. Existing containers
 # keep whatever they were created with, which is why housekeeping also truncates.
 if [ ! -f "$DAEMON" ]; then
@@ -41,5 +62,11 @@ else
 fi
 
 echo
-echo "Installed. It runs at 04:30 and logs to $LOG."
-echo "Run it now with: sudo SIBERIAN_REPO=$REPO $REPO/deploy/maintenance/housekeeping.sh"
+echo "Installed."
+echo "  housekeeping   04:30, logs to $LOG"
+echo "  nightly checks 05:00, logs to $CHECKS_LOG, and the Overview reads"
+echo "                 $REPO/deploy/checks/latest.json"
+echo
+echo "Run them now with:"
+echo "  sudo SIBERIAN_REPO=$REPO $REPO/deploy/maintenance/housekeeping.sh"
+echo "  SIBERIAN_REPO=$REPO $REPO/deploy/maintenance/nightly-checks.sh"

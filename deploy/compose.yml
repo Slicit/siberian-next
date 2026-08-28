@@ -132,6 +132,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - router_modules:/var/lib/siberian/router
       - ../modules:/var/lib/siberian/modules:ro
+      # Written on the host by the nightly sweep, read here so the Overview can
+      # show whether the last one passed. Read only: the Backoffice reports on
+      # the checks and never writes their result.
+      - ../deploy/checks:/var/lib/siberian/checks:ro
     depends_on:
       configuration:
         condition: service_healthy
