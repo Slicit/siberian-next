@@ -95,7 +95,27 @@ services:
       SIBERIAN_DATABASE_URL_SERVICE: http://database:3000
       SIBERIAN_STORAGE_URL: http://storage:3000
       SIBERIAN_MOBILE_URL: http://mobile:3000
-      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      SIBERIAN_SERVICE_NAME: orchestrator
+      # One secret per pair of services, not one per service.
+      #
+      # A single token per caller would still mean every callee has to know the
+      # Orchestrator's token in order to check it, so compromising any one of
+      # them would hand over the ability to act as the Orchestrator against all
+      # the rest. Per pair, the most a compromised service learns is how to talk
+      # to itself.
+      #
+      # The defaults are distinct rather than convenient: a shared default would
+      # make development quietly behave like the thing this replaces, and the
+      # first time anybody noticed would be in a deployment that inherited it.
+      SIBERIAN_CALLERS: >-
+        base=${SIBERIAN_TOKEN_BASE_ORCHESTRATOR:-dev_base_to_orchestrator},
+        mailer=${SIBERIAN_TOKEN_MAILER_ORCHESTRATOR:-dev_mailer_to_orchestrator}
+      SIBERIAN_CALLEES: >-
+        storage=${SIBERIAN_TOKEN_ORCHESTRATOR_STORAGE:-dev_orchestrator_to_storage},
+        database=${SIBERIAN_TOKEN_ORCHESTRATOR_DATABASE:-dev_orchestrator_to_database},
+        mailer=${SIBERIAN_TOKEN_ORCHESTRATOR_MAILER:-dev_orchestrator_to_mailer},
+        mobile=${SIBERIAN_TOKEN_ORCHESTRATOR_MOBILE:-dev_orchestrator_to_mobile},
+        auth=${SIBERIAN_TOKEN_ORCHESTRATOR_AUTH:-dev_orchestrator_to_auth}
       # Joined to every module network so modules can reach Postgres directly.
       SIBERIAN_MODULEDB_CONTAINER: siberian-moduledb-1
       SIBERIAN_ROUTER_CONFIG_DIR: /var/lib/siberian/router
@@ -130,7 +150,13 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_base
       SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
       SIBERIAN_AUTH_URL: http://auth:3000
-      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      SIBERIAN_SERVICE_NAME: base
+      # Calls out and is never called. Notably it holds no credential for Auth's
+      # user and role management: the Base App asks Auth who somebody is, which
+      # needs no token, and managing people is the Backoffice's job.
+      SIBERIAN_CALLEES: >-
+        orchestrator=${SIBERIAN_TOKEN_BASE_ORCHESTRATOR:-dev_base_to_orchestrator},
+        mobile=${SIBERIAN_TOKEN_BASE_MOBILE:-dev_base_to_mobile}
     volumes:
       - ../core/base:/app
       - ../lib:/app/lib
@@ -150,6 +176,10 @@ services:
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_auth
+      SIBERIAN_SERVICE_NAME: auth
+      # Only the Backoffice manages people and roles. Asking who somebody is
+      # needs no token at all, which is why the Base App is not on this list.
+      SIBERIAN_CALLERS: orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_AUTH:-dev_orchestrator_to_auth}
     volumes:
       - ../core/auth:/app
       - ../lib:/app/lib
@@ -170,7 +200,10 @@ services:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mailer
       SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
-      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      SIBERIAN_SERVICE_NAME: mailer
+      SIBERIAN_CALLERS: orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_MAILER:-dev_orchestrator_to_mailer}
+      # Asks the Orchestrator which module answers mail.transport.v1.
+      SIBERIAN_CALLEES: orchestrator=${SIBERIAN_TOKEN_MAILER_ORCHESTRATOR:-dev_mailer_to_orchestrator}
     volumes:
       - ../core/mailer:/app
       - ../lib:/app/lib
@@ -195,7 +228,9 @@ services:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mailer
       SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
-      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      SIBERIAN_SERVICE_NAME: mailer
+      SIBERIAN_CALLERS: orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_MAILER:-dev_orchestrator_to_mailer}
+      SIBERIAN_CALLEES: orchestrator=${SIBERIAN_TOKEN_MAILER_ORCHESTRATOR:-dev_mailer_to_orchestrator}
       MAILER_POLL_INTERVAL: "${MAILER_POLL_INTERVAL:-5}"
     volumes:
       - ../core/mailer:/app
@@ -216,7 +251,13 @@ services:
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mobile
-      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      SIBERIAN_SERVICE_NAME: mobile
+      # The Base App reads phone app state to draw the product side menu.
+      SIBERIAN_CALLERS: >-
+        orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_MOBILE:-dev_orchestrator_to_mobile},
+        base=${SIBERIAN_TOKEN_BASE_MOBILE:-dev_base_to_mobile}
+      # Registers itself with Storage like a module, to keep build artifacts.
+      SIBERIAN_CALLEES: storage=${SIBERIAN_TOKEN_MOBILE_STORAGE:-dev_mobile_to_storage}
       # A different trust level gets a different credential. The builder runs
       # third-party module code; the Orchestrator does not.
       SIBERIAN_BUILDER_TOKEN: ${SIBERIAN_BUILDER_TOKEN:-builder_dev_only}
@@ -285,6 +326,12 @@ services:
       # instead, which still works and simply costs more.
       GARAGE_PUBLIC_ENDPOINT: ${GARAGE_PUBLIC_ENDPOINT:-https://s3.${SIBERIAN_DOMAIN:-siberian.test}}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-storage_service_dev_only}
+      SIBERIAN_SERVICE_NAME: storage
+      # The Mobile service registers itself here like a module, to store build
+      # artifacts, so it is a caller as well as the Orchestrator.
+      SIBERIAN_CALLERS: >-
+        orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_STORAGE:-dev_orchestrator_to_storage},
+        mobile=${SIBERIAN_TOKEN_MOBILE_STORAGE:-dev_mobile_to_storage}
     volumes:
       - ../core/storage:/app
       - ../lib:/app/lib
@@ -328,7 +375,8 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_database
       MODULEDB_ADMIN_URL: postgres://postgres:${MODULEDB_PASSWORD:-moduledb_dev_only}@moduledb:5432/postgres
       CORE_CONFIGURATION_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_configuration
-      SIBERIAN_ADMIN_TOKEN: ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}
+      SIBERIAN_SERVICE_NAME: database
+      SIBERIAN_CALLERS: orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_DATABASE:-dev_orchestrator_to_database}
       MODULEDB_HOST: db
       MODULEDB_PORT: "5432"
     volumes:

@@ -18,7 +18,7 @@ class StorageAccess
   MODULE_NAME = "mobile"
 
   def initialize(endpoint: ENV.fetch("SIBERIAN_STORAGE_URL", "http://storage:3000"),
-                 admin_token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
+                 admin_token: Siberian::ServiceIdentity.token_for(:storage))
     @endpoint = endpoint
     @admin_token = admin_token
   end

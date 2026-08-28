@@ -1,6 +1,9 @@
 #!/bin/sh
 S=http://storage:3000
-A="Authorization: Bearer orchestrator_dev_only"
+# These endpoints are for core services. This stands in for the Orchestrator,
+# and since there is one secret per pair of services it is specifically the
+# Orchestrator-to-that-service credential, which works nowhere else.
+A="Authorization: Bearer ${SIBERIAN_TOKEN_ORCHESTRATOR_STORAGE:-dev_orchestrator_to_storage}"
 
 # A domain of its own, not the one the stack serves.
 #

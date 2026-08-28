@@ -18,7 +18,7 @@ module Transport
   end
 
   def self.resolve(orchestrator: ENV.fetch("SIBERIAN_ORCHESTRATOR_URL", "http://orchestrator:3000"),
-                   token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
+                   token: Siberian::ServiceIdentity.token_for(:orchestrator))
     implementation = lookup(orchestrator, token)
 
     if implementation && implementation["url"] && !implementation["built_in"]

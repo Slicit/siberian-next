@@ -13,7 +13,7 @@ class RoleCatalogue
   class Error < StandardError; end
 
   def initialize(auth_url: ENV.fetch("SIBERIAN_AUTH_URL", "http://auth:3000"),
-                 admin_token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
+                 admin_token: Siberian::ServiceIdentity.token_for(:auth))
     @auth_url = auth_url
     @admin_token = admin_token
   end

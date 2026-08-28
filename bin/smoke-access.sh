@@ -7,7 +7,7 @@
 DOMAIN="${SIBERIAN_DOMAIN:-siberian.test}"
 CA="${SIBERIAN_CA:-deploy/certs/ca.pem}"
 PASSWORD="${SIBERIAN_DEMO_PASSWORD:-siberian-demo}"
-ADMIN="Authorization: Bearer ${SIBERIAN_ADMIN_TOKEN:-orchestrator_dev_only}"
+ADMIN="Authorization: Bearer ${SIBERIAN_TOKEN_ORCHESTRATOR_AUTH:-dev_orchestrator_to_auth}"
 
 login() {
   jar="/tmp/access_$1.txt"

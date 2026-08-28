@@ -7,7 +7,8 @@
 # title, an area, and a URL.
 module Internal
   class CapabilitiesController < ActionController::API
-    before_action :authenticate_internal!
+    include Siberian::ServiceAuthentication
+    permit_services :base
 
     # GET /internal/capabilities
     def index
@@ -36,12 +37,5 @@ module Internal
 
     private
 
-    def authenticate_internal!
-      expected = ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only")
-      given = request.headers["Authorization"].to_s.delete_prefix("Bearer ").strip
-      return if ActiveSupport::SecurityUtils.secure_compare(given, expected)
-
-      render json: { error: "internal token required" }, status: :unauthorized
-    end
   end
 end

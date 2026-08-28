@@ -10,7 +10,7 @@ require "json"
 # full something is.
 class StorageClient
   def initialize(endpoint: ENV.fetch("SIBERIAN_STORAGE_URL", "http://storage:3000"),
-                 token: ENV.fetch("SIBERIAN_ADMIN_TOKEN", "orchestrator_dev_only"))
+                 token: Siberian::ServiceIdentity.token_for(:storage))
     @endpoint = endpoint
     @token = token
   end

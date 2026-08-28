@@ -5,6 +5,7 @@ module Admin
   class AppsController < ApplicationController
     before_action :authenticate_admin!
 
+
     # GET /admin/apps
     def index
       render json: {
@@ -200,6 +201,10 @@ module Admin
     end
 
     private
+
+    # The Base App reads phone app state to draw the product side menu, so it
+    # is admitted here and on no other Mobile endpoint.
+    def permitted_callers = %w[orchestrator base]
 
     def serialize(app)
       enabled = app.enabled_capabilities
