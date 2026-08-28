@@ -78,6 +78,10 @@ say "starting the nightly sweep in $REPO"
 
 record "check" ./bin/check
 record "test-lib" ./bin/test-lib
+# Asks whether every class the application names can actually be loaded, and
+# whether the whole thing would boot the way a deployment configures it. The box
+# runs in development mode on purpose, so nothing else ever exercises either.
+record "check-boot" ./bin/check-boot
 
 for smoke in bin/smoke-*; do
   case "$smoke" in

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Two questions a running stack cannot answer about itself.
+#
+# The first: can every class this application refers to actually be loaded?
+# Development autoloads on demand, so a controller naming a class that was
+# renamed is fine until somebody opens that page. `zeitwerk:check` loads
+# everything at once, which is what production would do at boot, and says so
+# now instead.
+#
+# The second: would this boot in production at all? The box runs in development
+# mode deliberately, so nothing here exercises the production configuration
+# until the day somebody deploys, and that is a poor day to find out that a
+# setting is missing.
+#
+# Neither changes how the stack runs. They ask questions of it.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+COMPOSE="docker compose --env-file .env -f deploy/compose.yml"
+SERVICES="${SIBERIAN_SERVICES:-orchestrator base auth mailer storage database mobile}"
+
+# A boot probe needs one, and it never signs anything: this runs `runner`, which
+# serves no request and issues no cookie. A deployment sets a real one.
+PROBE_SECRET="boot_probe_only_never_used_to_sign_anything"
+
+failures=0
+
+for service in $SERVICES; do
+  printf '%-14s ' "$service"
+
+  if ! $COMPOSE ps --status running --services 2>/dev/null | grep -qx "$service"; then
+    echo "not running, skipped"
+    continue
+  fi
+
+  # Everything the application can name, loaded at once.
+  if out=$($COMPOSE exec -T "$service" bin/rails zeitwerk:check 2>&1); then
+    if printf '%s' "$out" | grep -q "All is good"; then
+      autoload="loads"
+    else
+      autoload="UNCLEAR"
+      failures=$((failures + 1))
+    fi
+  else
+    autoload="FAILED"
+    failures=$((failures + 1))
+  fi
+
+  # The same application, configured the way a deployment would.
+  if $COMPOSE exec -T \
+      -e RAILS_ENV=production \
+      -e SECRET_KEY_BASE="$PROBE_SECRET" \
+      "$service" bin/rails runner 'nil' >/dev/null 2>&1; then
+    production="boots"
+  else
+    production="FAILED"
+    failures=$((failures + 1))
+  fi
+
+  echo "autoload: $autoload   production: $production"
+
+  if [ "$autoload" != "loads" ]; then
+    printf '%s\n' "$out" | tail -6 | sed 's/^/    /'
+  fi
+done
+
+echo
+if [ "$failures" -eq 0 ]; then
+  echo "Every service loads everything it names, and boots in production configuration."
+else
+  echo "$failures problem(s). A class that cannot be eager loaded is a 500 waiting"
+  echo "for somebody to open the right page."
+fi
+
+exit "$failures"
