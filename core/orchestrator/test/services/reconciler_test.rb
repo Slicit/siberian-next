@@ -66,8 +66,11 @@ class ReconcilerTest < ActiveSupport::TestCase
                    .call.installed_module
   end
 
+  # `extra` is appended after the heredoc rather than interpolated into it: a
+  # squiggly heredoc strips indentation per line, so a multi-line block dropped
+  # into the middle comes out at the wrong depth and parses as something else.
   def manifest(name, extra)
-    Siberian::Contracts::Manifest.parse(<<~YAML)
+    Siberian::Contracts::Manifest.parse(<<~YAML + extra.to_s)
       schema_version: 1
       name: #{name}
       version: 1.0.0
@@ -80,7 +83,15 @@ class ReconcilerTest < ActiveSupport::TestCase
       routes:
         base: /#{name}
         entry: web
-      #{extra}
+    YAML
+  end
+
+  def asking_for_storage
+    <<~YAML
+      permissions:
+        storage:
+          spaces: [files]
+          quota_mb: 10
     YAML
   end
 
@@ -111,7 +122,9 @@ class ReconcilerTest < ActiveSupport::TestCase
   end
 
   test "a missing storage registration is reported and not repaired" do
-    install("demo-tasks", "storage:\n  spaces: [files]\n  quota_mb: 10")
+    installed = install("demo-tasks", asking_for_storage)
+    assert installed.parsed_manifest.storage_spaces.any?,
+           "the fixture has to actually ask for storage or this proves nothing"
     registrar = FakeRegistrar.new(known: { mobile: ["demo-tasks"], storage: [] })
 
     result = reconcile(registrar: registrar)
