@@ -20,6 +20,7 @@ Rails.application.routes.draw do
   # Orchestrator-facing, behind the admin token. A module cannot grant itself
   # anything, which is the entire point of approving grants at install time.
   namespace :admin do
+    get "modules", to: "modules#index"
     post "modules", to: "modules#create"
     post "modules/:module_name/databases", to: "modules#provision"
     post "modules/:module_name/table_grants", to: "modules#grant_tables"

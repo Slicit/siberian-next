@@ -14,6 +14,7 @@ Rails.application.routes.draw do
   end
 
   namespace :admin do
+    get "modules", to: "modules#index"
     post "modules", to: "modules#create"
     delete "modules/:module_name", to: "modules#destroy"
     get "queue", to: "modules#queue"

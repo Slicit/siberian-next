@@ -16,6 +16,7 @@ Rails.application.routes.draw do
   # Orchestrator-facing, behind the admin token. A module cannot register
   # itself, because grants are approved by an operator before they exist.
   namespace :admin do
+    get "modules", to: "modules#index"
     post "modules", to: "modules#create"
     post "modules/:module_name/buckets", to: "modules#provision"
     delete "modules/:module_name", to: "modules#destroy"

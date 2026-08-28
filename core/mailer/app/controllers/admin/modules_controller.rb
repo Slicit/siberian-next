@@ -5,6 +5,23 @@ module Admin
   class ModulesController < ApplicationController
     before_action :authenticate_admin!
 
+    # GET /admin/modules
+    #
+    # What this service knows, so the Orchestrator can compare it against what
+    # it installed. Names and shape only: a reconciler needs to know whether a
+    # registration exists, never what its token is.
+    def index
+      render json: {
+        modules: ModuleRegistration.active.order(:module_name).map do |registration|
+          {
+            module_name: registration.module_name,
+            module_uuid: registration.module_uuid,
+            daily_limit: registration.daily_limit
+          }
+        end
+      }
+    end
+
     # POST /admin/modules
     def create
       registration, token = ModuleRegistration.register!(

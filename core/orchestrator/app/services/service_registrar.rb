@@ -63,6 +63,25 @@ class ServiceRegistrar
     end
   end
 
+  # What a service currently knows, by module name. Used to compare intent
+  # against reality rather than assuming install got there.
+  #
+  # `service` is one of :storage, :database, :mailer, :mobile.
+  def known_modules(service)
+    body = get(service_url(service), "/admin/modules")
+    Array(body["modules"]).filter_map { |entry| entry["module_name"] }.to_set
+  end
+
+  # Re-sends what the Mobile service was told at install.
+  #
+  # Safe to call at any time, which is not true of the other three: the token
+  # this returns is issued and then dropped on the floor by ModuleInstaller,
+  # which injects only the storage, database, and mail tokens into a container.
+  # Rotating a token nothing holds costs nothing.
+  def reregister_mobile(installed_module, manifest)
+    register_mobile(installed_module, manifest)
+  end
+
   def revoke(installed_module)
     %W[#{@storage_url}/admin/modules/#{installed_module.name}
        #{@database_url}/admin/modules/#{installed_module.name}
@@ -152,6 +171,34 @@ class ServiceRegistrar
     body = post(@database_url, "/admin/modules/#{installed_module.name}/databases",
                 { domain: domain.hostname, logical_name: logical_name })
     { kind: "database", identifier: body["database"] }
+  end
+
+  def service_url(service)
+    case service.to_sym
+    when :storage then @storage_url
+    when :database then @database_url
+    when :mailer then @mailer_url
+    when :mobile then @mobile_url
+    else raise ArgumentError, "unknown service #{service}"
+    end
+  end
+
+  def get(base, path)
+    uri = URI.join(base, path)
+    request = Net::HTTP::Get.new(uri)
+    request["Authorization"] = "Bearer #{@admin_token}"
+
+    response = Net::HTTP.start(uri.hostname, uri.port, open_timeout: 5, read_timeout: 15) do |http|
+      http.request(request)
+    end
+
+    unless response.code.to_i.between?(200, 299)
+      raise Error, "#{uri} returned #{response.code}: #{response.body.to_s[0, 300]}"
+    end
+
+    response.body.to_s.empty? ? {} : JSON.parse(response.body)
+  rescue Errno::ECONNREFUSED, Net::OpenTimeout => e
+    raise Error, "#{base} unreachable: #{e.message}"
   end
 
   def post(base, path, payload)

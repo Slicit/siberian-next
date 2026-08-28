@@ -25,6 +25,10 @@ Rails.application.routes.draw do
     end
 
     resources :roles, only: %i[index create update destroy]
+
+    # Delivers catalogue permissions added since a seeded role was created.
+    # Idempotent, so the Orchestrator can call it on every reconcile.
+    post "roles/reconcile", to: "roles#reconcile"
   end
 
   get "up", to: "rails/health#show", as: :rails_health_check
