@@ -14,7 +14,7 @@ convenience.
 
 | | |
 |---|---|
-| Host | `192.168.1.86`, user `claude`, passwordless sudo |
+| Host | `claude-machine-01.home`, user `claude`, passwordless sudo. Address it by name: the box takes its address by DHCP, so the IP moves. It was `192.168.1.86` when this was written |
 | SSH | `ssh siberian` (alias in `~/.ssh/config`, key `~/.ssh/siberian_debian`) |
 | Repo | `~/siberian-next`, remote over SSH, pushes as `Slicit` |
 | Engine | Docker 29.7.2 |
@@ -78,7 +78,11 @@ CA exists on a laptop by default.
 2. Add hosts entries pointing at the box. Wildcards are not possible in a hosts
    file, so **every module origin needs its own line**, which is the sharpest
    rough edge in the setup. `bin/hosts-file` prints the current set, on the box,
-   from the domains and modules actually installed:
+   from the domains and modules actually installed.
+
+   These are addresses rather than `claude-machine-01.home`, because a hosts
+   file maps names to addresses and cannot point one name at another. So this
+   is the one place the DHCP address matters: regenerate it if the box moves.
 
 ```
 ./bin/hosts-file
