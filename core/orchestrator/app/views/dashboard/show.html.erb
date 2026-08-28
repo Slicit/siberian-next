@@ -30,6 +30,54 @@
   </div>
 
   <div class="card">
+    <header>
+      <h2>Last night's checks</h2>
+    </header>
+    <% if !@checks.available? %>
+      <p class="muted">
+        The nightly sweep has not run here yet. Install it with
+        <span class="mono">deploy/maintenance/install.sh</span>.
+      </p>
+    <% else %>
+      <div class="spread" style="margin-bottom:.5rem">
+        <span class="row">
+          <span class="dot <%= @checks.ok? ? 'ok' : 'danger' %>"></span>
+          <%= @checks.passed %> of <%= @checks.total %> passed
+        </span>
+        <span class="muted small">
+          <%= time_ago_in_words(@checks.ran_at) %> ago, in <%= @checks.duration_seconds %>s
+        </span>
+      </div>
+
+      <% if @checks.stale? %>
+        <%# A green sweep from last week is not evidence that anything works
+            today. Said plainly, because the failure this whole feature exists
+            to stop is a check nobody noticed had stopped running. %>
+        <p class="muted small" style="margin:0 0 .5rem">
+          This is older than a day. The sweep may have stopped running.
+        </p>
+      <% end %>
+
+      <% if @checks.failures.any? %>
+        <div class="stack" style="--gap:.4rem">
+          <% @checks.failures.each do |check| %>
+            <div>
+              <span class="row"><span class="dot danger"></span><span class="mono"><%= check.name %></span></span>
+              <% if check.detail.present? %>
+                <p class="muted small mono" style="margin:.15rem 0 0; white-space:pre-wrap"><%= check.detail %></p>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="muted small" style="margin:0">
+          Everything the box can check by itself is passing.
+        </p>
+      <% end %>
+    <% end %>
+  </div>
+
+  <div class="card">
     <header><h2>Domains</h2></header>
     <% if @domains.any? %>
       <div class="stack" style="--gap:.45rem">

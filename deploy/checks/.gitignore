@@ -1,0 +1,4 @@
+# Written by deploy/maintenance/nightly-checks.sh on the box, read by the
+# Backoffice. A result belongs to the machine that produced it, not to the
+# repository.
+latest.json
