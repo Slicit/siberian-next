@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: shipped
 branch: feat-reconciler
 ---
 
@@ -97,3 +97,37 @@ permissions that did not exist when the operator last had an opinion, and
 leaves everything else alone. An operator's removal survives, because the
 removed permission is in the previous snapshot and so is never in the
 difference.
+
+### 2026-08-22: found the test double had been broken for eight days
+
+The first run of the new tests failed for a reason that had nothing to do with
+them: `FakeRouter` never grew `refresh_upstreams!` when `ModuleInstaller`
+started calling it, so every orchestrator test that installs a module has been
+failing on `main`, and the GitHub Actions run has been red on every push since
+2026-08-20.
+
+Seven failures, fixed by four lines in the double. Worth recording not for the
+fix but for what it says about the review's last point: nothing that runs
+automatically was watching, and the smokes that would have caught the same
+class of thing only run when somebody remembers to run them.
+
+## Outcome
+
+Shipped. Both drift bugs the review named are closed on the box, verified
+against the services' own state rather than the Backoffice's opinion of it:
+
+- `example-notes` and `example-relay` were absent from the Mobile service since
+  the day they were installed. The Mobile service's inventory and the
+  Orchestrator's now list the same five modules.
+- The operator role was missing `core.storage.manage` and `core.mobile.manage`,
+  both added to the catalogue after the role was seeded. It holds both.
+
+What runs: `Reconciler` behind a Backoffice button, four steps, one Activity
+record. Twelve tests on the reconciler, eight on the role logic, and
+`bin/smoke-reconcile`, which makes the Mobile service forget a module and
+checks that reconciling brings it back, then that reconciling again changes
+nothing.
+
+Left undone deliberately: nothing calls the reconciler automatically. It is a
+button and a smoke. Running it on a schedule belongs with the nightly smoke
+sweep, which is its own piece of work.
