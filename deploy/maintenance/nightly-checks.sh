@@ -22,6 +22,21 @@ TIMEOUT="${CHECK_TIMEOUT:-600}"
 
 cd "$REPO" || { echo "no repo at $REPO"; exit 1; }
 
+# Not as root, and this is a refusal rather than a warning.
+#
+# The smokes keep working files at fixed paths in /tmp. A run as root leaves
+# root owned files there, and the next run by a person cannot overwrite them:
+# the symptom is a smoke comparing an empty file and reporting that the bytes
+# came back wrong, which looks like a bug in the thing being tested and is not.
+#
+# Nothing here needs root anyway. It drives the stack through the Docker socket
+# and writes one file, both of which the user who owns the checkout can do.
+if [ "$(id -u)" -eq 0 ]; then
+  echo "Refusing to run as root: this leaves root owned files in /tmp that break"
+  echo "the next run by anybody else. Run it as the user who owns $REPO."
+  exit 1
+fi
+
 say() { printf '%s  %s\n' "$(date -Is)" "$*"; }
 
 started_at="$(date -Is)"
@@ -78,6 +93,10 @@ say "starting the nightly sweep in $REPO"
 
 record "check" ./bin/check
 record "test-lib" ./bin/test-lib
+# Asks whether every class the application names can actually be loaded, and
+# whether the whole thing would boot the way a deployment configures it. The box
+# runs in development mode on purpose, so nothing else ever exercises either.
+record "check-boot" ./bin/check-boot
 
 for smoke in bin/smoke-*; do
   case "$smoke" in

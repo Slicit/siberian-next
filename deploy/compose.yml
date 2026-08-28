@@ -15,6 +15,19 @@ x-rails-env: &rails_env
   SIBERIAN_RESOLVER: ${SIBERIAN_RESOLVER:-127.0.0.11}
   RAILS_ENV: ${RAILS_ENV:-development}
 
+# A ceiling for each Rails service, so a leak stops one container instead of the
+# box. They sit around 100 MB each, so this is roughly seven times headroom: it
+# is a bound on the pathological case, not a target to run near.
+#
+# Deliberately not a CPU cap. These services are waiting on Postgres and on each
+# other almost all the time, and capping something that is already idle costs
+# latency under load for no benefit. The thing that needed capping is the
+# builder, which is genuinely CPU hungry and is capped where it is defined.
+x-rails-limits: &rails_limits
+  resources:
+    limits:
+      memory: ${SIBERIAN_RAILS_MEMORY:-768M}
+
 services:
   configuration:
     # The box is a virtual machine on a host that can go down. Without this
@@ -86,6 +99,7 @@ services:
       <<: *rails_build
       args:
         SERVICE: orchestrator
+    deploy: *rails_limits
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_orchestrator
@@ -149,6 +163,7 @@ services:
       <<: *rails_build
       args:
         SERVICE: base
+    deploy: *rails_limits
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_base
@@ -177,6 +192,7 @@ services:
       <<: *rails_build
       args:
         SERVICE: auth
+    deploy: *rails_limits
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_auth
@@ -200,6 +216,7 @@ services:
       <<: *rails_build
       args:
         SERVICE: mailer
+    deploy: *rails_limits
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mailer
@@ -227,6 +244,7 @@ services:
       <<: *rails_build
       args:
         SERVICE: mailer
+    deploy: *rails_limits
     command: ["bin/worker"]
     environment:
       <<: *rails_env
@@ -252,6 +270,7 @@ services:
       <<: *rails_build
       args:
         SERVICE: mobile
+    deploy: *rails_limits
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mobile
@@ -306,6 +325,26 @@ services:
       - ../modules:/modules:ro
       - builder_workspace:/workspace
       - builder_cache:/home/builder
+    # The one container that genuinely competes for the machine.
+    #
+    # Gradle and Metro will each take every core they are offered, and this box
+    # has two. An unbounded build left Postgres waiting for CPU, which surfaces
+    # as the whole product being slow while nothing looks wrong with any of it:
+    # the symptom is everywhere and the cause is here.
+    #
+    # One core, so a build always leaves one for the databases, the Router, and
+    # the eleven services in front of them. Builds get slower. That is the
+    # intended trade: a build nobody is watching should lose to a page somebody
+    # is.
+    #
+    # The memory ceiling is generous because being killed halfway is worse than
+    # being slow, and a Gradle daemon that gets close to it is a build that
+    # would have failed anyway.
+    deploy:
+      resources:
+        limits:
+          cpus: "${SIBERIAN_BUILDER_CPUS:-1.0}"
+          memory: ${SIBERIAN_BUILDER_MEMORY:-3G}
     depends_on:
       mobile:
         condition: service_started
@@ -319,6 +358,7 @@ services:
       <<: *rails_build
       args:
         SERVICE: storage
+    deploy: *rails_limits
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_storage
@@ -374,6 +414,7 @@ services:
       <<: *rails_build
       args:
         SERVICE: database
+    deploy: *rails_limits
     environment:
       <<: *rails_env
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_database
