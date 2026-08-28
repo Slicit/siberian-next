@@ -4,6 +4,10 @@
 Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 -->
 
+## 2026-08-22
+
+- A full review of bottlenecks and proposed next major changes is in `docs/review-2026-08-22.md`: the box hardware, buffered byte paths, the per-request DDL pattern in reference modules, drift as a class, the flat admin token, development mode, and a proposal to make reconciliation the installation model. (trigger: review, source: project review 2026-08-22, agent: claude-code)
+
 ## 2026-08-19
 
 - Nothing re-registers a module with a core service that did not exist when the module was installed. example-notes and example-relay are absent from every phone app because they were installed before the Mobile service, and only a reinstall tells it they exist. `RouteReconciler` solves the same class of problem for routing; service registrations have no equivalent. (trigger: gap, source: feat-mobile-apps verification 2026-08-19, agent: claude-code)
