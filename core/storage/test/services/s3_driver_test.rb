@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require "test_helper"
+# Required explicitly because the drivers are loaded lazily: naming a backend
+# must not drag its client library into a service that never uses it.
+require "object_store/drivers/s3"
 
 # The AWS driver's own decisions, the ones that are not just "call the SDK".
 #
