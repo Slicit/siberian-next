@@ -44,6 +44,13 @@ services:
     environment:
       SIBERIAN_DOMAIN: ${SIBERIAN_DOMAIN:-siberian.test}
       SIBERIAN_RESOLVER: ${SIBERIAN_RESOLVER:-127.0.0.11}
+      # The ceiling on a module upload through the core door. Deliberately well
+      # above the default bucket grant: the Storage service's quotas are what
+      # should refuse an upload, because an operator sets those and can see
+      # them, and nginx's own default of 1m refused everything larger with a
+      # 413 that explained neither. Not unlimited, because a body big enough to
+      # be a problem should still be stopped at the door.
+      SIBERIAN_MAX_UPLOAD: ${SIBERIAN_MAX_UPLOAD:-1024m}
     ports:
       - "${SIBERIAN_HTTP_PORT:-80}:80"
       - "${SIBERIAN_HTTPS_PORT:-443}:443"

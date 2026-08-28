@@ -256,6 +256,22 @@ server {
     rewrite ^/storage/(.*)$ /$1 break;
     proxy_pass $upstream_storage;
     include /etc/nginx/siberian/internal_headers.conf;
+
+    # nginx defaults this to 1m, which silently made the Storage service's
+    # quotas a fiction: a module could be granted 512 MB and still be unable to
+    # store a photograph, because the door refused anything over a megabyte
+    # with a 413 that mentions neither quotas nor this limit.
+    #
+    # Quotas are where a size limit belongs, because an operator sets those per
+    # bucket and per domain and can see them. This is only here to stop a body
+    # so large that refusing it politely is itself the problem, so it is set
+    # well above the default bucket grant rather than tuned to it.
+    client_max_body_size ${SIBERIAN_MAX_UPLOAD};
+
+    # Streamed to Storage as it arrives. Without this nginx spools the entire
+    # upload to disk before opening a connection upstream, which is the same
+    # buffering this service stopped doing, moved one hop out.
+    proxy_request_buffering off;
   }
 
   location /database/ {
