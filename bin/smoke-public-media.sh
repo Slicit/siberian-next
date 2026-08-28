@@ -47,29 +47,62 @@ trap cleanup EXIT
 
 # No Authorization header anywhere below this line. That is the feature.
 rm -f $OUT
-code=$(curl -s --cacert "$CA" -o $OUT -w "%{http_code}" \
+code=$(curl -sL --cacert "$CA" -o $OUT -w "%{http_code}" \
   "https://$DOMAIN/-/public/$MODULE/smoke/pm.png")
 echo "3. anyone reads it, no token   -> $code   (expect 200)"
 [ "$code" = "200" ] || fail "the public path answered $code"
 [ "$(cat $OUT)" = "PUBLICBYTES" ] || fail "the bytes came back wrong: $(cat $OUT)"
 
+# Storage hands out an address and carries nothing. The redirect is the visible
+# part of that: if this ever goes back to answering 200 with a body, the bytes
+# are travelling through Rails again and the feature has quietly regressed.
+SIGNED=$(curl -s --cacert "$CA" -D- -o /dev/null "https://$DOMAIN/-/public/$MODULE/smoke/pm.png" \
+  | grep -i "^location" | tr -d '\r' | sed 's/^location: //I')
+echo "4. Storage redirects, not serves-> $(echo "$SIGNED" | cut -c1-40)..."
+case "$SIGNED" in
+  https://s3.$DOMAIN/*X-Amz-Signature=*) : ;;
+  "") fail "no redirect: Storage is serving the bytes itself" ;;
+  *) fail "redirected somewhere unexpected: $SIGNED" ;;
+esac
+
 # The content type survives. Proxying it through the module lost the real one
 # and guessed from the file extension instead.
-ctype=$(curl -s --cacert "$CA" -D- -o /dev/null "https://$DOMAIN/-/public/$MODULE/smoke/pm.png" \
+ctype=$(curl -s --cacert "$CA" -D- -o /dev/null "$SIGNED" \
   | grep -i "^content-type" | tr -d '\r' | awk '{print $2}')
-echo "4. content type is the real one-> $ctype   (expect image/png)"
+echo "5. content type is the real one-> $ctype   (expect image/png)"
 [ "$ctype" = "image/png" ] || fail "content type came back as '$ctype'"
 
-nosniff=$(curl -s --cacert "$CA" -D- -o /dev/null "https://$DOMAIN/-/public/$MODULE/smoke/pm.png" \
+nosniff=$(curl -s --cacert "$CA" -D- -o /dev/null "$SIGNED" \
   | grep -ic "x-content-type-options: nosniff")
-echo "5. nosniff is set              -> $nosniff   (expect 1)"
+echo "6. nosniff on the object store -> $nosniff   (expect 1)"
 [ "$nosniff" = "1" ] || fail "third-party bytes served without nosniff"
 
-# The preview runs on core.<domain>, so one URL has to work from both.
+# The door forwards signatures; it does not make them. Each of these is a way
+# somebody might try to turn one legitimate URL into access to something else.
+echo -n "7. unsigned request refused    -> "
+code=$(curl -s --cacert "$CA" -o /dev/null -w "%{http_code}" "${SIGNED%%\?*}")
+echo "$code   (expect 403)"
+[ "$code" = "403" ] || fail "the object store served an unsigned request"
+
+echo -n "8. key swapped for a private one-> "
 code=$(curl -s --cacert "$CA" -o /dev/null -w "%{http_code}" \
+  "$(echo "$SIGNED" | sed 's|public/smoke/pm.png|files/pm-private.txt|')")
+echo "$code   (expect 403)"
+[ "$code" = "403" ] || fail "a signature for a public object reached a private one"
+
+echo -n "9. tampered signature refused  -> "
+code=$(curl -s --cacert "$CA" -o /dev/null -w "%{http_code}" \
+  "$(echo "$SIGNED" | sed 's/X-Amz-Signature=./X-Amz-Signature=0/')")
+echo "$code   (expect 403)"
+[ "$code" = "403" ] || fail "a tampered signature was accepted"
+
+# The preview runs on core.<domain>, so one URL has to work from both.
+rm -f $OUT
+code=$(curl -sL --cacert "$CA" -o $OUT -w "%{http_code}" \
   "https://core.$DOMAIN/-/public/$MODULE/smoke/pm.png")
-echo "6. same path on core.<domain>  -> $code   (expect 200)"
+echo "10. same path on core.<domain> -> $code   (expect 200)"
 [ "$code" = "200" ] || fail "the preview origin answered $code"
+[ "$(cat $OUT)" = "PUBLICBYTES" ] || fail "the preview origin served the wrong bytes"
 
 # What must not work.
 for attempt in "../files/pm-private.txt" "..%2ffiles%2fpm-private.txt" "%2e%2e/files/pm-private.txt"; do
@@ -77,15 +110,16 @@ for attempt in "../files/pm-private.txt" "..%2ffiles%2fpm-private.txt" "%2e%2e/f
   code=$(curl -s --cacert "$CA" -o $OUT -w "%{http_code}" \
     "https://$DOMAIN/-/public/$MODULE/$attempt")
   body=$(cat $OUT 2>/dev/null)
-  echo "7. traversal refused           -> $code   ($attempt)"
+  echo "11. traversal refused          -> $code   ($attempt)"
   [ "$code" = "200" ] && fail "the public path reached a private object"
   case "$body" in *PRIVATE*) fail "a private object leaked through the public path";; esac
 done
 
 code=$(curl -s --cacert "$CA" -o /dev/null -w "%{http_code}" \
   "https://$DOMAIN/-/public/not-a-module/anything.png")
-echo "8. unknown module              -> $code   (expect 404)"
+echo "12. unknown module             -> $code   (expect 404)"
 [ "$code" = "404" ] || fail "an unknown module answered $code"
 
 echo
-echo "public media is served without a token and without the module in the path."
+echo "public media comes from the object store itself: no token, no module, and"
+echo "no core service carrying the bytes."
