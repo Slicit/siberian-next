@@ -13,6 +13,12 @@ Rails.application.routes.draw do
     delete ":space/*path", to: "files#destroy", format: false
   end
 
+  # The public space, without a token, so that an image can be a URL a browser
+  # loads rather than bytes a module proxies. The module is named in the path
+  # because there is no token to name it; see PublicFilesController for why that
+  # is safe for this space and only this space.
+  get "public/:module_name/*path", to: "public_files#show", format: false, as: :public_file
+
   # Orchestrator-facing, behind the admin token. A module cannot register
   # itself, because grants are approved by an operator before they exist.
   namespace :admin do
