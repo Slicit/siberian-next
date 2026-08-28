@@ -42,6 +42,37 @@ class ObjectStore
     raise Error, e.message
   end
 
+  # The same object, without ever holding all of it.
+  #
+  # `get` asks the SDK for a response whose body is a StringIO, which means a
+  # 67 MB artifact is 67 MB of Ruby heap in this process for as long as the
+  # download takes, once per concurrent reader. The block form of `get_object`
+  # yields chunks as they arrive instead, and an Enumerator turns that into
+  # something Rails can hand to Rack as a streaming body.
+  #
+  # Metadata comes from a separate HEAD because the size and content type have
+  # to be on the response before the first chunk is written, and the block form
+  # only returns them once it has finished. That is one extra round trip inside
+  # the storage network, which is a good trade against buffering the object.
+  #
+  # Returns [Stored, Enumerator].
+  def stream(space, path)
+    key = @bucket.key_for(space, path)
+    meta = head(space, path)
+
+    body = Enumerator.new do |yielder|
+      client.get_object(bucket: @bucket.name, key: key) do |chunk|
+        yielder << chunk
+      end
+    end
+
+    [meta, body]
+  rescue Aws::S3::Errors::NoSuchKey, Aws::S3::Errors::NotFound
+    raise NotFound, path
+  rescue Aws::S3::Errors::ServiceError => e
+    raise Error, e.message
+  end
+
   def head(space, path)
     key = @bucket.key_for(space, path)
     object = client.head_object(bucket: @bucket.name, key: key)
