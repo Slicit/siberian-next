@@ -61,8 +61,12 @@ server {
   client_max_body_size ${SIBERIAN_MAX_UPLOAD};
 
   location / {
-    set $upstream_garage "http://garage:3900";
-    proxy_pass $upstream_garage;
+    # Where the object store answers S3, from inside the stack. A variable
+    # rather than a name, because which store that is belongs to the
+    # deployment: self hosted here, a managed bucket elsewhere, and this door
+    # is unnecessary altogether against a store the internet can already reach.
+    set $upstream_object_store "${SIBERIAN_OBJECT_STORE_ADDRESS}";
+    proxy_pass $upstream_object_store;
 
     # Host is forwarded exactly as received because it is part of what was
     # signed. The usual forwarded_headers.conf include would be wrong here: it

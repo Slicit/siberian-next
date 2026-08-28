@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Provisions a bucket and drives the ordinary read and write path against a
+# second, different object store, through the driver. Skips if the image for it
+# cannot be pulled.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-s3-backend.sh

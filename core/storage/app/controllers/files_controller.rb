@@ -34,7 +34,7 @@ class FilesController < ApplicationController
       bucket_remaining_bytes: current_bucket.reload.remaining_bytes,
       domain_remaining_bytes: current_bucket.domain_quota.reload.remaining_bytes
     }, status: :created
-  rescue ObjectStore::Error => e
+  rescue StoredObjects::Error => e
     render json: { error: e.message }, status: :bad_gateway
   end
 
@@ -56,7 +56,7 @@ class FilesController < ApplicationController
     response.headers["X-Content-Type-Options"] = "nosniff"
 
     self.response_body = body
-  rescue ObjectStore::NotFound
+  rescue StoredObjects::NotFound
     render json: { error: "not found" }, status: :not_found
   end
 
@@ -78,7 +78,7 @@ class FilesController < ApplicationController
     # document, which is a worse answer than saying so now.
     stored = store.head(space, path)
 
-    unless ObjectStore.public_endpoint
+    unless StoredObjects.public_endpoint
       # Nothing to sign against. Saying so is better than returning a URL that
       # names a host only the inside of the stack can reach.
       return render json: { error: "this deployment has no public object store address" },
@@ -91,7 +91,7 @@ class FilesController < ApplicationController
       size: stored.size,
       content_type: stored.content_type
     }
-  rescue ObjectStore::NotFound
+  rescue StoredObjects::NotFound
     render json: { error: "not found" }, status: :not_found
   end
 
@@ -102,7 +102,7 @@ class FilesController < ApplicationController
     response.headers["ETag"] = stored.etag.to_s
     response.headers["Last-Modified"] = stored.last_modified&.httpdate.to_s
     head :ok
-  rescue ObjectStore::NotFound
+  rescue StoredObjects::NotFound
     head :not_found
   end
 
@@ -110,7 +110,7 @@ class FilesController < ApplicationController
   def destroy
     stored = begin
       store.head(space, path)
-    rescue ObjectStore::NotFound
+    rescue StoredObjects::NotFound
       nil
     end
 
@@ -139,7 +139,7 @@ class FilesController < ApplicationController
   def path = params[:path].to_s
 
   def store
-    @store ||= ObjectStore.new(current_bucket)
+    @store ||= StoredObjects.new(current_bucket)
   end
 
   def check_space

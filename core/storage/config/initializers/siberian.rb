@@ -14,6 +14,7 @@ if shared_lib
   require "contracts"
   require "service_identity"
   require "service_authentication"
+  require "object_store"
 else
   Rails.logger&.warn("Shared lib/ not found. Manifest parsing and the engine driver are unavailable.")
 end
