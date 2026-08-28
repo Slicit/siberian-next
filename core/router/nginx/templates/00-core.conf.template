@@ -28,6 +28,65 @@ server {
   return 301 https://$host$request_uri;
 }
 
+# The object store's own door, for signed URLs.
+#
+# Garage sits on a network no browser can reach, which is what makes a
+# presigned URL useless on its own: the URL names a host that does not resolve
+# outside the stack. This is the address that does resolve, and it forwards to
+# Garage unchanged.
+#
+# Unchanged is the whole requirement. An S3 signature covers the host and the
+# path, so rewriting either invalidates it. That is why this is a subdomain
+# rather than a path prefix on the product domain: the path arriving here is
+# already /<bucket>/<key>, which is exactly what Garage expects, and the Host
+# is what the URL was signed for.
+#
+# What this door can do is bounded by what the caller already holds. No Garage
+# credential is configured here, so nginx cannot sign anything: a request
+# without a valid signature is refused by Garage, and one with a valid
+# signature was issued by the Storage service to somebody it had already
+# decided to serve. The Router gains reachability, not authority.
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name s3.${SIBERIAN_DOMAIN};
+
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server-key.pem;
+
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+
+  # Signed URLs are minted with an expiry and a scope. Anything else here is a
+  # request Garage will refuse, so the ceiling is generous rather than tuned.
+  client_max_body_size ${SIBERIAN_MAX_UPLOAD};
+
+  location / {
+    set $upstream_garage "http://garage:3900";
+    proxy_pass $upstream_garage;
+
+    # Host is forwarded exactly as received because it is part of what was
+    # signed. The usual forwarded_headers.conf include would be wrong here: it
+    # adds X-Siberian-Domain, which means nothing to an object store, and this
+    # door must add as little as possible to a signed request.
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+
+    # Neither direction is buffered. An object served through here should cost
+    # this process a chunk at a time, which is the entire reason it exists.
+    proxy_buffering off;
+    proxy_request_buffering off;
+
+    # These bytes were written by a third-party module. They are already on
+    # their own origin, so an HTML file here runs as s3.<domain> and not as the
+    # product, but a browser guessing a type it was not given is worth refusing
+    # anyway. Set here rather than in Storage because Storage no longer sees
+    # the response: it hands out a URL and steps out of the way.
+    add_header X-Content-Type-Options nosniff always;
+    # Nothing here is ever a frame worth embedding.
+    add_header X-Frame-Options DENY always;
+  }
+}
+
 # Base App. The product shell that wraps installed modules in iframes.
 server {
   listen 443 ssl;

@@ -35,6 +35,9 @@ lines=$(docker compose --env-file .env -f deploy/compose.yml exec -T orchestrato
     usable.each do |domain|
       puts domain
       puts "core.#{domain}"
+      # The object store's door. A signed media URL points here, so a machine
+      # that cannot resolve it sees every image fail while every page loads.
+      puts "s3.#{domain}"
       modules.each { |installed| puts installed.origin_for(domain) }
     end
 

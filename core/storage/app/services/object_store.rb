@@ -142,13 +142,52 @@ class ObjectStore
     total
   end
 
+  # A URL the caller can fetch from the object store directly, valid for a
+  # while and for one object.
+  #
+  # This is how a service stops carrying bytes it has no opinion about. The
+  # signature is made with this bucket's own key, so the URL grants exactly one
+  # object to whoever holds it and nothing else in the bucket, and it stops
+  # working when it expires.
+  #
+  # Signed against the public address rather than the internal one, because the
+  # host is part of what gets signed: a URL signed for `garage:3900` and then
+  # rewritten to a reachable host is a URL with a broken signature.
+  def presigned_get_url(space, path, expires_in:)
+    Aws::S3::Presigner.new(client: public_client).presigned_url(
+      :get_object,
+      bucket: @bucket.name,
+      key: @bucket.key_for(space, path),
+      expires_in: expires_in
+    )
+  end
+
+  # Whether the public door is configured at all. Without it there is nothing
+  # to sign against, and the caller should serve the bytes itself rather than
+  # hand out a URL to a host that does not resolve.
+  def self.public_endpoint
+    ENV["GARAGE_PUBLIC_ENDPOINT"].presence
+  end
+
   private
 
   def client
-    @client ||= Aws::S3::Client.new(
+    @client ||= build_client(ENV.fetch("GARAGE_ENDPOINT", "http://garage:3900"))
+  end
+
+  # Same credentials, addressed the way the outside world reaches Garage. Used
+  # only for signing: nothing is ever fetched through this one from here.
+  def public_client
+    @public_client ||= build_client(
+      self.class.public_endpoint || ENV.fetch("GARAGE_ENDPOINT", "http://garage:3900")
+    )
+  end
+
+  def build_client(endpoint)
+    Aws::S3::Client.new(
       access_key_id: @bucket.access_key_id,
       secret_access_key: @bucket.secret_access_key,
-      endpoint: ENV.fetch("GARAGE_ENDPOINT", "http://garage:3900"),
+      endpoint: endpoint,
       region: ENV.fetch("GARAGE_REGION", "garage"),
       force_path_style: true
     )

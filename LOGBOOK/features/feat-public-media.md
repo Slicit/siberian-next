@@ -132,3 +132,45 @@ Storage out of the read path entirely, and presigned uploads, which would take
 it out of the write path. Both need Garage reachable from a browser, and that
 is a topology change with a security cost that belongs to whoever owns the
 threat model.
+
+### 2026-08-22: the Router reaches Garage, and still cannot read anything
+
+Asked to route public object store URIs from the Router the way an external S3
+service would, which meant finding out what Garage actually offers. Two things,
+from its own API rather than from documentation:
+
+- `websiteAccess` is a boolean on the bucket.
+- A key's permissions are `{read, write, owner}` on the bucket.
+
+Neither has any notion of a prefix. One bucket holds `public/`, `files/`, and
+`tmp/` for a (module, domain) pair, so making that bucket publicly readable
+would publish every private file in it. The S3 way to have a public bucket is
+to have a second bucket, and splitting every module's storage in two is a large
+change with a leak at the end of it if any part is wrong.
+
+Presigned URLs get the same result without that. Storage signs with the
+bucket's own key, so a URL grants one object for one hour and nothing else, and
+the Router only has to forward it.
+
+What the Router gains is reachability, not authority. It holds no Garage
+credential and cannot sign anything, so it can serve only what the caller
+already had a valid signature for. Verified rather than assumed, against the
+running stack: an unsigned request, a tampered signature, a signature whose key
+was edited to a private object in the same bucket, and one pointed at a
+different bucket entirely are all refused with 403.
+
+The signature covers the host and the path, which is why the door is
+`s3.<domain>` and not a path on the product domain: the path arriving at Garage
+has to be exactly the `/<bucket>/<key>` that was signed, and a rewrite would
+invalidate it. The wildcard certificate already covers the name.
+
+## Outcome, revised
+
+Public media is now served by the object store itself. Storage answers with a
+302 to a signed URL and carries no bytes at all; before this feature it read
+every object into a String, and between the first half of this feature and this
+one it streamed them.
+
+For a CMS image on a phone the path went from four copies, two of them buffered
+in a language runtime, to none: the Router forwards a signed request and Garage
+answers it.
