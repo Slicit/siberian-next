@@ -49,7 +49,8 @@ class MobileController < ApplicationController
       bundle_identifier: params[:bundle_identifier],
       version: params[:version],
       primary_color: params[:primary_color],
-      theme: params[:theme]
+      theme: params[:theme],
+      follow_device_scheme: params[:follow_device_scheme]
     })
 
     redirect_to mobile_app_path(domain), notice: notice_for(result, "App saved.")

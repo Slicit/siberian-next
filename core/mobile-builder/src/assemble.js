@@ -173,7 +173,10 @@ export async function assemble(plan, workspace, assets = {}) {
         // whichever the query string asks for and falls back to this one,
         // which is what lets the preview try a theme on without a build.
         theme: plan.app.theme || "daylight",
-        themes: plan.app.themes || {}
+        themes: plan.app.themes || {},
+        // Whether the phone's own light or dark setting may pick a different
+        // palette than the one an operator chose.
+        followDeviceScheme: plan.app.follow_device_scheme !== false
       },
       null,
       2

@@ -35,6 +35,9 @@ module Admin
       app.version = params[:version].presence || app.version || "1.0.0"
       app.primary_color = params[:primary_color] if params.key?(:primary_color)
       app.theme = params[:theme] if params.key?(:theme)
+      if params.key?(:follow_device_scheme)
+        app.follow_device_scheme = params[:follow_device_scheme].to_s == "true"
+      end
       app.icon_path = params[:icon_path] if params.key?(:icon_path)
 
       if app.save
@@ -218,6 +221,7 @@ module Admin
         build_number: app.build_number,
         primary_color: app.primary_color,
         theme: app.theme,
+        follow_device_scheme: app.follow_device_scheme,
         icon_path: app.icon_path,
         splash: {
           image: app.splash_image?,

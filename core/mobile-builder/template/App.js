@@ -8,7 +8,16 @@
 // The same file renders on the web through React Native for Web, which is what
 // the preview is: not a mock of the app, the app.
 import React, { useMemo } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View
+} from "react-native";
 import { WebView } from "react-native-webview";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -22,21 +31,39 @@ const Tab = createBottomTabNavigator();
 // is still reachable from Home, which is the one tab that is always there.
 const MAX_TABS = 4;
 
-// Which palette to draw in.
+// Which of the palettes to render in.
 //
-// The app is built with one, and carries all of them, so the preview can try
-// another by asking for it in the query string. That is the whole mechanism:
-// a theme is data the shell reads at render time, so switching costs a reload
-// rather than a ten minute build.
+// Three things get a say, in this order.
 //
-// Only on the web, and deliberately. On a phone the app was built for a theme
-// and there is no address bar to override it from, so reading a query string
-// there would be a setting with no way to reach it.
-function activeThemeKey() {
+// The query string, on the web only. That is how the Backoffice preview tries a
+// theme on without a build. On a phone there is no address bar to reach it from,
+// so honouring it there would be a setting with no way to change it.
+//
+// Then the phone's own light or dark setting, when the operator left that on. A
+// theme here is a palette rather than a light-or-dark decision, so the chosen
+// one is kept whenever its scheme matches: an app set to Meadow stays Meadow on
+// every phone set to light, and only a phone asking for dark moves. The
+// alternative is showing a light app to somebody who set their phone to dark at
+// eleven at night.
+//
+// Then the theme the operator chose, which is the answer whenever nothing above
+// had an opinion.
+function activeThemeKey(deviceScheme) {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     const asked = new URLSearchParams(window.location.search).get("theme");
     if (asked && config.themes && config.themes[asked]) return asked;
   }
+
+  if (config.followDeviceScheme && deviceScheme && config.themes) {
+    const chosen = config.themes[config.theme];
+    if (chosen && chosen.scheme === deviceScheme) return config.theme;
+
+    const match = Object.keys(config.themes).find(
+      (key) => config.themes[key].scheme === deviceScheme
+    );
+    if (match) return match;
+  }
+
   return config.theme;
 }
 
@@ -184,7 +211,10 @@ function screenComponent(screen, key, theme, styles) {
 }
 
 export default function App() {
-  const key = activeThemeKey();
+  // Re-renders when somebody changes their phone from light to dark, which is
+  // the whole reason this is a hook rather than a value read once at startup.
+  const deviceScheme = useColorScheme();
+  const key = activeThemeKey(deviceScheme);
   const theme = useMemo(() => paletteFor(key), [key]);
   const styles = useMemo(() => sheet(theme), [theme]);
 

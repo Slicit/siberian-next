@@ -92,6 +92,24 @@ module Siberian
       THEMES.fetch(key.to_s, THEMES.fetch(DEFAULT))
     end
 
+
+    # The theme to render in when the device has asked for light or dark.
+    #
+    # A theme is a palette rather than a light-or-dark decision, so the
+    # operator's choice is kept whenever it fits: Meadow on a light phone stays
+    # Meadow, and only a phone asking for dark moves to a dark theme. That is
+    # what makes following the device something an operator can leave on.
+    #
+    # Falls back to the preferred theme when no theme matches the scheme, which
+    # is the honest answer for a catalogue that has none: rendering in the wrong
+    # scheme is better than rendering in nothing.
+    def self.for_scheme(scheme, preferred: DEFAULT)
+      wanted = scheme.to_s == "dark" ? "dark" : "light"
+      return preferred.to_s if fetch(preferred)[:scheme] == wanted
+
+      match = THEMES.find { |_, palette| palette[:scheme] == wanted }
+      match ? match.first : preferred.to_s
+    end
     # Everything, for a picker and for the app, which carries all of them so a
     # preview can switch without rebuilding.
     def self.all = THEMES
