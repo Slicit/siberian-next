@@ -53,7 +53,10 @@ op -o /tmp/appuser_page -w '' "https://core.$DOMAIN/app-users"
 ID=$(grep -B4 ">$DOMAIN<" /tmp/appuser_page | grep -oE 'app-users/[0-9]+' | head -1 | grep -oE '[0-9]+')
 [ -z "$ID" ] && ID=$(grep -oE 'app-users/[0-9]+' /tmp/appuser_page | head -1 | grep -oE '[0-9]+')
 op -o /tmp/appuser_page "https://core.$DOMAIN/app-users/$ID"
-PAGE_TOKEN=$(grep -o 'name="authenticity_token" value="[^"]*"' /tmp/appuser_page | head -1 | sed 's/.*value="//; s/"//')
+# The meta tag, not a form field. Per-form CSRF tokens are scoped to the
+# action they were rendered for, so the first form on the page carries a token
+# that is valid for that form and nothing else.
+PAGE_TOKEN=$(grep -o 'name="csrf-token" content="[^"]*"' /tmp/appuser_page | head -1 | sed 's/.*content="//; s/"//')
 
 check "the domain has an app users page" \
   "$(op -o /dev/null -w '%{http_code}' "https://core.$DOMAIN/app-users/$ID")" "200"
