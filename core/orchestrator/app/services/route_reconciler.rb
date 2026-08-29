@@ -60,6 +60,18 @@ class RouteReconciler
       []
     end
 
+    # A domain the Router serves that the applications will refuse.
+    #
+    # Rails checks the Host header against a list read from the environment at
+    # boot, so a domain added here answers with a routing error until the
+    # services are restarted with it. Reported rather than repaired: restarting
+    # every core service is not something a reconcile should decide to do.
+    unallowed = written_domains - allowed_domains
+    if unallowed.any?
+      errors << "not in SIBERIAN_DOMAINS, so the applications will refuse them " \
+                "until the core services restart: #{unallowed.join(', ')}"
+    end
+
     reloaded = begin
       @router.reload
       true
@@ -78,6 +90,14 @@ class RouteReconciler
   end
 
   private
+
+  # What the applications were told to accept, which is not necessarily what the
+  # database says is served.
+  def allowed_domains
+    list = ENV["SIBERIAN_DOMAINS"].to_s.split(",").map(&:strip)
+    list << ENV["SIBERIAN_DOMAIN"].to_s.strip
+    list.reject(&:empty?).uniq
+  end
 
   # The data cluster loses its attachments for the same reason the Router does.
   def attach_data_cluster(installed)

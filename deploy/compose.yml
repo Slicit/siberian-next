@@ -12,6 +12,13 @@ x-rails-build: &rails_build
 
 x-rails-env: &rails_env
   SIBERIAN_DOMAIN: ${SIBERIAN_DOMAIN:-siberian.test}
+  # Every domain the system serves, comma separated. Rails refuses a Host it
+  # was not told about, so a domain missing here reaches the right server block
+  # in the Router and is then refused by the application.
+  #
+  # Read at boot, so adding a domain in the Backoffice needs a restart before
+  # that domain answers. The reconciler reports the gap.
+  SIBERIAN_DOMAINS: ${SIBERIAN_DOMAINS:-${SIBERIAN_DOMAIN:-siberian.test}}
   SIBERIAN_RESOLVER: ${SIBERIAN_RESOLVER:-127.0.0.11}
   RAILS_ENV: ${RAILS_ENV:-development}
 

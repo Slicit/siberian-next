@@ -33,8 +33,20 @@ Rails.application.configure do
     # Host every module-originated call arrives with.
     config.hosts += %w[core orchestrator base auth mailer storage database mobile router]
 
-    domain = ENV["SIBERIAN_DOMAIN"].presence
-    if domain
+    # Every served domain, not just one.
+    #
+    # SIBERIAN_DOMAIN names the first; SIBERIAN_DOMAINS names all of them, comma
+    # separated. A second domain used to reach the right server block in the
+    # Router and then be refused here, which reads as a routing fault and is
+    # not one: the Router had already decided the request was legitimate.
+    #
+    # Static, so adding a domain in the Backoffice needs a restart before that
+    # domain answers. The reconciler reports the gap rather than leaving it to
+    # be discovered.
+    domains = ENV["SIBERIAN_DOMAINS"].to_s.split(",").map(&:strip).reject(&:empty?)
+    domains << ENV["SIBERIAN_DOMAIN"].to_s.strip
+
+    domains.reject(&:empty?).uniq.each do |domain|
       config.hosts << domain
       # Leading dot matches every subdomain, which is how module origins
       # arrive: <module>.apps.<domain>.
