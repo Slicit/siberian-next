@@ -80,6 +80,30 @@ Checked against the running module rather than reasoned about:
 `display:none`, and `url(http://evil.test/x)` renders the fallback and no
 `evil.test`.
 
+### 2026-08-29: two ways a build reported success and delivered the old app
+
+Neither of these was a theme bug, and both were only visible because the themes
+gave the preview something new to show. They are worth writing down because the
+shape is the same: everything upstream said it worked.
+
+**The builder was running code it had already loaded.** `core/mobile-builder`
+is bind mounted, so an edit shows up inside the container immediately and
+`grep` inside it confirms the new line is there. Node does not reread a module
+after loading it, and that process had been up for days. Builds kept succeeding
+and kept emitting the previous `siberian.config.js`, so the app had no palettes
+in it while the plan that produced it had all three.
+
+The worker now hashes its own source between builds, never during one, and
+exits when it differs. Compose restarts it. Restarting by hand after an edit
+would also have worked and is exactly the step that gets forgotten.
+
+**The preview could not load its own bundle.** Expo exports asset references
+root-absolute, `/_expo/static/js/...`, which is right for a site at the root of
+a host. The preview is served under `/mobile/:id/preview/`, so the browser asked
+the Backoffice root for the bundle and got a 404 and a blank frame. Rewritten in
+the export rather than in the page that frames it, so the directory works
+wherever it is put down.
+
 ### 2026-08-29: the CPU cap made Android builds roughly three times slower
 
 Not a decision so much as a measured consequence, recorded because it is the
