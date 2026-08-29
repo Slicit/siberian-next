@@ -10,9 +10,22 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_29_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "app_password_resets", force: :cascade do |t|
+    t.bigint "app_user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "expires_at", null: false
+    t.string "requested_ip"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.datetime "used_at"
+    t.index ["app_user_id", "created_at"], name: "index_app_password_resets_on_app_user_id_and_created_at"
+    t.index ["app_user_id"], name: "index_app_password_resets_on_app_user_id"
+    t.index ["token_digest"], name: "index_app_password_resets_on_token_digest", unique: true
+  end
 
   create_table "app_sessions", force: :cascade do |t|
     t.bigint "app_user_id", null: false
@@ -53,6 +66,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_140000) do
     t.datetime "updated_at", null: false
     t.index "domain, lower((email)::text)", name: "index_app_users_on_domain_and_email", unique: true
     t.index ["domain", "active"], name: "index_app_users_on_domain_and_active"
+  end
+
+  create_table "auth_attempts", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "domain", null: false
+    t.string "identifier", null: false
+    t.string "ip_address"
+    t.string "kind", null: false
+    t.index ["created_at"], name: "index_auth_attempts_on_created_at"
+    t.index ["kind", "identifier", "created_at"], name: "index_auth_attempts_on_kind_and_identifier_and_created_at"
+    t.index ["kind", "ip_address", "created_at"], name: "index_auth_attempts_on_kind_and_ip_address_and_created_at"
   end
 
   create_table "permission_grants", force: :cascade do |t|
@@ -125,6 +149,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_140000) do
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
+  add_foreign_key "app_password_resets", "app_users"
   add_foreign_key "app_sessions", "app_users"
   add_foreign_key "permission_grants", "users"
   add_foreign_key "permission_grants", "users", column: "granted_by_id"
