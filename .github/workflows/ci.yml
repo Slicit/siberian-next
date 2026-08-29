@@ -20,6 +20,9 @@ jobs:
           node-version: '22'
       # bin/check is the same script developers run locally. If it passes here
       # and fails there, or the reverse, the check is the bug.
+      - name: A JSX parser, so the native screens are parsed rather than skipped
+        run: npm install --no-save --no-audit --no-fund @babel/parser@7.24.7
+
       - name: Architecture and convention checks
         run: ./bin/check
 
@@ -50,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [orchestrator, base, auth, mailer, storage, database]
+        service: [orchestrator, base, auth, mailer, mobile, storage, database]
     services:
       postgres:
         image: postgres:16-alpine

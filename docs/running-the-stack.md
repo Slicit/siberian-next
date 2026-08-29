@@ -254,6 +254,13 @@ the same address on another domain is a different person and signing in on the
 wrong one is refused exactly like a wrong password. The Backoffice lists them
 under App users.
 
+**A service suite fails on the box but passes in CI.** Run it with
+`bin/test-service <name>`, not `bin/rails test` inside the container. Every
+service is handed a `DATABASE_URL` and Rails merges it into every environment,
+so a bare `bin/rails test` runs against the development database: it fails on
+other people's data and writes to it. `bin/test-service` sets the test database
+the way CI does.
+
 **A permission change has not taken effect.** It is cached for 30 seconds per
 session. Wait, or use the endpoint that never caches.
 

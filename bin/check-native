@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Every JSX file the phone app is assembled from, parsed.
+#
+# Nothing else parses them until a build runs, and a build is minutes for the
+# web export and over half an hour for Android. A missing bracket in a native
+# screen should not cost that.
+#
+# The parser comes from one of two places, because there are two places this
+# runs: the builder image carries it, and in CI a step installs it. The runner
+# is chosen once, up front, so a file that genuinely fails to parse is reported
+# rather than mistaken for a missing dependency and retried somewhere else.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+files=()
+while IFS= read -r file; do files+=("$file"); done < <(
+  { ls modules/*/native/*.js 2>/dev/null || true
+    ls core/mobile-builder/template/*.js 2>/dev/null || true; }
+)
+
+if [ ${#files[@]} -eq 0 ]; then
+  echo "No native JSX to parse."
+  exit 0
+fi
+
+BUILDER_IMAGE="${BUILDER_IMAGE:-siberian-mobile-builder}"
+BAKED=/opt/checktools/node_modules/@babel/parser
+
+# Whatever is running this, if it can already resolve the parser.
+if command -v node >/dev/null 2>&1 && node -e 'require("@babel/parser")' >/dev/null 2>&1; then
+  exec node bin/parse-native.mjs "${files[@]}"
+fi
+
+# The builder image, which carries it. The image rather than the running
+# container: this needs the repository, and the container mounts only part of
+# it.
+if docker image inspect "$BUILDER_IMAGE" >/dev/null 2>&1; then
+  exec docker run --rm -v "$PWD:/repo" -w /repo -e PARSER_ROOT="$BAKED" \
+    "$BUILDER_IMAGE" node bin/parse-native.mjs "${files[@]}"
+fi
+
+# Refused rather than skipped. A check that passes silently when it could not
+# run is worse than no check, because the green is read as an answer.
+echo "Cannot parse the native JSX: no @babel/parser here and no ${BUILDER_IMAGE} image." >&2
+echo "Build the builder image, or: npm install -g @babel/parser" >&2
+exit 1

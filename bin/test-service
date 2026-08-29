@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Runs a core service's test suite on the box, against a test database.
+#
+# `bin/rails test` inside a service container does not do this. Every service is
+# handed a DATABASE_URL, Rails merges that into every environment including
+# test, and so the suite runs against the development database. It fails in ways
+# that are about the data rather than the code (a test expecting one module
+# registration found forty-seven), and, worse, it writes: every run left rows
+# behind in a database somebody was using.
+#
+# CI never had the problem, because it sets DATABASE_URL to its own test
+# database explicitly. This does the same thing, so running a suite on the box
+# means what running it in CI means.
+#
+#   bin/test-service auth
+#   bin/test-service            # all of them
+#   bin/test-service auth test/models/app_user_test.rb
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+COMPOSE=(docker compose --env-file .env -f deploy/compose.yml)
+
+# Every service with a suite. `base` is here and mailer-worker is not: the
+# worker shares the Mailer's code and database, so running it would be running
+# the same suite twice against the same rows.
+ALL=(orchestrator base auth mailer mobile storage database)
+
+run_one() {
+  local service="$1"
+  shift
+
+  # Asked for rather than assumed. Deriving the database name from the service
+  # name would be a second place that has to agree with compose, and the first
+  # time they disagreed the suite would quietly run somewhere else.
+  local url
+  if ! url=$("${COMPOSE[@]}" exec -T "$service" printenv DATABASE_URL 2>/dev/null | tr -d '\r'); then
+    echo "  ${service}: not running, skipped"
+    return 0
+  fi
+
+  if [ -z "$url" ]; then
+    echo "  ${service}: no DATABASE_URL, skipped"
+    return 0
+  fi
+
+  echo "=== ${service} ==="
+  "${COMPOSE[@]}" exec -T \
+    -e RAILS_ENV=test \
+    -e DATABASE_URL="${url}_test" \
+    "$service" sh -c 'bin/rails db:prepare >/dev/null && bin/rails test "$@"' -- "$@"
+}
+
+failed=()
+
+if [ $# -gt 0 ] && [ "$1" != "--all" ]; then
+  service="$1"
+  shift
+  run_one "$service" "$@"
+  exit $?
+fi
+
+for service in "${ALL[@]}"; do
+  run_one "$service" || failed+=("$service")
+  echo
+done
+
+if [ ${#failed[@]} -gt 0 ]; then
+  echo "FAILED: ${failed[*]}"
+  exit 1
+fi
+
+echo "every service suite passed"
