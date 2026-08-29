@@ -87,21 +87,29 @@ class ModuleProbe
 
   private
 
+  # Answers that mean "ask again".
+  #
+  # Nothing at all, which a container that is still starting gives. 404, which
+  # is what the Router says about a module whose upstream map it has not
+  # reloaded. And the bad-gateway family, which is what nginx says for the ten
+  # seconds its resolver caches the address of a container that has just been
+  # replaced.
+  #
+  # That last one was found by upgrading: the probe accepted a 502 as "the
+  # endpoint is there", so a version declaring a path it did not serve upgraded
+  # cleanly. A gateway error is the Router saying it cannot reach the module,
+  # which is not evidence of anything except that.
+  RETRY_ON = %w[000 404 502 503 504].freeze
+
   def probe(what, path)
     status = nil
 
     @attempts.times do |attempt|
       status = get(path)
-      # Two answers mean "ask again": nothing answered at all, which a container
-      # that is still starting gives, and 404, which is what the Router says
-      # about a module whose upstream map it has not reloaded yet.
-      #
-      # 404 is also exactly what a module that does not serve the path says, and
-      # the two are indistinguishable from here. Retrying both costs a wrong
-      # manifest a few seconds at install time and saves an honest module from
-      # being refused because nginx was a moment behind. Installs are rare;
-      # refusing a correct one is expensive.
-      break unless %w[000 404].include?(status)
+      # Retrying costs a wrong manifest a few seconds at install time and saves
+      # an honest module from being refused because nginx was a moment behind.
+      # Installs are rare; refusing a correct one is expensive.
+      break unless RETRY_ON.include?(status)
 
       sleep(@between) unless attempt == @attempts - 1
     end
@@ -109,7 +117,7 @@ class ModuleProbe
     Finding.new(what: what, where: path, status: status, ok: acceptable?(status))
   end
 
-  # Anything but "nothing is there".
+  # Anything that is not one of the answers above.
   #
   # 405 passes on purpose: a POST-only endpoint is the ordinary shape for a
   # system capability, and refusing those would mean the check could only be
@@ -119,9 +127,8 @@ class ModuleProbe
   # an endpoint that exists, and demanding it be open to this probe would be
   # asking modules to weaken themselves to be installable.
   def acceptable?(status)
-    !%w[404 000 501].include?(status)
+    !RETRY_ON.include?(status) && status != "501"
   end
-
   def get(path)
     uri = URI.join("#{@base}/", "#{@installed.name}/", path.sub(%r{\A/}, ""))
     request = Net::HTTP::Get.new(uri)
