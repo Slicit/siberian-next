@@ -36,6 +36,7 @@ None.
 | [Test isolation](fix-test-isolation.md) | Suites against their own database, mobile in CI, seven smokes that can now fail, and the JSX parsed | `bin/test-service`, `bin/check-native` |
 | [Honest manifest](feat-honest-manifest.md) | Install probes what a module declared, and refuses one that does not serve it | `bin/smoke-honest-manifest` |
 | [Accounts finished](feat-accounts-finished.md) | A reset for core accounts too, email verification, and an operator's last resort | `bin/smoke-core-recovery` |
+| [Operator visibility](feat-operator-visibility.md) | The mail queue and audit trail have pages, and a failing sweep says so everywhere | `bin/smoke-visibility` |
 | [App preview](feat-app-preview.md) | The app rendered through React Native for Web in a phone-shaped panel, and a shell with a bottom bar | `bin/smoke-mobile` |
 
 ## Abandoned
