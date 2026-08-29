@@ -137,6 +137,32 @@ device. It can only be enforced where it was always enforced, at the door.
 - **Why:** a build is a thing that happened. Explaining one after the configuration behind it has changed is otherwise guesswork.
 - **Impact:** changing a capability does not change a queued build. Asking again is how you get the new configuration, which is also what an operator expects from a queue.
 
+
+### 2026-08-30: a failed build said the exit code, not the reason
+
+A build that failed recorded `gradle assembleRelease exited 1` as its error, and
+kept the actual output in a `log` column that nothing on the failure showed.
+
+Finding out why one had failed meant reading that column out of the database by
+hand, and the first answer that surfaced was wrong: an AAPT error naming a splash
+image, which sent the investigation at a 2500 by 2500 PNG that turned out to be
+a perfectly ordinary file that a dozen earlier builds had compiled without
+complaint.
+
+The attempt now carries the reason. Gradle puts it under "What went wrong", so
+that is what is looked for, and the tail is the fallback because a build tool
+that has just failed says why near the end.
+
+It paid for itself immediately. Run against the same build's log, the new
+message reads:
+
+> Failed to create parent directory
+> '/workspace/83/android/app/build/intermediates/manifest_merge_blame_file'
+
+The build had not failed on the splash image at all. It failed because the disk
+was full, and the AAPT error was the same cause wearing a different symptom: a
+resource that could not be written. One line pointed at it; the exit code had
+pointed at nothing.
 ## Outcome
 
 Shipped 2026-08-19. A domain has an app, an operator decides what it may do
