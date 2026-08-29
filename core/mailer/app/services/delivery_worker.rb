@@ -39,6 +39,13 @@ class DeliveryWorker
 
   # Works until the queue has nothing due, then returns how many it handled.
   def drain(limit: 50)
+    # Before claiming anything: whatever the last worker was holding when it
+    # died is nobody's otherwise, and a restarted worker is exactly the thing
+    # that should pick it up. Doing it here rather than in a nightly sweep
+    # means the recovery happens in minutes rather than the next morning.
+    released = Message.release_stale!
+    @logger.warn("released #{released} message(s) a worker had stopped sending") if released.positive?
+
     handled = 0
 
     limit.times do

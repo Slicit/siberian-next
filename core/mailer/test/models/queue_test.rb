@@ -206,4 +206,52 @@ class QueueTest < ActiveSupport::TestCase
   test "a module with no limit is never over it" do
     refute @registration.over_daily_limit?
   end
+
+  # A worker that dies mid-delivery leaves a message in `sending`, where nothing
+  # can tell it from a delivery in progress. Four sat there for ten days, one of
+  # them a password reset, before anything counted them.
+  test "a message a dead worker left in sending is put back" do
+    message = enqueue
+    Message.claim_next!
+    assert_equal Message::SENDING, message.reload.state
+
+    message.update_columns(updated_at: (Message::STALE_AFTER + 60).seconds.ago)
+
+    assert_equal 1, Message.release_stale!
+    assert_equal Message::FAILED, message.reload.state
+    assert_equal 1, message.attempts, "the retry is counted, so it can still reach dead"
+  end
+
+  test "a message that has only just been claimed is left alone" do
+    enqueue
+    Message.claim_next!
+
+    assert_equal 0, Message.release_stale!,
+                  "a delivery in progress looks exactly like a dead worker, so the limit is the only thing separating them"
+  end
+
+  test "putting one back records why, so the queue page says something" do
+    message = enqueue
+    Message.claim_next!
+    message.update_columns(updated_at: (Message::STALE_AFTER + 60).seconds.ago)
+
+    Message.release_stale!
+
+    assert_match(/stopped answering/, message.reload.last_error)
+  end
+
+  # Bounded, or a worker that dies on the same message every time would put it
+  # back forever.
+  test "a message that keeps being abandoned still reaches dead" do
+    message = enqueue
+    message.update!(max_attempts: 2)
+
+    2.times do
+      Message.claim_next!
+      message.reload.update_columns(updated_at: (Message::STALE_AFTER + 60).seconds.ago, next_attempt_at: 1.hour.ago)
+      Message.release_stale!
+    end
+
+    assert_equal Message::DEAD, message.reload.state
+  end
 end

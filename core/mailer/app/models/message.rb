@@ -52,6 +52,42 @@ class Message < ApplicationRecord
   # SKIP LOCKED is the whole trick: a second worker running this at the same
   # moment steps over the locked row rather than waiting behind it, so workers
   # scale without talking to each other.
+  # A message claimed by a worker that then died would sit in `sending`
+  # forever: no retry, no dead state, nothing reported, and nobody able to tell
+  # it apart from a delivery still in progress. Four had been sitting there for
+  # ten days before anybody counted them, and one of them was a password reset,
+  # which is somebody unable to get back into their account and no record that
+  # anything went wrong.
+  #
+  # `Build` learned this first and has the same limit for the same reason. The
+  # difference is worth stating: putting a build back is free because a build
+  # has no side effect until its artifact is uploaded, and putting a message
+  # back may send it twice, because the worker could have died after the
+  # transport accepted it and before it said so.
+  #
+  # Retrying anyway is the right trade for a queue. A duplicate email is
+  # confusing; a reset link that was never sent and never reported is somebody
+  # locked out with nothing to look at. The retry is counted like any other, so
+  # a message that cannot be delivered still reaches `dead` rather than looping.
+  #
+  # Generous, because it only has to exceed a real delivery: the transport gives
+  # up at five seconds to connect and thirty to answer.
+  STALE_AFTER = 10 * 60
+
+  def self.release_stale!
+    released = 0
+
+    where(state: SENDING)
+      .where(arel_table[:updated_at].lt(STALE_AFTER.seconds.ago))
+      .find_each do |message|
+        message.record_failure!(transport: "unknown",
+                                error: "the worker stopped answering while sending")
+        released += 1
+      end
+
+    released
+  end
+
   def self.claim_next!
     transaction do
       message = pending
