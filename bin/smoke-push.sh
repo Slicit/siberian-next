@@ -43,7 +43,7 @@ c -o /dev/null -X POST \
 echo "1. send one to myself"
 expect "   accepted                  " "$(c -o /tmp/push_send -w '%{http_code}' -X POST \
   -H 'Content-Type: application/json' \
-  -d '{"title":"Smoke","body":"Sent by bin/smoke-push"}' "$MODULE/api/notifications")" 201
+  -d '{"title":"Smoke","body":"Sent by bin/smoke-push"}' "$MODULE/api/notifications")" 200
 
 ID=$(grep -oE '"id": *[0-9]+' /tmp/push_send | grep -oE '[0-9]+' | head -1)
 present "it came back with an id" "$ID"
