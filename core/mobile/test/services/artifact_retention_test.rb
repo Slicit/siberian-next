@@ -23,13 +23,15 @@ class ArtifactRetentionTest < ActiveSupport::TestCase
     end
   end
 
-  def app(bundle: "test.siberian")
-    MobileApp.create!(domain: "example.test", bundle_identifier: bundle, name: "Test")
+  # One app per domain, which the model enforces: a domain has an app, not a
+  # collection of them. So a second app means a second domain.
+  def app(domain: "example.test", bundle: "test.siberian")
+    MobileApp.create!(domain: domain, bundle_identifier: bundle, name: "Test")
   end
 
   def build_for(mobile_app, platform: "android", artifact: true, bytes: 60)
     Build.create!(
-      mobile_app: mobile_app, domain: "example.test", platform: platform,
+      mobile_app: mobile_app, domain: mobile_app.domain, platform: platform,
       state: Build::SUCCEEDED,
       artifact_path: artifact ? "files/apps/#{platform}/#{SecureRandom.hex(4)}.apk" : nil,
       artifact_bytes: artifact ? bytes * 1_048_576 : nil
@@ -65,8 +67,8 @@ class ArtifactRetentionTest < ActiveSupport::TestCase
   end
 
   test "each app keeps its own newest" do
-    first = build_for(app(bundle: "one.siberian"))
-    second = build_for(app(bundle: "two.siberian"))
+    first = build_for(app(domain: "one.test", bundle: "one.siberian"))
+    second = build_for(app(domain: "two.test", bundle: "two.siberian"))
     storage = FakeStorage.new
 
     ArtifactRetention.new(storage: storage).call
