@@ -57,6 +57,26 @@ class ModuleUninstallerTest < ActiveSupport::TestCase
     assert_includes @router.left_networks, network
   end
 
+  # The Router is not the only thing on a module network. RouteReconciler also
+  # joins the module data cluster to every one, and nothing used to take it off.
+  # A network with anything still attached cannot be removed, the failure was
+  # swallowed, and every uninstall left one behind until Docker ran out of
+  # address pools and no module could be installed at all.
+  test "the data cluster leaves the module network too, so the network can go" do
+    network = @installed.network_name
+    ENV["SIBERIAN_MODULEDB_CONTAINER"] = "siberian-moduledb-1"
+    @engine.attach("siberian-moduledb-1", network: network, aliases: ["db"])
+
+    result = uninstall
+
+    assert result.success?, result.error
+    assert_empty @engine.attached_to(network),
+                 "anything left attached is what stops the network being removed"
+    refute_includes @engine.networks, network
+  ensure
+    ENV.delete("SIBERIAN_MODULEDB_CONTAINER")
+  end
+
   test "a container the engine has already lost does not block removal" do
     @engine.containers.clear
 

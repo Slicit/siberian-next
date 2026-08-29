@@ -11,6 +11,7 @@ class FakeEngine
   def initialize(fail_on: nil)
     @networks = []
     @containers = {}
+    @attachments = {}
     @calls = []
     @execs = []
     @fail_on = fail_on
@@ -27,10 +28,35 @@ class FakeEngine
   end
 
   def remove_network(name)
+    # The real engine refuses while anything is still attached, and that refusal
+    # is the reason uninstall used to leave a network behind every time. A
+    # double that removes it regardless cannot fail the way the real one did.
+    attached = @attachments.fetch(name, [])
+    raise Siberian::Engine::Driver::Error, "#{name} still has #{attached.join(', ')} attached" if attached.any?
+
     @networks.delete(name)
     @calls << [:remove_network, name]
     true
   end
+
+  # Attaching and detaching an existing container to a module network. The
+  # Router and the module data cluster both join every module network, and both
+  # have to come off again before the network can go.
+  def attach(id, network:, aliases: [])
+    @attachments[network] ||= []
+    @attachments[network] << id unless @attachments[network].include?(id)
+    @calls << [:attach, id, network, aliases]
+    true
+  end
+
+  def detach(id, network:)
+    @attachments.fetch(network, []).delete(id)
+    @calls << [:detach, id, network]
+    true
+  end
+
+  # Who is currently on a network, for a test that wants to assert about it.
+  def attached_to(network) = @attachments.fetch(network, [])
 
   def create(spec, network:)
     fail_if!(:create)
