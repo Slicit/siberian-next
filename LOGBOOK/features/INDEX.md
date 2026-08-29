@@ -38,6 +38,7 @@ None.
 | [Accounts finished](feat-accounts-finished.md) | A reset for core accounts too, email verification, and an operator's last resort | `bin/smoke-core-recovery` |
 | [Operator visibility](feat-operator-visibility.md) | The mail queue and audit trail have pages, and a failing sweep says so everywhere | `bin/smoke-visibility` |
 | [Module upgrade](feat-module-upgrade.md) | One action, data kept, and the working version put back when the new one fails | `bin/smoke-module-upgrade` |
+| [Product surface](feat-product-surface.md) | The app follows the phone's light or dark setting, the theme contract is written down, and the phone can attach a file | `bin/smoke-appearance` |
 | [App preview](feat-app-preview.md) | The app rendered through React Native for Web in a phone-shaped panel, and a shell with a bottom bar | `bin/smoke-mobile` |
 
 ## Abandoned
