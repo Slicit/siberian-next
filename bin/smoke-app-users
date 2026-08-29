@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# The people an app is for. One account signed in on several devices, belonging
+# to one domain, seen by a module, and refused by the Backoffice.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-app-users.sh
