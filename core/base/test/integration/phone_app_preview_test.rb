@@ -69,10 +69,17 @@ class PhoneAppPreviewTest < ShellTest
 
   # Rails refuses to send a JavaScript response to a request it cannot prove
   # came from here. Right for a page about the person asking, wrong for a build
-  # artifact, and the symptom is a blank phone rather than anything red.
+  # artifact, and the symptom is a blank white phone rather than anything red.
+  #
+  # Forgery protection is off in the test environment, so this switches it on
+  # for the length of the example. Without that this test passes against a
+  # controller with the skip removed, which makes it a test of nothing: it was
+  # written that way first and caught nothing when tried.
   test "including its JavaScript, which forgery protection would otherwise refuse" do
-    as_owner(mobile: FakeMobile.new(preview: ["console.log(1)", "text/javascript"])) do
-      get "/app/preview/_expo/static/js/web/index-abc.js", headers: headers
+    protecting do
+      as_owner(mobile: FakeMobile.new(preview: ["console.log(1)", "text/javascript"])) do
+        get "/app/preview/_expo/static/js/web/index-abc.js", headers: headers
+      end
     end
 
     assert_response :success

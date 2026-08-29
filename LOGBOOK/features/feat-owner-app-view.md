@@ -95,6 +95,36 @@ now, next to `mobile_capabilities`, rather than in a third service's
 initializer. A list two of three services remembered to require is a mistake
 waiting to be made a second time.
 
+
+### 2026-08-30: the Backoffice had already solved this, differently
+
+The Base App's preview was skipping forgery protection with
+`skip_forgery_protection only: :preview`. The Backoffice, which proxies the same
+export, was skipping `verify_same_origin_request` directly, and had been all
+along. The first grep for it missed the line because it names neither
+`skip_forgery` nor `verify_authenticity_token`, which is why the two behaved
+differently for a while with no explanation.
+
+The Backoffice's is the better one and both now use it.
+`skip_forgery_protection` turns off the token check for the whole action, which
+is harmless for a GET and wrong in principle: it would also switch off real
+protection if the action ever answered a POST. `skip_after_action
+:verify_same_origin_request` turns off exactly the check that is wrong here and
+leaves token verification alone.
+
+Worth recording because the divergence was invisible from either side. Each app
+worked, and only comparing them showed that one of them was solving the problem
+twice as broadly as it needed to.
+
+### 2026-08-30: the test for it proved nothing until it was made to
+
+Forgery protection is off in the test environment, so the example asserting that
+the preview serves its own JavaScript passed against a controller with the skip
+removed. It was written that way first, and caught nothing when that was tried.
+
+It now switches the protection on for the length of the example. Removing the
+skip fails it, which is the check that was run before trusting it.
+
 ## Outcome
 
 The page lists the domain's builds, says where a waiting one is in line, says

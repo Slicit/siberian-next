@@ -367,8 +367,19 @@
         <div>
           <h2>Builds</h2>
           <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
-            One builder, shared by every domain. Asking for a build is asking to
-            be next.
+            One builder takes the Android and iOS work, shared by every domain,
+            so asking for one of those is asking to be next. Previews have a
+            builder of their own and do not queue behind them.
+            <% if @native.to_h["building"].to_i.positive? || @native.to_h["queued"].to_i.positive? %>
+              <br>
+              Native lane: <%= pluralize(@native["building"].to_i, "build") %> running,
+              <%= @native["queued"].to_i %> waiting.
+            <% end %>
+            <% if @previews.to_h["building"].to_i.positive? || @previews.to_h["queued"].to_i.positive? %>
+              <br>
+              Preview lane: <%= pluralize(@previews["building"].to_i, "build") %> running,
+              <%= @previews["queued"].to_i %> waiting.
+            <% end %>
           </p>
         </div>
         <% if may_manage %>
@@ -420,7 +431,14 @@
         </table>
       </div>
     <% else %>
-      <div class="empty">Nothing built yet for this domain.</div>
+      <div class="empty">
+        <% if @builds_unavailable %>
+          The Mobile service did not answer, so this cannot show the queue.
+          Nothing is lost.
+        <% else %>
+          Nothing built yet for this domain.
+        <% end %>
+      </div>
     <% end %>
   </div>
 <% end %>

@@ -7,14 +7,20 @@
 # app they have any business configuring. The controller never passes a domain
 # it was given: it passes the one the Router put on the request.
 class PhoneAppController < ApplicationController
-  # The preview serves the exported app's own JavaScript, and Rails refuses to
-  # send a JavaScript response to a request it cannot prove came from here: the
-  # rule exists to stop another site pulling a signed-in page in with a script
-  # tag and reading it. What comes back here is a build artifact rather than
-  # anything about the person asking, it is a GET that changes nothing, and the
-  # domain is the Router's rather than the caller's, so there is nothing for that
-  # rule to protect. Signing in and holding core.mobile.manage is still required.
-  skip_forgery_protection only: :preview
+  # Rails refuses to send a JavaScript response to a request it cannot prove
+  # came from here, which is a real protection against another site pulling a
+  # signed-in page in with a script tag and reading it. It decides a response is
+  # JavaScript from its content type, so proxying a build's own bundle trips it:
+  # the browser asks for the file the page it just loaded named, and gets a 422
+  # error page with a JavaScript content type. Nothing rendered here is about
+  # the person asking; it is a file that came out of a build.
+  #
+  # The same line as the Backoffice's, and deliberately not
+  # `skip_forgery_protection`, which was tried first: that skips the token check
+  # for the whole action rather than the cross-origin one, so it would also
+  # switch off real protection if this action ever answered a POST. This turns
+  # off exactly the check that is wrong here.
+  skip_after_action :verify_same_origin_request, only: %i[preview], raise: false
 
   before_action :require_permission!
 

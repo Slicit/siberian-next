@@ -80,6 +80,67 @@ class BuildLaneTest < ActiveSupport::TestCase
     assert_equal Build::PREVIEW, preview.lane
   end
 
+
+
+  # Sized per lane, because before the split there was one number to pick and it
+  # had to suit a twenty minute Gradle build. A preview abandoned by a worker
+  # that was restarted underneath it then blocked its own queue for an hour and
+  # a half, on a lane whose whole purpose is being quick.
+  test "an abandoned preview is put back after ten minutes" do
+    build = queued(Build::WEB)
+    Build.claim_next!(lanes: [Build::PREVIEW])
+    build.update_columns(claimed_at: 11.minutes.ago)
+
+    Build.release_stale!
+
+    assert_equal Build::FAILED, build.reload.state
+  end
+
+  test "and an Android build is left alone at the same age, because it is still building" do
+    build = queued(Build::ANDROID)
+    Build.claim_next!(lanes: [Build::NATIVE])
+    build.update_columns(claimed_at: 11.minutes.ago)
+
+    Build.release_stale!
+
+    assert_equal Build::BUILDING, build.reload.state
+  end
+
+  test "an Android build is put back eventually" do
+    build = queued(Build::ANDROID)
+    Build.claim_next!(lanes: [Build::NATIVE])
+    build.update_columns(claimed_at: 91.minutes.ago)
+
+    Build.release_stale!
+
+    assert_equal Build::FAILED, build.reload.state
+  end
+  # The belt to the lane filter's braces. A worker handed a build it should not
+  # have puts it back rather than doing it, and this is the endpoint that lets
+  # it: without one, a misrouted build sits in BUILDING until the stale timeout.
+  test "a build put back is queued again with its attempts untouched" do
+    build = queued(Build::ANDROID)
+    Build.claim_next!
+
+    assert_equal Build::BUILDING, build.reload.state
+
+    build.update!(state: Build::QUEUED, claimed_at: nil, started_at: nil)
+
+    assert_equal Build::QUEUED, build.reload.state
+    assert_equal 0, build.attempts
+    assert_nil build.claimed_at
+  end
+
+  # Putting it back means the other worker can have it, which is the whole
+  # point: the stale timeout is measured in minutes and a preview is measured in
+  # one.
+  test "and the worker that does take that lane can then claim it" do
+    build = queued(Build::WEB)
+    Build.claim_next!(lanes: [Build::NATIVE])
+
+    assert_equal Build::QUEUED, build.reload.state, "the native lane should not have taken it at all"
+    assert_equal build.id, Build.claim_next!(lanes: [Build::PREVIEW]).id
+  end
   test "order within a lane is still first in, first out" do
     first = queued(Build::ANDROID)
     queued(Build::IOS)
