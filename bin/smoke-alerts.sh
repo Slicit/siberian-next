@@ -18,9 +18,14 @@ runner() { $COMPOSE exec -T orchestrator bin/rails runner "$1" </dev/null 2>/dev
 posted() { $COMPOSE exec -T mailer bin/rails runner \
   'puts Message.where(core_sender: "core-orchestrator").count' </dev/null 2>/dev/null | tail -1 | tr -d '\r'; }
 
-# A clean slate: this asserts on transitions, and a condition left firing by an
-# earlier run would make the first scan look like the second.
-runner 'AlertCondition.delete_all; puts "cleared"' >/dev/null
+# Cleared by scanning healthy rather than by deleting the rows.
+#
+# Deleting them resets the occurrence counter, so a second run of this script
+# produced occurrence one again, which is the same idempotency key, which the
+# Mailer correctly deduplicated into the first run's email. The script then
+# failed on its own tidying up. Clearing the honest way keeps the counter
+# advancing, which is what happens in production, where nothing deletes these.
+runner '2.times { AlertScan.new(free_megabytes: 50_000).call }; puts "clear"' >/dev/null
 
 scan() { runner "puts AlertScan.new(free_megabytes: $1).call.opened.join(',')"; }
 
@@ -63,9 +68,10 @@ contains "it names what recovered" \
      'puts Message.where(core_sender: "core-orchestrator").order(:id).last&.text_body.to_s' </dev/null 2>/dev/null)" \
   "Resolved"
 
-echo "7. a healthy system records nothing at all"
-runner 'AlertCondition.delete_all; puts "cleared"' >/dev/null
+echo "7. a healthy system adds nothing to the list"
+BEFORE_ROWS=$(runner 'puts AlertCondition.count')
 runner 'AlertScan.new(free_megabytes: 50_000).call' >/dev/null
-check "no row per healthy thing" "$(runner 'puts AlertCondition.count')" "0"
+check "no new row for a healthy thing" "$(runner 'puts AlertCondition.count')" "$BEFORE_ROWS"
+check "and nothing is firing" "$(runner 'puts AlertCondition.firing.count')" "0"
 
 finish "alerts"
