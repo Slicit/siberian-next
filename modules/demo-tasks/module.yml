@@ -11,7 +11,7 @@ description: A to-do list with archive and delete, using every core service. Wri
 
 containers:
   - service: web
-    image: siberian/demo-tasks:1.1.0
+    image: siberian/demo-tasks:1.1.1
     role: http
     internal_port: 8080
     health:
