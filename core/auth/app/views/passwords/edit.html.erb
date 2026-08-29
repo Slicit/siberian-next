@@ -1,0 +1,42 @@
+<% content_for :title, "Set a new password" %>
+
+<div class="centred">
+  <div class="card stack">
+    <div class="brand" style="margin-bottom:.6rem">
+      <span class="mark">S</span>
+      <span>Siberian</span>
+    </div>
+
+    <div>
+      <h1 style="font-size:1.25rem">Set a new password</h1>
+      <%# Said before they commit rather than after. Somebody who does not want
+          to be signed out on their other devices should know that now. %>
+      <p class="muted" style="margin:0">
+        This also signs you out everywhere else, on every device.
+      </p>
+    </div>
+
+    <% if flash.now[:alert] || flash[:alert] %>
+      <div class="alert"><%= flash.now[:alert] || flash[:alert] %></div>
+    <% end %>
+
+    <%= form_with url: reset_path, method: :post, class: "stack", data: { turbo: false } do |form| %>
+      <%= hidden_field_tag :token, @token %>
+
+      <div class="field">
+        <%= form.label :password, "New password" %>
+        <%= form.password_field :password, autocomplete: "new-password",
+              required: true, minlength: 8, autofocus: true %>
+      </div>
+
+      <div class="field">
+        <%= form.label :password_confirmation, "And again" %>
+        <%= form.password_field :password_confirmation, autocomplete: "new-password", required: true %>
+      </div>
+
+      <button type="submit" class="primary" style="width:100%; justify-content:center">
+        Set it
+      </button>
+    <% end %>
+  </div>
+</div>

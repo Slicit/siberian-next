@@ -3,6 +3,13 @@ Rails.application.routes.draw do
   get "login", to: "sessions#new", as: :login
   post "login", to: "sessions#create"
   delete "logout", to: "sessions#destroy", as: :logout
+
+  # Getting back in without a password. Same door as the sign-in form, because
+  # the person is looking at a page rather than holding a token.
+  get "forgot", to: "passwords#new", as: :forgot
+  post "forgot", to: "passwords#create"
+  get "reset", to: "passwords#edit", as: :reset
+  post "reset", to: "passwords#update"
   get "logout", to: "sessions#destroy"
 
   # The app's own door.
@@ -19,6 +26,7 @@ Rails.application.routes.draw do
     get "reset", to: "passwords#show"
     post "reset", to: "passwords#update"
     delete "sign-out", to: "sessions#destroy"
+    get "verify", to: "sessions#verify"
     get "me", to: "sessions#show"
     get "devices", to: "sessions#devices"
     delete "devices/:id", to: "sessions#revoke_device"

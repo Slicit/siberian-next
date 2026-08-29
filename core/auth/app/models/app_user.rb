@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "digest"
+
 # A person who uses one domain's app.
 #
 # Not a smaller `User`. A `User` is an account across the whole system, and an
@@ -49,6 +51,38 @@ class AppUser < ApplicationRecord
     Siberian::Permissions::Set.new(PERMISSIONS)
   end
 
+  # Whether this account has proved it can read the address it signed up with.
+  #
+  # Recorded and reported, not enforced. Blocking sign-in on it would mean a
+  # broken mail transport locks every new account out of a product that was
+  # working, which is a worse failure than an unverified address. A module that
+  # wants to care reads `verified` from the identity and decides for itself.
+  def verified? = verified_at.present?
+
+  # Returns the plaintext token, which exists in readable form exactly once.
+  def start_verification!
+    token = SecureRandom.urlsafe_base64(32)
+    update!(verification_digest: Digest::SHA256.hexdigest(token), verified_at: nil)
+    token
+  end
+
+  def self.verify!(token)
+    return nil if token.blank?
+
+    account = find_by(verification_digest: Digest::SHA256.hexdigest(token.to_s))
+    return nil if account.nil?
+
+    # The digest goes with it. A verification link is single use for the same
+    # reason a reset link is: one that keeps working is a second credential
+    # sitting in a mailbox.
+    account.update!(verified_at: Time.current, verification_digest: nil)
+    account
+  end
+
+  # What a password reset ends. Named here rather than reached for, because the
+  # two kinds of account keep their sessions in different tables.
+  def sessions_to_end = app_sessions.active
+
   def deactivate!
     transaction do
       update!(active: false, deactivated_at: Time.current)
@@ -76,6 +110,7 @@ class AppUser < ApplicationRecord
       active: active,
       operator: false,
       app_user: true,
+      verified: verified?,
       domain: domain,
       permissions: permissions.to_a,
       denied: permissions.denied

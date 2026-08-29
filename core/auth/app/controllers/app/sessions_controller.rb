@@ -11,6 +11,8 @@
 #
 # So one sign-in produces both. The token is what the app holds; the cookie is
 # what the pages it frames carry.
+require "digest"
+
 module App
   class SessionsController < ActionController::API
     include ActionController::Cookies
@@ -41,7 +43,22 @@ module App
                       status: :unprocessable_entity
       end
 
+      send_verification(account)
       issue(account)
+    end
+
+    # GET /-/auth/verify?token=...
+    #
+    # Followed from an email, so it answers to a browser as well as to an app.
+    def verify
+      account = AppUser.verify!(params[:token])
+
+      unless account
+        return render json: { verified: false, error: "that link is not valid" },
+                      status: :unprocessable_entity
+      end
+
+      render json: { verified: true, user: account.to_identity }
     end
 
     # POST /-/auth/sign-in
@@ -133,6 +150,25 @@ module App
     end
 
     private
+
+    def send_verification(account)
+      token = account.start_verification!
+
+      Siberian::CoreMailClient.new(logger: Rails.logger).deliver(
+        domain: current_domain,
+        to: account.email,
+        subject: "Confirm your email address",
+        text_body: <<~BODY,
+          Somebody created an account for #{account.email} on #{current_domain}.
+
+          https://#{current_domain}/-/auth/verify?token=#{token}
+
+          You can use the app either way. This only confirms the address is
+          yours, which is what lets anybody rely on it.
+        BODY
+        idempotency_key: "app-verification-#{account.id}-#{Digest::SHA256.hexdigest(token)[0, 12]}"
+      )
+    end
 
     def issue(account)
       session_record, token = AppSession.start!(
