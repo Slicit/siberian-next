@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# The mail queue, the database audit trail, and a failing nightly sweep saying
+# so on every page rather than only the dashboard.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-visibility.sh
