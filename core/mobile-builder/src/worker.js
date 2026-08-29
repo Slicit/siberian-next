@@ -5,7 +5,7 @@
 // rewrite, but until somebody needs that this stays the simplest thing that
 // cannot lose a build.
 import { spawn } from "node:child_process";
-import { access, cp, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import { access, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { assemble, applyAndroidSplashAnimation } from "./assemble.js";
@@ -132,6 +132,7 @@ async function build({ build_id: id, plan }) {
   // this is quick enough to be worth looking at.
   if (plan.platform === "web") {
     await step("expo export", "npx", ["expo", "export", "--platform", "web", "--output-dir", "dist"]);
+    log.push(await relativiseExport(path.join(workspace, "dist")));
 
     return { directory: path.join(workspace, "dist"), log: log.join("\n\n"), started };
   }
@@ -209,6 +210,35 @@ async function report(id, outcome, body) {
   });
 }
 
+
+// Expo writes its asset references root-absolute: `/_expo/static/js/...`. That
+// is right for a site served from the root of a host, and wrong for this one.
+// The preview is served under `/mobile/:id/preview/`, so the browser asked the
+// Backoffice root for the bundle, got a 404, and rendered a blank page: the
+// export was fine and unreachable, which is the worst of the two failures
+// because everything upstream of it reports success.
+//
+// Rewritten here rather than in the page that frames it, so the export is a
+// directory that works wherever it is put down.
+async function relativiseExport(directory) {
+  const pages = (await readdir(directory, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".html"))
+    .map((entry) => path.join(directory, entry.name));
+
+  let changed = 0;
+
+  for (const page of pages) {
+    const before = await readFile(page, "utf8");
+    const after = before.replace(/(src|href)="\/(_expo\/|assets\/|favicon)/g, '$1="$2');
+
+    if (after === before) continue;
+
+    await writeFile(page, after);
+    changed += 1;
+  }
+
+  return `made asset paths relative in ${changed} page(s) of ${pages.length}`;
+}
 // The preview, file by file.
 //
 // A static export is a directory, and the builder holds no Storage credential,
@@ -301,6 +331,31 @@ async function exists(target) {
   }
 }
 
+// The builder's own source, hashed.
+//
+// `core/mobile-builder` is bind mounted, which makes an edit on the box look
+// live: the file inside the container changes immediately. Node does not
+// reread a module after it has loaded it, so the running worker kept building
+// from the code it started with. A build then succeeds, reports success, and
+// silently produces the previous version of the app, which is the failure that
+// takes longest to notice because nothing anywhere says anything is wrong.
+//
+// So the worker notices instead. Between builds, never during one, it compares
+// its source to what is on disk and exits when they differ. Compose restarts
+// it, and the next build runs the code that is checked out.
+async function fingerprint() {
+  const hash = createHash("sha256");
+  const here = path.dirname(new URL(import.meta.url).pathname);
+
+  for (const name of (await readdir(here)).sort()) {
+    if (!name.endsWith(".js")) continue;
+    hash.update(name);
+    hash.update(await readFile(path.join(here, name)));
+  }
+
+  return hash.digest("hex").slice(0, 12);
+}
+
 async function sweep() {
   let left;
 
@@ -361,7 +416,8 @@ async function once() {
 }
 
 async function loop() {
-  console.log(`builder up, polling ${MOBILE} every ${POLL / 1000}s`);
+  const source = await fingerprint();
+  console.log(`builder up (source ${source}), polling ${MOBILE} every ${POLL / 1000}s`);
   await sweep();
 
   for (;;) {
@@ -369,6 +425,13 @@ async function loop() {
       // Straight back round when there was work: a queue that empties in bursts
       // should not wait out the poll interval between two builds.
       const worked = await once();
+
+      const now = await fingerprint().catch(() => source);
+      if (now !== source) {
+        console.log(`builder source changed (${source} to ${now}), restarting`);
+        return;
+      }
+
       if (!worked) await new Promise((resolve) => setTimeout(resolve, POLL));
     } catch (error) {
       console.error(`builder loop: ${error.message}`);
