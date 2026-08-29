@@ -14,6 +14,8 @@ REPO="$(pwd)"
 CHECK_USER="$(stat -c '%U' "$REPO")"
 CRON=/etc/cron.d/siberian-housekeeping
 CHECKS_CRON=/etc/cron.d/siberian-checks
+ALERTS_CRON=/etc/cron.d/siberian-alerts
+ALERTS_LOG=${SIBERIAN_ALERT_LOG:-/var/log/siberian-alerts.log}
 DAEMON=/etc/docker/daemon.json
 LOG=/var/log/siberian-housekeeping.log
 CHECKS_LOG=/var/log/siberian-checks.log
@@ -32,6 +34,27 @@ sudo chmod 0644 "$CRON"
 
 sudo touch "$LOG"
 sudo chmod 0644 "$LOG"
+
+echo "Installing the alert scan cron entry..."
+sudo tee "$ALERTS_CRON" >/dev/null <<CRONTAB
+# Siberian Next alert scan. Installed from $REPO/deploy/maintenance/install.sh
+#
+# Every quarter of an hour, and that frequency is safe because of what the scan
+# refuses to do rather than what it does: a condition has to hold across two
+# scans before anything is sent, and one that is still true is never sent twice.
+# Running it often makes the first alert arrive sooner without making any alert
+# arrive again.
+#
+# As $CHECK_USER, like the sweep: it needs the Docker socket and nothing root
+# has, and it reads free disk before it starts.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+*/15 * * * * $CHECK_USER SIBERIAN_REPO=$REPO $REPO/deploy/maintenance/alert-scan.sh >> $ALERTS_LOG 2>&1
+CRONTAB
+sudo chmod 0644 "$ALERTS_CRON"
+sudo touch "$ALERTS_LOG"
+sudo chown "$CHECK_USER" "$ALERTS_LOG"
+sudo chmod 0644 "$ALERTS_LOG"
 
 echo "Installing the nightly check cron entry..."
 sudo tee "$CHECKS_CRON" >/dev/null <<CRONTAB

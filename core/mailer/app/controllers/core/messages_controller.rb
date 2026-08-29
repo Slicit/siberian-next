@@ -18,7 +18,10 @@ module Core
     # Auth, and nothing else, until something else has a reason. Forgetting to
     # widen this refuses a caller loudly; widening it by default would let any
     # compromised core service send mail as the core.
-    permit_services :auth
+    # Auth sends a way back into an account. The Orchestrator sends an alert to
+    # whoever can act on it. Nothing else has a reason, and widening this by
+    # default would let any compromised core service send mail as the core.
+    permit_services :auth, :orchestrator
 
     # POST /core/messages
     def create

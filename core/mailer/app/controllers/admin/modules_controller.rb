@@ -52,6 +52,13 @@ module Admin
           message.summary.merge(module_name: message.sender_name)
         end,
         counts: Message::STATES.index_with { |state| Message.where(state: state).count },
+        # How many are sitting in `sending` longer than a delivery can take.
+        # The caller cannot work this out from the summaries, which carry no
+        # claim time, and a plain count of `sending` on a busy queue is just
+        # the queue working.
+        stalled: Message.where(state: Message::SENDING)
+                        .where(Message.arel_table[:updated_at].lt(Message::STALE_AFTER.seconds.ago))
+                        .count,
         unacknowledged: Message.unacknowledged.count,
         modules: ModuleRegistration.active.pluck(:module_name)
       }
