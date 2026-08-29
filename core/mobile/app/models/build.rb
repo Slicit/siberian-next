@@ -99,10 +99,43 @@ class Build < ApplicationRecord
   # a bundle identifier a store will not take, a capability whose key is wrong.
   # Retrying spends the shared builder to reach the same answer, so it does not
   # get to.
+  # The part of a build log that says why it failed.
+  #
+  # A failed build recorded "gradle assembleRelease exited 1" as its error and
+  # kept the log in a column nothing on the failure itself showed. Finding out
+  # that the real cause was a splash image AAPT could not compile took reading
+  # the log out of the database by hand.
+  #
+  # Gradle puts the useful part under "What went wrong", so that is what is
+  # looked for. When it is not there, the tail is a better guess than nothing:
+  # a build tool that has just failed says why near the end.
+  WHY_LINES = 12
+
+  def self.why_it_failed(log, fallback)
+    text = log.to_s
+    return fallback if text.strip.empty?
+
+    marker = text.index("What went wrong")
+    excerpt = if marker
+                text[marker, 600]
+              else
+                text.lines.last(WHY_LINES).join
+              end
+
+    excerpt = excerpt.to_s.strip
+    return fallback if excerpt.empty?
+
+    "#{fallback}: #{excerpt}"
+  end
+
   def record_failure!(error:, permanent: false, duration_ms: nil, log: nil)
+    # The attempt carries the reason rather than the summary, because the
+    # attempt is what a person reads when they ask why a build failed.
+    detail = self.class.why_it_failed(log, error)
+
     transaction do
       build_attempts.create!(number: next_attempt_number, outcome: permanent ? "rejected" : "failed",
-                             duration_ms: duration_ms, detail: error, attempted_at: Time.current)
+                             duration_ms: duration_ms, detail: detail, attempted_at: Time.current)
 
       count = attempts + 1
       finished = permanent || count >= MAX_ATTEMPTS
@@ -110,14 +143,13 @@ class Build < ApplicationRecord
       update!(
         state: finished ? DEAD : FAILED,
         attempts: count,
-        last_error: error,
+        last_error: detail,
         log: log || self.log,
         finished_at: finished ? Time.current : nil,
         next_attempt_at: finished ? nil : Time.current + backoff_for(count)
       )
     end
   end
-
   def cancel!
     return false if terminal?
 
