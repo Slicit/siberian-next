@@ -74,7 +74,30 @@ present "the page names its bundle" "$ASSET"
 check "and the bundle is served" \
   "$(c -o /dev/null -w '%{http_code}' "https://$DOMAIN/app/preview/$ASSET")" "200"
 
-echo "4. asking for a build asks for a build"
+echo "4. the themes can be tried on and one kept"
+STARTED_AS=$(runner mobile "puts MobileApp.find_by(domain: '$DOMAIN').theme")
+KEPT=$(runner mobile "a = MobileApp.find_by(domain: '$DOMAIN'); puts [a.name, a.bundle_identifier, a.version].join('|')")
+contains "the picker is drawn" "$(grep -o 'id="theme-picker"' /tmp/owner_page)" "theme-picker"
+contains "the frame opens on the saved one" \
+  "$(grep -o 'index.html?theme=[a-z]*' /tmp/owner_page | head -1)" "theme=$STARTED_AS"
+
+# midnight unless that is already it, so the check is a change either way.
+WANTED=midnight
+[ "$STARTED_AS" = midnight ] && WANTED=daylight
+THEME_TOKEN=$(token_for /tmp/owner_page 'action="/app/theme"' 'theme-picker')
+c -o /dev/null -X POST --data-urlencode "authenticity_token=$THEME_TOKEN" \
+  --data-urlencode "_method=patch" --data-urlencode "theme=$WANTED" "https://$DOMAIN/app/theme"
+check "keeping one saves it" "$(runner mobile "puts MobileApp.find_by(domain: '$DOMAIN').theme")" "$WANTED"
+# Only the theme is sent, so the upsert has to keep everything it was not
+# given. A save that quietly renamed the app would still pass the line above.
+check "and rewrites nothing else" \
+  "$(runner mobile "a = MobileApp.find_by(domain: '$DOMAIN'); puts [a.name, a.bundle_identifier, a.version].join('|')")" \
+  "$KEPT"
+
+c -o /dev/null -X POST --data-urlencode "authenticity_token=$(token_for /tmp/owner_page 'action="/app/theme"' 'theme-picker')" \
+  --data-urlencode "_method=patch" --data-urlencode "theme=$STARTED_AS" "https://$DOMAIN/app/theme"
+
+echo "5. asking for a build asks for a build"
 BEFORE=$(runner mobile "puts Build.count")
 BUILD_TOKEN=$(token_for /tmp/owner_page 'action="/app/build"' 'value="web"')
 present "the build button carries its own token" "$BUILD_TOKEN"
