@@ -342,6 +342,11 @@ services:
   # It holds no engine socket and no admin token. It claims one build, receives
   # the plan for that build, and can ask this service nothing else.
   mobile-builder:
+    # Both lanes are the same image, named so compose builds it once and the
+    # second service reuses the tag. Two builds of a Dockerfile that unpacks
+    # the Android SDK is several gigabytes of disk for two copies of the same
+    # thing, on a box that has run out of it before.
+    image: siberian-mobile-builder:local
     # The box is a virtual machine on a host that can go down. Without this
     # nothing comes back, and the stack stays off until somebody notices.
     restart: unless-stopped
@@ -406,6 +411,7 @@ services:
   # sharing a workspace means the second one starting deletes the first one's
   # build out from under it.
   mobile-builder-web:
+    image: siberian-mobile-builder:local
     restart: unless-stopped
     build:
       context: ..
