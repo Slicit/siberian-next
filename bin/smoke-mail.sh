@@ -69,8 +69,19 @@ check "it sees no messages at all" "$(grep -c '"id":' /tmp/mb)" "0"
 expect "   and not that one by id    " \
   "$(q "$M/v1/messages/$ID" -H "Authorization: Bearer $NOSY" -H "$D")" 404
 
-echo "8. a terminal message can be put back by hand"
-expect "   retry                     " "$(q -X POST "$M/v1/messages/$ID/retry" -H "$T" -H "$D")" 200
+echo "8. a sent message is not retriable"
+# Retry exists for a dead or cancelled message. Asking it to resend one that
+# arrived is a mistake worth refusing rather than honouring, and this used to
+# pass only because the transport rejected everything, so every message was
+# dead and every retry was accepted.
+expect "   retry a sent message      " "$(q -X POST "$M/v1/messages/$ID/retry" -H "$T" -H "$D")" 409
+
+echo "9. a cancelled one is"
+q -X POST "$M/v1/messages" -H "$T" -H "$D" -H "Content-Type: application/json" \
+  -d '{"to":"later@example.test","subject":"cancel me","text_body":"x"}' >/dev/null
+C=$(sed 's/.*"id"://; s/,.*//' /tmp/mb)
+expect "   cancel                    " "$(q -X DELETE "$M/v1/messages/$C" -H "$T" -H "$D")" 200
+expect "   retry                     " "$(q -X POST "$M/v1/messages/$C/retry" -H "$T" -H "$D")" 200
 check "it is queued again" "$(field state)" "queued"
 
 finish "mail"
