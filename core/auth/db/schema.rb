@@ -10,9 +10,50 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_22_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "app_sessions", force: :cascade do |t|
+    t.bigint "app_user_id", null: false
+    t.datetime "created_at", null: false
+    t.string "device_id"
+    t.string "device_name"
+    t.datetime "expires_at", null: false
+    t.string "ip_address"
+    t.datetime "last_seen_at"
+    t.string "platform"
+    t.datetime "revoked_at"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.string "user_agent"
+    t.index ["app_user_id", "device_id"], name: "index_app_sessions_on_app_user_id_and_device_id"
+    t.index ["app_user_id", "expires_at"], name: "index_app_sessions_on_app_user_id_and_expires_at"
+    t.index ["app_user_id"], name: "index_app_sessions_on_app_user_id"
+    t.index ["token_digest"], name: "index_app_sessions_on_token_digest", unique: true
+  end
+
+  create_table "app_settings", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "domain", null: false
+    t.boolean "registration_open", default: false, null: false
+    t.datetime "updated_at", null: false
+    t.index ["domain"], name: "index_app_settings_on_domain", unique: true
+  end
+
+  create_table "app_users", force: :cascade do |t|
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "deactivated_at"
+    t.string "domain", null: false
+    t.string "email", null: false
+    t.datetime "last_seen_at"
+    t.string "name"
+    t.string "password_digest", null: false
+    t.datetime "updated_at", null: false
+    t.index "domain, lower((email)::text)", name: "index_app_users_on_domain_and_email", unique: true
+    t.index ["domain", "active"], name: "index_app_users_on_domain_and_active"
+  end
 
   create_table "permission_grants", force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -84,6 +125,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_120000) do
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
+  add_foreign_key "app_sessions", "app_users"
   add_foreign_key "permission_grants", "users"
   add_foreign_key "permission_grants", "users", column: "granted_by_id"
   add_foreign_key "role_assignments", "roles"

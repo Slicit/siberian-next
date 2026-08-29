@@ -1,0 +1,126 @@
+<% content_for :title, "App users on #{@domain.hostname}" %>
+
+<div class="spread" style="margin-bottom:1.2rem">
+  <div>
+    <h1>App users</h1>
+    <p class="muted" style="margin:0">
+      Signed in to the app on <span class="mono"><%= @domain.hostname %></span>.
+      These accounts exist only here: the same address on another domain is a
+      different person, and none of them can reach this Backoffice.
+    </p>
+  </div>
+  <%= link_to "All domains", app_users_path, class: "button" %>
+</div>
+
+<div class="card">
+  <header>
+    <h2>Signing up</h2>
+  </header>
+
+  <%# Off unless somebody turned it on, and said so on the page rather than in a
+      settings file: opening this means anybody who can reach the domain can
+      create an account on it. %>
+  <p class="muted" style="margin:0 0 .7rem">
+    <% if @settings["registration_open"] %>
+      <strong>Anyone can create an account</strong> on this domain from the app.
+      Accounts appear in the list below as they are made.
+    <% else %>
+      <strong>Sign-up is closed.</strong> Only the accounts added here can sign
+      in, which is the right default: opening it lets anybody who can reach this
+      domain create an account on it.
+    <% end %>
+  </p>
+
+  <%= form_with url: app_registration_path(@domain), method: :patch, class: "row" do %>
+    <input type="hidden" name="registration_open" value="<%= !@settings["registration_open"] %>">
+    <button class="button" type="submit">
+      <%= @settings["registration_open"] ? "Close sign-up" : "Open sign-up" %>
+    </button>
+  <% end %>
+</div>
+
+<div class="card">
+  <header>
+    <h2>Add an account</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      The only way in while sign-up is closed.
+    </p>
+  </header>
+
+  <%= form_with url: domain_app_users_path(@domain), method: :post, class: "stack" do %>
+    <div class="row wrap">
+      <input type="email" name="email" placeholder="Email" required>
+      <input type="text" name="name" placeholder="Name (optional)">
+      <input type="password" name="password" placeholder="Password" minlength="8" required>
+      <button class="button accent" type="submit">Add</button>
+    </div>
+  <% end %>
+</div>
+
+<div class="card">
+  <header>
+    <h2>Accounts</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      One account, any number of devices. Ending a device signs out that phone
+      and leaves the others alone; deactivating the account ends all of them.
+    </p>
+  </header>
+
+  <% if @accounts.any? %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Account</th><th>Devices</th><th>Last seen</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% @accounts.each do |account| %>
+            <tr>
+              <td>
+                <span class="mono"><%= account["email"] %></span>
+                <% unless account["active"] %>
+                  <span class="badge" style="margin-left:.4rem">deactivated</span>
+                <% end %>
+                <% if account["name"].present? && account["name"] != account["email"].split("@").first %>
+                  <div class="muted small"><%= account["name"] %></div>
+                <% end %>
+              </td>
+              <td>
+                <% devices = Array(account["devices"]) %>
+                <% if devices.any? %>
+                  <div class="stack" style="--gap:.3rem">
+                    <% devices.each do |device| %>
+                      <div class="row" style="gap:.5rem">
+                        <span><%= device["name"] %></span>
+                        <span class="muted small">
+                          <%= device["last_seen_at"] ? "seen #{time_ago_in_words(Time.parse(device['last_seen_at']))} ago" : "never used" %>
+                        </span>
+                        <%= button_to "Sign out",
+                              app_user_device_path(@domain, account["id"], device["id"]),
+                              method: :delete, class: "button small",
+                              form: { style: "display:inline" } %>
+                      </div>
+                    <% end %>
+                  </div>
+                <% else %>
+                  <span class="muted small">No device signed in.</span>
+                <% end %>
+              </td>
+              <td class="muted small">
+                <%= account["last_seen_at"] ? "#{time_ago_in_words(Time.parse(account['last_seen_at']))} ago" : "never" %>
+              </td>
+              <td class="right">
+                <%= button_to account["active"] ? "Deactivate" : "Restore",
+                      app_user_active_path(@domain, account["id"], active: !account["active"]),
+                      method: :post, class: "button" %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="empty">
+      Nobody has an account on this domain's app yet.
+    </div>
+  <% end %>
+</div>

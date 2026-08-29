@@ -55,6 +55,20 @@ Rails.application.routes.draw do
   post "mobile/:id/build", to: "mobile#build", as: :build_mobile_app
   post "mobile/:id/builds/:build_id/cancel", to: "mobile#cancel", as: :cancel_mobile_build
 
+  # The people a domain's app is for.
+  #
+  # A separate page from People, and deliberately: those are accounts that run
+  # the system, these are accounts that use one domain's product, and a single
+  # list holding both would invite treating them as one thing. Addressed by the
+  # domain record, like every other per-domain route here.
+  get "app-users", to: "app_users#index", as: :app_users
+  get "app-users/:id", to: "app_users#show", as: :domain_app_users
+  post "app-users/:id", to: "app_users#create"
+  patch "app-users/:id/registration", to: "app_users#registration", as: :app_registration
+  post "app-users/:id/accounts/:account_id/active", to: "app_users#set_active", as: :app_user_active
+  delete "app-users/:id/accounts/:account_id/devices/:device_id", to: "app_users#revoke_device",
+         as: :app_user_device
+
   get "interfaces", to: "interfaces#index", as: :interfaces
   get "activity", to: "activities#index", as: :activity
 

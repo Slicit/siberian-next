@@ -175,6 +175,18 @@ server {
     proxy_request_buffering off;
   }
 
+  # The app's own sign-in, on the served domain so the cookie it sets is scoped
+  # the same way the browser login's is: a phone gets a bearer token, and the
+  # module pages it frames carry the cookie without implementing anything.
+  #
+  # A regex, and under /-/, so it wins over `location /` and can never be
+  # shadowed by a module base route or a page a CMS published at the root.
+  location ~ "^/-/auth/" {
+    set $upstream_app_auth "http://auth:3000";
+    proxy_pass $upstream_app_auth;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+  }
+
   # Sign in and out are served by Auth on the main domain, so the cookie it
   # sets is scoped to the domain every module frame sits under. The Base App
   # never sees a password.

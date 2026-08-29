@@ -19,19 +19,40 @@ module Internal
     def show
       session_record = Session.authenticate(token_from_request)
 
-      unless session_record
+      # A core account, resolved the expensive way once and cached on the row.
+      if session_record
+        permissions = session_record.permission_set
+
+        return render json: {
+          authenticated: true,
+          user: session_record.user.to_identity(permissions),
+          permissions: permissions.to_a,
+          denied: permissions.denied,
+          permissions_version: session_record.permissions_version,
+          expires_at: session_record.expires_at
+        }
+      end
+
+      # An app account. The same shape, so a module identifying the person in
+      # front of it does not have to know which kind it got: it asks what they
+      # may do and gets an answer either way. The permission set is fixed rather
+      # than resolved, which is why there is no version stamp to report.
+      app_record = AppSession.authenticate(token_from_request)
+
+      unless app_record
         return render json: { authenticated: false }, status: :unauthorized
       end
 
-      permissions = session_record.permission_set
+      app_record.touch_seen!
+      permissions = app_record.app_user.permission_set
 
       render json: {
         authenticated: true,
-        user: session_record.user.to_identity(permissions),
+        user: app_record.app_user.to_identity,
         permissions: permissions.to_a,
         denied: permissions.denied,
-        permissions_version: session_record.permissions_version,
-        expires_at: session_record.expires_at
+        permissions_version: 0,
+        expires_at: app_record.expires_at
       }
     end
 
@@ -43,27 +64,40 @@ module Internal
     # permission can survive that window. For most of a page that is the right
     # trade. For the handful of actions where it is not, this exists.
     def authorize_action
-      session_record = Session.authenticate(token_from_request)
       permission = params.require(:permission)
+      session_record = Session.authenticate(token_from_request)
 
-      unless session_record
+      if session_record
+        # Deliberately re-resolves rather than trusting the stored copy: the
+        # point of this endpoint is to be right, not to be quick.
+        permissions = session_record.refresh_permissions!
+
+        return render json: {
+          allowed: permissions.allow?(permission),
+          permission: permission,
+          user: session_record.user.email
+        }
+      end
+
+      app_record = AppSession.authenticate(token_from_request)
+
+      unless app_record
         return render json: { allowed: false, reason: "no session" }, status: :unauthorized
       end
 
-      # Deliberately re-resolves rather than trusting the stored copy: the point
-      # of this endpoint is to be right, not to be quick.
-      permissions = session_record.refresh_permissions!
-
+      # Nothing to re-resolve: an app account holds a fixed set, so the stored
+      # copy and the fresh one are the same answer by construction.
       render json: {
-        allowed: permissions.allow?(permission),
+        allowed: app_record.app_user.permission_set.allow?(permission),
         permission: permission,
-        user: session_record.user.email
+        user: app_record.app_user.email
       }
     end
 
     # DELETE /internal/session
     def destroy
-      Session.authenticate(token_from_request)&.revoke!
+      token = token_from_request
+      (Session.authenticate(token) || AppSession.authenticate(token))&.revoke!
       head :no_content
     end
 

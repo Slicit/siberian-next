@@ -99,6 +99,33 @@ module Siberian
       delete("/internal/users/#{id}/grants?permission=#{CGI.escape(permission)}&effect=#{effect}", admin: true)
     end
 
+
+    # The people a domain's app is for. Always scoped to one domain, because an
+    # app account only exists inside one and a listing that guessed would be
+    # showing somebody else's customers.
+    def app_users(domain) = get("/internal/app-users?domain=#{CGI.escape(domain)}", admin: true)
+
+    def create_app_user(domain, attributes)
+      post("/internal/app-users", attributes.merge(domain: domain), admin: true)
+    end
+
+    def update_app_user(domain, id, attributes)
+      patch("/internal/app-users/#{id}", attributes.merge(domain: domain), admin: true)
+    end
+
+    def set_app_user_active(domain, id, active)
+      action = active ? "reactivate" : "deactivate"
+      post("/internal/app-users/#{id}/#{action}", { domain: domain }, admin: true)
+    end
+
+    def revoke_app_device(domain, id, device_id)
+      delete("/internal/app-users/#{id}/devices/#{device_id}?domain=#{CGI.escape(domain)}", admin: true)
+    end
+
+    def set_app_registration(domain, open)
+      patch("/internal/app-settings", { domain: domain, registration_open: open }, admin: true)
+    end
+
     def create_role(attributes) = post("/internal/roles", attributes, admin: true)
     def update_role(id, attributes) = patch("/internal/roles/#{id}", attributes, admin: true)
     def delete_role(id, force: false) = delete("/internal/roles/#{id}?force=#{force}", admin: true)
