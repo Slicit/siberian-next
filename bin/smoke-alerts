@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Alerts, judged by what they refuse to say: nothing the first time, once when
+# it holds, nothing while it stays true, and once when it recovers.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-alerts.sh
