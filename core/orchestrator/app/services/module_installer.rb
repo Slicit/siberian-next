@@ -12,6 +12,8 @@ class ModuleInstaller
 
   class AlreadyInstalled < StandardError; end
   class ConflictingInterface < StandardError; end
+  # The manifest said the module serves something it does not.
+  class Dishonest < StandardError; end
 
   def initialize(manifest,
                  driver: Siberian::Engine.driver,
@@ -47,6 +49,7 @@ class ModuleInstaller
     create_containers(installed, tokens)
     provision(installed)
     publish_routes(installed)
+    verify_declarations(installed)
 
     installed.update!(status: installed.derived_status, installed_at: Time.current, last_error: nil)
     Activity.record("install.finished", installed_module: installed, containers: installed.module_containers.count)
@@ -302,6 +305,31 @@ class ModuleInstaller
     Activity.record("routes.published", installed_module: installed, domains: domains.map(&:hostname))
   end
 
+
+  # The last thing before an install is called a success: does the module
+  # actually serve what it said it would?
+  #
+  # After the routes, because the probe reaches the module the way the core
+  # will. Before the record is marked installed, because the point is to refuse
+  # rather than to report: an install that half succeeded leaves an operator
+  # with a module in the list that no part of the system can use, and the mail
+  # transport that spent weeks answering 404 is what that looks like.
+  #
+  # Skipped when there is nowhere to reach it from. A stack with no domains has
+  # no module door, and refusing every install on that basis would make the
+  # first domain impossible to set up.
+  def verify_declarations(installed)
+    return if domains.empty?
+    return if @manifest.system_capabilities.empty? && @manifest.containers.none? { |c| c["health"] }
+
+    findings = ModuleProbe.new(installed, @manifest, domain: domains.first.hostname).call
+    refusal = ModuleProbe.refusal(findings)
+
+    Activity.record("install.probed", installed_module: installed,
+                    checked: findings.length, failed: findings.count { |f| !f.ok? })
+
+    raise Dishonest, refusal if refusal
+  end
   # Undone in reverse, so a container is removed before the network it sits on.
   def roll_back
     @undo.reverse_each do |step|

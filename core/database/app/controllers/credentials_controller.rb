@@ -14,8 +14,26 @@ class CredentialsController < ApplicationController
     provisioned = current_module.provisioned_databases.find_by(domain: current_domain, logical_name: logical)
 
     unless provisioned&.ready?
+      # Says what this module does have, not only what it asked for.
+      #
+      # It used to answer "no database provisioned for X on Y", which is true
+      # and is also what a module with no databases at all would be told. A
+      # module whose manifest declares `deliveries` and whose code asks for
+      # `primary` gets exactly that message, and the forty minutes it took to
+      # find that once is the reason for this line.
+      available = current_module.provisioned_databases.where(domain: current_domain).pluck(:logical_name)
+
+      detail = if available.empty?
+                 "no database is provisioned for it on that domain at all"
+               else
+                 "it has: #{available.sort.join(', ')}"
+               end
+
       return render json: {
-        error: "no database provisioned for #{current_module.module_name} on #{current_domain}"
+        error: "#{current_module.module_name} has no database named #{logical.inspect} " \
+               "on #{current_domain}; #{detail}",
+        requested: logical,
+        available: available
       }, status: :not_found
     end
 
