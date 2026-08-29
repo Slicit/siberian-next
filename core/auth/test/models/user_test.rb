@@ -24,10 +24,12 @@ class UserTest < ActiveSupport::TestCase
 
     identity = user.to_identity
 
-    # The shape grew when access control arrived. This asserts what must never
-    # appear rather than an exact key list, which changes with every feature and
-    # fails for reasons nobody cares about.
-    assert_equal %i[id email name active operator permissions denied].sort, identity.keys.sort
+    # The shape grew when access control arrived, and again when identities
+    # got a stable name. This asserts what must always be there and what must
+    # never be, rather than an exact key list: the comment already said that
+    # was the intent, and the assertion underneath it said otherwise and
+    # failed the next time a field was added.
+    assert_empty %i[subject id email name active operator permissions denied] - identity.keys
     refute identity.key?(:password_digest)
     refute identity.key?(:otp_secret)
     refute identity.values.any? { |value| value.to_s.include?("$2a$") }

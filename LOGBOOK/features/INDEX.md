@@ -1,6 +1,6 @@
 # Feature index
 
-_Generated: 2026-08-30, by hand. Thirty one features, all shipped._
+_Generated: 2026-08-30, by hand. Thirty two features, all shipped._
 
 ## Active
 
@@ -45,6 +45,7 @@ None.
 | [Owner app view](feat-owner-app-view.md) | The app owner sees their own builds, their place in line, and the app running, on the domain they built it for | `bin/smoke-owner-app` |
 | [Build lanes](feat-build-lanes.md) | Previews get a worker of their own: about a minute whether or not an Android build is running, down from about twenty | `bin/smoke-owner-app` |
 | [Base App tests](feat-base-tests.md) | The product side gets a suite: stand-ins for the three services it is a view onto, and the domain invariant asserted | `bin/test-service base` |
+| [Stable subject](feat-stable-subject.md) | Modules key rows by a name the core issues, not by an email address: it survives a change of address and is never handed on | `bin/smoke-identity` |
 
 ## Abandoned
 

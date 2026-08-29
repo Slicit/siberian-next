@@ -21,6 +21,7 @@ HTTP round trip to Auth for every mention of the current user.
 """
 
 import os
+import threading
 
 from flask import Flask, jsonify, request, redirect, url_for, Response
 from markupsafe import escape
@@ -44,6 +45,28 @@ SCHEMA = [
       created_at  timestamptz NOT NULL DEFAULT now()
     )
     """,
+    # The stable name the core hands us, added after the first release.
+    #
+    # Rows used to be keyed by email address, which is how somebody signs in
+    # rather than who they are. Two things followed: the core could not let
+    # anybody end an account and free the address, because the next person to
+    # claim it would open this module and find the previous person's tasks;
+    # and changing an address would have orphaned everything, here and in
+    # every other module at once, with nothing reporting it.
+    #
+    # Nullable, because rows written before this existed have no subject until
+    # their owner next visits. See claim_rows.
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_subject text",
+    "CREATE INDEX IF NOT EXISTS tasks_for_person ON tasks (user_subject, archived, id DESC)",
+    # Only for the backfill, which looks rows up by the address once per
+    # person and never again.
+    "CREATE INDEX IF NOT EXISTS tasks_by_old_key ON tasks (user_email) WHERE user_subject IS NULL",
+    # The address stops being required, because new rows do not carry one.
+    # Keeping a copy of everybody's address in every module database is a cost
+    # with no remaining benefit: the core owns the mapping, and a module that
+    # never stores an address cannot leak one or be asked to forget one. What
+    # is left of this column is the old rows the backfill still needs to find.
+    "ALTER TABLE tasks ALTER COLUMN user_email DROP NOT NULL",
     # Added after the first release. IF NOT EXISTS rather than a migration
     # runner, because a module owning one table does not need one.
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false",
@@ -63,7 +86,15 @@ def current_user():
     services use and the reason a page can ask this four times without paying
     for it four times.
     """
-    return siberian.current_user()
+    user = siberian.current_user()
+
+    # The one place every handler passes through before it can query for
+    # somebody, which is why the backfill hangs off it rather than off each
+    # of the eleven places this module opens a connection.
+    if user:
+        claim_rows(user)
+
+    return user
 
 
 def product_settings():
@@ -90,16 +121,50 @@ def db():
     return siberian.db.connection()
 
 
-def owned_task(connection, task_id, email):
+# Rows written before this module knew about subjects, attached to the person
+# they belong to.
+#
+# Done here rather than in a migration because a module cannot ask the core for
+# the subject behind an address, and should not be able to: that would be a
+# lookup from an address to a person, which is exactly what a module has no
+# business doing. What it can do is wait until that person visits, at which
+# point it is holding both halves of the mapping and the join is free.
+#
+# Once per process per person. The statement is a no-op after the first time,
+# but it is still a write, and a write per page view for a table that will never
+# need it again is the kind of cost nobody goes looking for.
+_claimed = set()
+_claimed_lock = threading.Lock()
+
+
+def claim_rows(user):
+    key = (user["subject"], user["email"])
+
+    with _claimed_lock:
+        if key in _claimed:
+            return
+
+    with db() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE tasks SET user_subject = %s WHERE user_email = %s AND user_subject IS NULL",
+                (user["subject"], user["email"]),
+            )
+
+    with _claimed_lock:
+        _claimed.add(key)
+
+
+def owned_task(connection, task_id, subject):
     """A task, only if it belongs to the person asking.
 
-    user_email in the WHERE clause, not only in the INSERT. One tenant's
+    user_subject in the WHERE clause, not only in the INSERT. One tenant's
     database still holds several people.
     """
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT id, title, done, archived, attachment FROM tasks WHERE id = %s AND user_email = %s",
-            (task_id, email),
+            "SELECT id, title, done, archived, attachment FROM tasks WHERE id = %s AND user_subject = %s",
+            (task_id, subject),
         )
         return cursor.fetchone()
 
@@ -209,8 +274,8 @@ def tasks_json():
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT id, title, done, attachment FROM tasks "
-                "WHERE user_email = %s AND archived = %s ORDER BY done, id DESC",
-                (user["email"], showing_archived),
+                "WHERE user_subject = %s AND archived = %s ORDER BY done, id DESC",
+                (user["subject"], showing_archived),
             )
             rows = cursor.fetchall()
 
@@ -234,12 +299,12 @@ def index():
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT id, title, done, attachment, created_at FROM tasks "
-                "WHERE user_email = %s AND archived = %s ORDER BY done, id DESC",
-                (user["email"], showing_archived),
+                "WHERE user_subject = %s AND archived = %s ORDER BY done, id DESC",
+                (user["subject"], showing_archived),
             )
             rows = cursor.fetchall()
             cursor.execute(
-                "SELECT count(*) FROM tasks WHERE user_email = %s AND archived = true", (user["email"],)
+                "SELECT count(*) FROM tasks WHERE user_subject = %s AND archived = true", (user["subject"],)
             )
             archived_count = cursor.fetchone()[0]
 
@@ -329,8 +394,8 @@ def create():
         with db() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO tasks (user_email, title) VALUES (%s, %s) RETURNING id",
-                    (user["email"], title),
+                    "INSERT INTO tasks (user_subject, title) VALUES (%s, %s) RETURNING id",
+                    (user["subject"], title),
                 )
                 created = cursor.fetchone()[0]
 
@@ -352,12 +417,12 @@ def toggle(task_id):
     with db() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                "UPDATE tasks SET done = NOT done WHERE id = %s AND user_email = %s",
-                (task_id, user["email"])
+                "UPDATE tasks SET done = NOT done WHERE id = %s AND user_subject = %s",
+                (task_id, user["subject"])
             )
     if wants_json():
         with db() as connection:
-            task = owned_task(connection, task_id, user["email"])
+            task = owned_task(connection, task_id, user["subject"])
         # The new state, so the screen can draw it without asking again.
         return jsonify({"id": task_id, "done": bool(task and task[2])})
 
@@ -383,8 +448,8 @@ def set_archived(task_id, archived):
     with db() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                "UPDATE tasks SET archived = %s WHERE id = %s AND user_email = %s",
-                (archived, task_id, user["email"]),
+                "UPDATE tasks SET archived = %s WHERE id = %s AND user_subject = %s",
+                (archived, task_id, user["subject"]),
             )
 
     if wants_json():
@@ -406,7 +471,7 @@ def confirm_delete(task_id):
         return signed_out()
 
     with db() as connection:
-        task = owned_task(connection, task_id, user["email"])
+        task = owned_task(connection, task_id, user["subject"])
 
     if not task:
         return redirect(url_for("index"))
@@ -443,7 +508,7 @@ def destroy(task_id):
         return signed_out()
 
     with db() as connection:
-        task = owned_task(connection, task_id, user["email"])
+        task = owned_task(connection, task_id, user["subject"])
 
         if not task:
             if wants_json():
@@ -463,8 +528,8 @@ def destroy(task_id):
                 pass
 
         with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM tasks WHERE id = %s AND user_email = %s",
-                           (task_id, user["email"]))
+            cursor.execute("DELETE FROM tasks WHERE id = %s AND user_subject = %s",
+                           (task_id, user["subject"]))
 
     if wants_json():
         return jsonify({"id": task_id, "deleted": True})
@@ -504,8 +569,8 @@ def attach(task_id):
     with db() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                "UPDATE tasks SET attachment = %s WHERE id = %s AND user_email = %s",
-                (name, task_id, user["email"]),
+                "UPDATE tasks SET attachment = %s WHERE id = %s AND user_subject = %s",
+                (name, task_id, user["subject"]),
             )
 
     if wants_json():
@@ -531,7 +596,7 @@ def download(task_id):
         return signed_out()
 
     with db() as connection:
-        task = owned_task(connection, task_id, user["email"])
+        task = owned_task(connection, task_id, user["subject"])
 
     if not task or not task[4]:
         return redirect(url_for("index"))
