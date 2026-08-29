@@ -49,6 +49,25 @@
         <%= render "shared/breadcrumb" %>
         <% if flash[:notice] %><div class="notice"><%= flash[:notice] %></div><% end %>
         <% if flash[:alert] %><div class="alert"><%= flash[:alert] %></div><% end %>
+
+        <%# The nightly sweep, on every page rather than only the dashboard.
+            Nothing in this system alerts anybody: a red sweep or one that
+            stopped running sat on a page an operator visits when they already
+            suspect something, which is the wrong way round. Rendered only when
+            there is something wrong, so a working system is silent. %>
+        <% if (sweep = nightly_sweep) && sweep.available? && !sweep.ok? %>
+          <div class="alert">
+            <% if sweep.stale? %>
+              <strong>The nightly sweep has not run for over a day.</strong>
+              A green result from last week is not evidence that anything works
+              today.
+            <% else %>
+              <strong><%= pluralize(sweep.failures.length, "nightly check") %> failing:</strong>
+              <span class="mono"><%= sweep.failures.map(&:name).join(", ") %></span>.
+            <% end %>
+            <%= link_to "Look", root_path %>
+          </div>
+        <% end %>
         <%= yield %>
       </main>
     </div>
