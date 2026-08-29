@@ -10,6 +10,13 @@ EMAIL="${SIBERIAN_DEMO_EMAIL:-operator@siberian.localhost}"
 PASSWORD="${SIBERIAN_DEMO_PASSWORD:-siberian-demo}"
 JAR=/tmp/siberian_modules_jar.txt
 
+# Unique per run. A fixed title meant counting rows left behind by every
+# previous run, so "it left the open list" was answered by somebody else's
+# task from last week.
+STAMP=$(date +%s)
+NOTE_TITLE="Smoke note $STAMP"
+TASK_TITLE="Smoke task $STAMP"
+
 . "$(dirname "$0")/smoke-lib.sh"
 
 rm -f "$JAR"
@@ -28,7 +35,7 @@ TASKS="https://tasks.apps.$DOMAIN"
 echo "--- Notes (PHP): markdown CRUD ---"
 expect "list             " "$(c -o /tmp/sm_n -w '%{http_code}' "$NOTES/")" 200
 expect "create           " "$(c -o /dev/null -w '%{http_code}' -X POST \
-  --data-urlencode 'title=Smoke note' \
+  --data-urlencode "title=$NOTE_TITLE" \
   --data-urlencode 'body=# Heading
 
 **bold** and `code`
@@ -69,7 +76,7 @@ c -o /dev/null -X POST "$NOTES/notes/$XID/delete"
 
 echo
 echo "--- Tasks (Python): archive, attach, delete ---"
-expect "add              " "$(c -o /dev/null -w '%{http_code}' -X POST --data-urlencode 'title=Smoke task' "$TASKS/tasks")" 302
+expect "add              " "$(c -o /dev/null -w '%{http_code}' -X POST --data-urlencode "title=$TASK_TITLE" "$TASKS/tasks")" 302
 c -o /tmp/sm_t "$TASKS/"
 TID=$(grep -oE '/tasks/[0-9]+/archive' /tmp/sm_t | head -1 | grep -oE '[0-9]+')
 present "the new task is listed" "$TID"
@@ -81,9 +88,9 @@ contains "the attachment is named on the row" "$(cat /tmp/sm_ta)" "sm_attach"
 
 expect "archive          " "$(c -o /dev/null -w '%{http_code}' -X POST "$TASKS/tasks/$TID/archive")" 302
 c -o /tmp/sm_t2 "$TASKS/?archived=1"
-check "it moved to the archived list" "$(grep -c 'Smoke task' /tmp/sm_t2)" "1"
+check "it moved to the archived list" "$(grep -c "$TASK_TITLE" /tmp/sm_t2)" "1"
 c -o /tmp/sm_t2b "$TASKS/"
-check "and left the open one" "$(grep -c 'Smoke task' /tmp/sm_t2b)" "0"
+check "and left the open one" "$(grep -c "$TASK_TITLE" /tmp/sm_t2b)" "0"
 
 expect "restore          " "$(c -o /dev/null -w '%{http_code}' -X POST "$TASKS/tasks/$TID/unarchive")" 302
 expect "confirm delete   " "$(c -o /tmp/sm_t3 -w '%{http_code}' "$TASKS/tasks/$TID/delete")" 200
