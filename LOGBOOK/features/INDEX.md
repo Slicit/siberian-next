@@ -34,6 +34,7 @@ None.
 | [App users](feat-app-users.md) | The person an app is for: one account, many devices, one domain, no way into the Backoffice | `bin/smoke-app-users` |
 | [Account recovery](feat-account-recovery.md) | A reset link by email, the first mail the core sends, and a throttle on both public doors | `bin/smoke-account-recovery` |
 | [Test isolation](fix-test-isolation.md) | Suites against their own database, mobile in CI, seven smokes that can now fail, and the JSX parsed | `bin/test-service`, `bin/check-native` |
+| [Honest manifest](feat-honest-manifest.md) | Install probes what a module declared, and refuses one that does not serve it | `bin/smoke-honest-manifest` |
 | [App preview](feat-app-preview.md) | The app rendered through React Native for Web in a phone-shaped panel, and a shell with a bottom bar | `bin/smoke-mobile` |
 
 ## Abandoned
