@@ -68,6 +68,37 @@ parameters and keeps its own styling, including its own dark mode. Overriding
 unconditionally would make every module render light for everybody, which is a
 regression dressed as a feature. Verified both ways.
 
+### 2026-08-29: the palette has to survive navigation, not just arrive
+
+Reported after the first version shipped: the notes homepage was styled and
+every page reached from it was not, and going back changed the colours again.
+
+The query string is the right way in and the wrong way to stay. The shell puts
+the palette on one URL, and everything after that is the module's own links,
+forms and redirects. Threading nine colours through each of them by hand is not
+a contract a module can be asked to keep, and a module that half keeps it looks
+worse than one that never adopted the theme.
+
+So the first themed request leaves the palette behind, in a session cookie
+scoped to the module's own path. That fixes the redirect case too, which was
+about to be its own bug: example-cms sends the module root to a page, and the
+palette was being dropped in the 302.
+
+**Set only when one arrived, read only when one was set.** A module opened in an
+ordinary browser is never given a theme it then cannot get rid of, and the
+scoping means one module's palette is never another's. Verified both ways, on
+both of the Router's doors: the app frames a WebView module at
+`<origin>.apps.<domain>` where it sits at the root, and the same module answers
+under `/m/<name>/`, which needs a different cookie path. The module name header
+the Router sets on one door and not the other is what tells them apart.
+
+### 2026-08-29: a module that changes needs a version somebody can install
+
+example-cms carried the palette change in its source and served the old page,
+because the image tag had not moved and nothing ever replaced the container.
+Rebuilding under the same tag looks like it worked and changes nothing that is
+running.
+
 ### 2026-08-29: theme values are filtered, because they end up in a stylesheet
 
 A colour from a query string is written into a `<style>` block, so a value that
@@ -124,6 +155,12 @@ with more disk to spare.
 Three palettes in `lib/mobile_themes.rb`: Daylight, Midnight and Meadow. One
 list, read by the builder, the Backoffice picker and a module inside a WebView.
 
+Every module with a web face adopts it: demo-tasks, example-cms and
+example-push through the Python SDK, example-notes in PHP with no SDK at all,
+which is the point of that module existing. The contract is a query string, so
+reading it is a few lines of whatever a module is written in. example-relay has
+no page to theme.
+
 Every action the native screen offers, exercised against the running module:
 
 | | |
@@ -142,6 +179,9 @@ And the theme, checked the same way:
 | a value trying to close the declaration | falls back, no injected rule |
 | a `url()` value | falls back, no request |
 | the built web export | carries all three palettes and picks by query string |
+| a sub page reached from a themed one | keeps the palette, and so does going back |
+| a module reached without a palette | sets no cookie and reads none |
+| one module's palette in another module | not carried, the cookie is scoped |
 
 Twelve tests on the catalogue, including contrast floors: text against
 background, accent against surface, and a button label against its button. A
