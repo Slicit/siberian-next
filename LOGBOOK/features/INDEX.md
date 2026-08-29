@@ -38,6 +38,7 @@ None.
 | [Accounts finished](feat-accounts-finished.md) | A reset for core accounts too, email verification, and an operator's last resort | `bin/smoke-core-recovery` |
 | [Operator visibility](feat-operator-visibility.md) | The mail queue and audit trail have pages, and a failing sweep says so everywhere | `bin/smoke-visibility` |
 | [Alerts](feat-alerts.md) | Fire once, clear once, silent in between, and only for things somebody can act on | `bin/smoke-alerts` |
+| [Builder CPU cap](feat-builder-cap.md) | Measured on both sides: 27% faster builds against 25% slower pages | `build_attempts.duration_ms` |
 | [Module upgrade](feat-module-upgrade.md) | One action, data kept, and the working version put back when the new one fails | `bin/smoke-module-upgrade` |
 | [Product surface](feat-product-surface.md) | The app follows the phone's light or dark setting, the theme contract is written down, and the phone can attach a file | `bin/smoke-appearance` |
 | [App preview](feat-app-preview.md) | The app rendered through React Native for Web in a phone-shaped panel, and a shell with a bottom bar | `bin/smoke-mobile` |
