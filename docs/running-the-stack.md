@@ -246,6 +246,14 @@ browser console. The export now makes those paths relative and fails the build
 if it names a file it did not produce, so this should surface as a failed build
 rather than an empty phone.
 
+**An app account cannot sign in, or a module says it does not know them.** App
+accounts are separate from the People list: they live in `app_users`, keyed by
+domain, and `Auth` resolves them in the same `/internal/session` call that
+resolves an operator. Check the account is on the domain being served, because
+the same address on another domain is a different person and signing in on the
+wrong one is refused exactly like a wrong password. The Backoffice lists them
+under App users.
+
 **A permission change has not taken effect.** It is cached for 30 seconds per
 session. Wait, or use the endpoint that never caches.
 
