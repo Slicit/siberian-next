@@ -30,7 +30,7 @@ free_mb=$(df -Pm / 2>/dev/null | awk 'NR==2 {print $4}')
 ruby="r = AlertScan.new(free_megabytes: ${free_mb}).call; puts [r.opened.join(','), r.closed.join(','), r.firing.length, r.notified].join('|')"
 
 out=$(docker compose --env-file .env -f deploy/compose.yml exec -T orchestrator \
-        bin/rails runner "$ruby" 2>/dev/null | tail -1 | tr -d '\r')
+        bin/rails runner "$ruby" </dev/null 2>/dev/null | tail -1 | tr -d '\r')
 
 if [ -z "$out" ]; then
   say "could not ask the Orchestrator what is wrong"
