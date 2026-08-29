@@ -69,6 +69,17 @@ class ShellTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # Forgery protection is off in the test environment, which is right for
+  # almost everything and wrong for the one action that exists because of it.
+  # An example that needs the real behaviour asks for it here.
+  def protecting
+    was = ActionController::Base.allow_forgery_protection
+    ActionController::Base.allow_forgery_protection = true
+    yield
+  ensure
+    ActionController::Base.allow_forgery_protection = was
+  end
+
   # Minitest 6 no longer ships Object#stub, and the alternatives are adding a
   # gem to every service or giving the app class-level slots it only needs
   # because of its tests. Swapping one constructor for the length of a block is
