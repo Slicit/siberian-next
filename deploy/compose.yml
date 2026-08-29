@@ -217,6 +217,11 @@ services:
       # Only the Backoffice manages people and roles. Asking who somebody is
       # needs no token at all, which is why the Base App is not on this list.
       SIBERIAN_CALLERS: orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_AUTH:-dev_orchestrator_to_auth}
+      SIBERIAN_MAILER_URL: http://mailer:3000
+      # Auth sends one kind of mail: a way back into an account. It is the
+      # first thing in the core to send any, which is why the Mailer grew a
+      # sender that is not a module.
+      SIBERIAN_CALLEES: mailer=${SIBERIAN_TOKEN_AUTH_MAILER:-dev_auth_to_mailer}
     volumes:
       - ../core/auth:/app
       - ../lib:/app/lib
@@ -242,7 +247,9 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mailer
       SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
       SIBERIAN_SERVICE_NAME: mailer
-      SIBERIAN_CALLERS: orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_MAILER:-dev_orchestrator_to_mailer}
+      SIBERIAN_CALLERS: >-
+        orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_MAILER:-dev_orchestrator_to_mailer},
+        auth=${SIBERIAN_TOKEN_AUTH_MAILER:-dev_auth_to_mailer}
       # Asks the Orchestrator which module answers mail.transport.v1.
       SIBERIAN_CALLEES: orchestrator=${SIBERIAN_TOKEN_MAILER_ORCHESTRATOR:-dev_mailer_to_orchestrator}
     volumes:
@@ -274,7 +281,9 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres_dev_only}@configuration:5432/siberian_mailer
       SIBERIAN_ORCHESTRATOR_URL: http://orchestrator:3000
       SIBERIAN_SERVICE_NAME: mailer
-      SIBERIAN_CALLERS: orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_MAILER:-dev_orchestrator_to_mailer}
+      SIBERIAN_CALLERS: >-
+        orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_MAILER:-dev_orchestrator_to_mailer},
+        auth=${SIBERIAN_TOKEN_AUTH_MAILER:-dev_auth_to_mailer}
       SIBERIAN_CALLEES: orchestrator=${SIBERIAN_TOKEN_MAILER_ORCHESTRATOR:-dev_mailer_to_orchestrator}
       MAILER_POLL_INTERVAL: "${MAILER_POLL_INTERVAL:-5}"
     volumes:

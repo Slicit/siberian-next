@@ -13,6 +13,11 @@ Rails.application.routes.draw do
   namespace :app, path: "-/auth" do
     post "register", to: "sessions#create_account"
     post "sign-in", to: "sessions#create"
+    # Getting back in without one. Public, unauthenticated, and throttled,
+    # because it sends an email to any address it is given.
+    post "forgot", to: "passwords#create"
+    get "reset", to: "passwords#show"
+    post "reset", to: "passwords#update"
     delete "sign-out", to: "sessions#destroy"
     get "me", to: "sessions#show"
     get "devices", to: "sessions#devices"

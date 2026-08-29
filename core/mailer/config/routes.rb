@@ -13,6 +13,13 @@ Rails.application.routes.draw do
     get "stats", to: "messages#stats"
   end
 
+  # Mail the core itself sends. The same queue as a module's, reached with a
+  # service token rather than a module one.
+  scope "/core" do
+    post "messages", to: "core/messages#create"
+    get "messages", to: "core/messages#index"
+  end
+
   namespace :admin do
     get "modules", to: "modules#index"
     post "modules", to: "modules#create"
