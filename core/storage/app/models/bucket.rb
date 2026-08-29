@@ -74,4 +74,30 @@ class Bucket < ApplicationRecord
       DomainQuota.where(domain: domain).update_all(["bytes_used = GREATEST(bytes_used - ?, 0)", bytes])
     end
   end
+
+  # What this bucket actually holds, counted by asking the object store.
+  #
+  # The counters above move with each write and delete, which is right for the
+  # hot path and is not a source of truth: anything that touches the store
+  # without going through this service leaves them wrong, and until this existed
+  # nothing could tell. `DomainQuota#recalculate!` summed these columns, so a
+  # wrong counter was re-added to a wrong total and reported as `drift: 0`,
+  # which reads as "checked and correct".
+  #
+  # Expensive on purpose. It walks every object in every space, so it belongs to
+  # an operator asking rather than to a request.
+  #
+  # Returns the drift it corrected, positive when the counter was overstating.
+  def recalculate!
+    actual = StoredObjects.new(self).total_bytes
+    drift = bytes_used - actual
+    update!(bytes_used: actual) unless drift.zero?
+    drift
+  rescue StandardError => e
+    # A bucket whose credentials no longer work cannot be counted, and guessing
+    # zero would hand its allowance back to a domain that is still storing the
+    # bytes. Left alone and said out loud.
+    Rails.logger.warn("could not recount #{name}: #{e.message}")
+    0
+  end
 end
