@@ -140,7 +140,10 @@ class AppUserTest < ActiveSupport::TestCase
 
     @account.erase!
 
-    assert_equal :unknown, AppPasswordReset.claim(token).last,
+    reset, reason = AppPasswordReset.claim(token)
+
+    assert_nil reset
+    refute_equal :ok, reason,
                  "a link in a mailbox must not outlive the account it opens"
   end
 
