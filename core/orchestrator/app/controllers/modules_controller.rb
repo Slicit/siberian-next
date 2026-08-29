@@ -3,6 +3,8 @@
 class ModulesController < ApplicationController
   requires "core.modules.read"
   requires "core.modules.remove", only: :destroy
+  # Replacing what is running is installing, not reading.
+  requires "core.modules.install", only: :upgrade
   before_action :set_module, only: %i[show refresh destroy]
 
   def index
@@ -10,6 +12,9 @@ class ModulesController < ApplicationController
   end
 
   def show
+    # What the catalogue holds now, so the page can offer an upgrade only when
+    # there is one to offer.
+    @available_version = catalog.find(@module.name)&.manifest&.version
     @breadcrumb_leaf = @module.title.presence || @module.name
     @activities = @module.activities.recent.limit(25)
     @registry = InterfaceRegistry.new
@@ -34,6 +39,31 @@ class ModulesController < ApplicationController
 
     @module.update(status: @module.derived_status)
     redirect_to module_path(@module.name), notice: "Container states refreshed from the engine."
+  end
+
+  # Moving to whatever the catalogue now holds for this module.
+  #
+  # An upgrade rather than a remove and install: the module keeps its uuid, its
+  # network, its databases and its buckets, and only the containers are
+  # replaced. If the new version does not come up, the old one is put back,
+  # which is the thing uninstall-and-install could never do.
+  def upgrade
+    entry = catalog.find(@module.name)
+    return redirect_to module_path(@module.name), alert: "#{@module.name} is not in the catalogue." if entry.nil?
+
+    result = ModuleUpgrader.new(@module, entry.manifest, registrar: ServiceRegistrar.new).call
+
+    if result.success? && result.changed?
+      notice = "#{@module.name} is now at #{result.installed_module.version}."
+      notice += " Warnings: #{result.warnings.join('; ')}" if result.warnings.any?
+      redirect_to module_path(@module.name), notice: notice
+    elsif result.success?
+      # Nothing changed, and said so. An operator who rebuilt an image under the
+      # same tag would otherwise be told it worked and find nothing different.
+      redirect_to module_path(@module.name), alert: result.error
+    else
+      redirect_to module_path(@module.name), alert: "Upgrade failed: #{result.error}"
+    end
   end
 
   def destroy

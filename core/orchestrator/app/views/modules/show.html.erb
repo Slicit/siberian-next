@@ -13,6 +13,15 @@
 
   <div class="row">
     <%= button_to "Refresh from engine", refresh_module_path(@module.name), class: "button" %>
+    <%# Offered only when the catalogue holds a different version, so the button
+        is an answer rather than a question. Upgrading keeps the module's uuid,
+        network, databases and buckets; only the containers are replaced, and
+        the old ones come back if the new ones do not. %>
+    <% if allow?("core.modules.install") && @available_version && @available_version != @module.version %>
+      <%= button_to "Upgrade to #{@available_version}", upgrade_module_path(@module.name),
+            method: :post, class: "button accent",
+            form: { data: { turbo_confirm: "Replace #{@module.name} #{@module.version} with #{@available_version}? Files and databases stay. If it does not come up, the current version is put back." } } %>
+    <% end %>
     <%= button_to "Remove", module_path(@module.name), method: :delete, class: "button danger",
           form: { data: { turbo_confirm: "Remove #{@module.name}? Containers and routes go; files and databases stay." } } %>
   </div>
