@@ -14,6 +14,7 @@ if shared_lib
   require "contracts"
   require "service_identity"
   require "service_authentication"
+  require "served_domains"
 else
   Rails.logger&.warn("Shared lib/ not found. Manifest parsing and the engine driver are unavailable.")
 end
@@ -32,25 +33,19 @@ Rails.application.configure do
     # Host every module-originated call arrives with.
     config.hosts += %w[core orchestrator base auth mailer storage database mobile router]
 
-    # Every served domain, not just one.
+    # Every served domain, asked at request time rather than fixed at boot.
     #
-    # SIBERIAN_DOMAIN names the first; SIBERIAN_DOMAINS names all of them, comma
-    # separated. A second domain used to reach the right server block in the
-    # Router and then be refused here, which reads as a routing fault and is
-    # not one: the Router had already decided the request was legitimate.
+    # The list lives in the Orchestrator database, which this service cannot
+    # read, so the Orchestrator publishes it to a file and this consults it. A
+    # boot-time list meant a domain added in the Backoffice reached the right
+    # server block in the Router and was then refused here until every core
+    # service restarted.
     #
-    # Static, so adding a domain in the Backoffice needs a restart before that
-    # domain answers. The reconciler reports the gap rather than leaving it to
-    # be discovered.
-    domains = ENV["SIBERIAN_DOMAINS"].to_s.split(",").map(&:strip).reject(&:empty?)
-    domains << ENV["SIBERIAN_DOMAIN"].to_s.strip
-
-    domains.reject(&:empty?).uniq.each do |domain|
-      config.hosts << domain
-      # Leading dot matches every subdomain, which is how module origins
-      # arrive: <module>.apps.<domain>.
-      config.hosts << ".#{domain}"
-    end
+    # A callable rather than strings because the answer changes while the
+    # process runs. Siberian::ServedDomains caches, so this is not a stat per
+    # request, and it merges the environment in so a deployment that has never
+    # reconciled behaves exactly as it did before.
+    config.hosts << ->(host) { Siberian::ServedDomains.serves?(host) }
   end
 
   # Health checks come from the engine with whatever Host it feels like using.

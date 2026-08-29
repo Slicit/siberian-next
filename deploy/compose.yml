@@ -156,6 +156,9 @@ services:
       # reaches the daemon. Nothing else gets the socket.
       - /var/run/docker.sock:/var/run/docker.sock
       - router_modules:/var/lib/siberian/router
+      # Read only, to report which domains the certificate covers. Reissuing
+      # one needs the CA key and belongs to whoever runs the box.
+      - ../deploy/certs:/var/lib/siberian/certs:ro
       - ../modules:/var/lib/siberian/modules:ro
       # Written on the host by the nightly sweep, read here so the Overview can
       # show whether the last one passed. Read only: the Backoffice reports on
@@ -190,6 +193,9 @@ services:
     volumes:
       - ../core/base:/app
       - ../lib:/app/lib
+      # The domain list the Orchestrator publishes. Read only: this service
+      # reports on which domains it may answer for and never decides them.
+      - router_modules:/var/lib/siberian/router:ro
     depends_on:
       configuration:
         condition: service_healthy
@@ -214,6 +220,9 @@ services:
     volumes:
       - ../core/auth:/app
       - ../lib:/app/lib
+      # The domain list the Orchestrator publishes. Read only: this service
+      # reports on which domains it may answer for and never decides them.
+      - router_modules:/var/lib/siberian/router:ro
     depends_on:
       configuration:
         condition: service_healthy
@@ -239,6 +248,9 @@ services:
     volumes:
       - ../core/mailer:/app
       - ../lib:/app/lib
+      # The domain list the Orchestrator publishes. Read only: this service
+      # reports on which domains it may answer for and never decides them.
+      - router_modules:/var/lib/siberian/router:ro
     depends_on:
       configuration:
         condition: service_healthy
@@ -268,6 +280,9 @@ services:
     volumes:
       - ../core/mailer:/app
       - ../lib:/app/lib
+      # The domain list the Orchestrator publishes. Read only: this service
+      # reports on which domains it may answer for and never decides them.
+      - router_modules:/var/lib/siberian/router:ro
     depends_on:
       configuration:
         condition: service_healthy
@@ -303,6 +318,9 @@ services:
     volumes:
       - ../core/mobile:/app
       - ../lib:/app/lib
+      # The domain list the Orchestrator publishes. Read only: this service
+      # reports on which domains it may answer for and never decides them.
+      - router_modules:/var/lib/siberian/router:ro
     depends_on:
       configuration:
         condition: service_healthy
@@ -390,6 +408,9 @@ services:
     volumes:
       - ../core/storage:/app
       - ../lib:/app/lib
+      # The domain list the Orchestrator publishes. Read only: this service
+      # reports on which domains it may answer for and never decides them.
+      - router_modules:/var/lib/siberian/router:ro
     depends_on:
       configuration:
         condition: service_healthy
@@ -438,6 +459,9 @@ services:
     volumes:
       - ../core/database:/app
       - ../lib:/app/lib
+      # The domain list the Orchestrator publishes. Read only: this service
+      # reports on which domains it may answer for and never decides them.
+      - router_modules:/var/lib/siberian/router:ro
     depends_on:
       configuration:
         condition: service_healthy
