@@ -104,8 +104,11 @@ fi
 # Guarded by the same in-flight check as the workspaces above: deleting an
 # artifact while its build is running would race the upload.
 if [ "$building" = "0" ]; then
-  artifacts=$(cd "$REPO" 2>/dev/null && docker compose --env-file .env -f deploy/compose.yml 
-    exec -T mobile bin/rails runner "r = ArtifactRetention.new.call; puts r.removed.to_s + %q{ } + r.megabytes.to_s + %q{ } + r.kept.to_s" 2>/dev/null | tr -d "")
+  # One line on purpose: a continuation here was eaten once, which split the
+  # command in two and reported docker's usage text as the number of
+  # artifacts removed.
+  retention_ruby='r = ArtifactRetention.new.call; puts [r.removed, r.megabytes, r.kept].join(" ")'
+  artifacts=$(cd "$REPO" 2>/dev/null && docker compose --env-file .env -f deploy/compose.yml exec -T mobile bin/rails runner "$retention_ruby" 2>/dev/null | tr -d "")
   set -- $artifacts
   if [ -n "$1" ]; then
     say "removed $1 superseded artifact(s), $2 MB, keeping $3"
