@@ -105,6 +105,17 @@ class PhoneAppController < ApplicationController
     end
   end
 
+  # The exported web build, proxied from the Mobile service. The domain is the
+  # one the Router put on this request, so an app owner cannot fetch another
+  # domain's export by asking for it.
+  def preview
+    found = mobile.preview(current_domain, params[:path].presence || "index.html")
+    return head :not_found if found.nil?
+
+    body, content_type = found
+    send_data body, type: content_type.presence || "application/octet-stream", disposition: "inline"
+  end
+
   private
 
   def mobile
@@ -115,7 +126,28 @@ class PhoneAppController < ApplicationController
     report = mobile.app(current_domain)
     @app = report && report["ok"] ? report : nil
     @catalogue = Array(mobile.apps&.[]("catalogue"))
-    @builds = Array(mobile.builds(domain: current_domain)&.[]("builds")).first(5)
+
+    queue = mobile.builds(domain: current_domain)
+
+    # Told apart deliberately. "Nothing built yet" is a true and useful thing to
+    # say when the queue is empty, and a lie when the answer never arrived. That
+    # is the shape of failure that hides longest here, because a page that says
+    # nothing happened looks exactly like a page where nothing happened, and
+    # this section spent its whole life so far saying it to a refused request.
+    @builds_unavailable = queue.nil? || !queue["ok"]
+    @builds = Array(queue && queue["builds"])
+    @queued = queue && queue["queued"].to_i
+    @building = queue && queue["building"].to_i
+
+    # What the preview iframe points at. The most recent web build that
+    # finished, because a queued one has nothing to show and a failed one would
+    # show the last good export while claiming to be current.
+    @preview_build = @builds.find do |build|
+      build["platform"] == "web" && build["state"] == "succeeded"
+    end
+    @preview_pending = @builds.any? do |build|
+      build["platform"] == "web" && %w[queued building].include?(build["state"])
+    end
   end
 
   # Configuring the app is not using the product. Somebody who can open the

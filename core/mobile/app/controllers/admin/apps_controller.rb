@@ -4,13 +4,17 @@
 module Admin
   class AppsController < ApplicationController
     before_action :authenticate_admin!
-
+    before_action :require_named_domain!, except: :index
 
     # GET /admin/apps
     def index
       render json: {
         catalogue: Siberian::MobileCapabilities::CATALOGUE,
-        apps: MobileApp.ordered.map { |app| serialize(app) }
+        # The catalogue is the same for everybody: it is what an app can be
+        # built with, not what anybody has built. The list of apps is not,
+        # and a caller that speaks for one domain has no use for it and no
+        # business seeing which other domains exist.
+        apps: pinned_caller? ? [] : MobileApp.ordered.map { |app| serialize(app) }
       }
     end
 
@@ -206,8 +210,8 @@ module Admin
 
     private
 
-    # The Base App reads phone app state to draw the product side menu, so it
-    # is admitted here and on no other Mobile endpoint.
+    # The Base App configures the app for the domain it is inside. It is pinned
+    # to that domain rather than trusted with the parameter: see PINNED_CALLERS.
     def permitted_callers = %w[orchestrator base]
 
     def serialize(app)

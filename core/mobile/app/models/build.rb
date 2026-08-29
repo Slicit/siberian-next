@@ -55,6 +55,12 @@ class Build < ApplicationRecord
 
   def terminal? = TERMINAL.include?(state)
 
+  # Waiting for the builder rather than finished with it. Queued and failed both
+  # count, because a failed build is one due another attempt, and it matches the
+  # `pending` scope on purpose: anything that reports a queue position has to
+  # agree with what the queue is counting.
+  def waiting? = [QUEUED, FAILED].include?(state)
+
   # Claims one build that is due, for one worker. SKIP LOCKED is the whole
   # trick: a second worker running this at the same moment steps over the
   # locked row rather than queueing behind it.
