@@ -187,9 +187,110 @@ function e(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+// --------------------------------------------------------------- app palette
+
+/**
+ * The app's colours, when this page is being rendered inside the app.
+ *
+ * A module has two faces. The native one is drawn by the app and inherits its
+ * palette for free. This one is HTML the module renders itself, and inside a
+ * WebView it is the one part of the app that would ignore the theme, which is
+ * exactly where it shows: a dark app with a white page in the middle of it.
+ *
+ * The shell puts the palette in the query string. There is no SDK here, in
+ * either language, which is the point of this module existing: the contract is
+ * a query string, so a module in any language reads it in a few lines.
+ *
+ * Nothing here is trusted for anything but colour. These values land inside a
+ * stylesheet, so they are filtered to shapes that cannot end a declaration.
+ * Someone who controls the query string controls the palette of a page they
+ * are already looking at, and must not be able to control anything else on it.
+ */
+
+/** Hex, rgb/rgba, hsl/hsla, or a plain keyword. An allowlist of shapes rather
+ *  than an attempt to strip dangerous characters out of arbitrary text. */
+const THEME_COLOUR = '/\A(\#[0-9a-fA-F]{3,8}|rgba?\(\s*[\d.\s,%\/]+\)|hsla?\(\s*[\d.\s,%\/deg]+\)|[a-zA-Z]{3,20})\z/';
+
+/** The fields a theme carries, and what a page falls back to. Kept identical to
+ *  the Python SDK's defaults, because a module should look the same in either. */
+const THEME_DEFAULTS = [
+    'background' => '#f7f8fa',
+    'surface' => '#ffffff',
+    'text' => '#111827',
+    'muted' => '#6b7280',
+    'line' => '#e5e7eb',
+    'accent' => '#2563eb',
+    'on-accent' => '#ffffff',
+    'danger' => '#b3261e',
+    'danger-surface' => '#fee2e2',
+];
+
+/** This module's own variable names, mapped onto the app's. The stylesheet is
+ *  not renamed to suit the app: the module keeps calling a colour what it
+ *  always called it. */
+const THEME_VARIABLES = [
+    '--bg' => 'background',
+    '--fg' => 'text',
+    '--muted' => 'muted',
+    '--line' => 'line',
+    '--accent' => 'accent',
+    '--danger' => 'danger',
+    '--surface' => 'surface',
+];
+
+function themeAsked(): bool
+{
+    return isset($_GET['theme']) && $_GET['theme'] !== '';
+}
+
+function themeColour(string $field, string $fallback): string
+{
+    // The query parameter is camelCase where the CSS name is kebab: the app
+    // sends theme_onAccent for what becomes --theme-on-accent.
+    $parameter = 'theme_' . lcfirst(str_replace(' ', '', ucwords(str_replace('-', ' ', $field))));
+    $value = trim((string) ($_GET[$parameter] ?? ''));
+
+    return ($value !== '' && preg_match(THEME_COLOUR, $value) === 1) ? $value : $fallback;
+}
+
+/**
+ * A stylesheet fragment pointing this module's variables at the app's.
+ *
+ * Empty when no app asked, so a page opened directly in a browser keeps its own
+ * styling and its own dark mode. Overriding unconditionally would make every
+ * module render light for everybody, which is a regression dressed as a
+ * feature.
+ *
+ * Placed after the module's own rules, because they are the same specificity
+ * and the later one wins.
+ */
+function themeBridge(string $selector = ':root'): string
+{
+    if (!themeAsked()) {
+        return '';
+    }
+
+    $scheme = ($_GET['theme_scheme'] ?? '') === 'dark' ? 'dark' : 'light';
+
+    $palette = '';
+    foreach (THEME_DEFAULTS as $field => $fallback) {
+        $palette .= '--theme-' . $field . ':' . themeColour($field, $fallback) . ';';
+    }
+
+    $adopt = '';
+    foreach (THEME_VARIABLES as $name => $field) {
+        $adopt .= $name . ':var(--theme-' . $field . ');';
+    }
+
+    return $selector . '{color-scheme:' . $scheme . ';' . $palette . '}'
+        . $selector . '{' . $adopt . '}';
+}
+
 function page(string $body, string $title = 'Notes'): void
 {
-    $style = file_get_contents(__DIR__ . '/style.css');
+    // The module's own stylesheet, then the app's palette when an app is framing
+    // this page. Nothing is appended when it is not.
+    $style = file_get_contents(__DIR__ . '/style.css') . themeBridge();
     echo <<<HTML
     <!doctype html>
     <html lang="en"><head>
