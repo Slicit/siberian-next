@@ -19,7 +19,12 @@ class ModuleInstaller
                  driver: Siberian::Engine.driver,
                  router: RouterConfig.new,
                  registrar: nil,
-                 domains: nil)
+                 domains: nil,
+                 # Injected for the same reason the driver and the router are:
+                 # a unit test installs against a fake engine that serves no
+                 # HTTP, so a probe that really asks would fail every install
+                 # in the suite for a reason that is not about installing.
+                 probe: ModuleProbe)
     @manifest = manifest
     @driver = driver
     @router = router
@@ -27,6 +32,7 @@ class ModuleInstaller
     # Storage service and a Database service standing behind it.
     @registrar = registrar
     @domains = domains
+    @probe = probe
     @undo = []
   end
 
@@ -332,8 +338,8 @@ class ModuleInstaller
     return if domains.empty?
     return if @manifest.system_capabilities.empty? && @manifest.containers.none? { |c| c["health"] }
 
-    findings = ModuleProbe.new(installed, @manifest, domain: domains.first.hostname).call
-    refusal = ModuleProbe.refusal(findings)
+    findings = @probe.new(installed, @manifest, domain: domains.first.hostname).call
+    refusal = @probe.refusal(findings)
 
     Activity.record("install.probed", installed_module: installed,
                     checked: findings.length, failed: findings.count { |f| !f.ok? })

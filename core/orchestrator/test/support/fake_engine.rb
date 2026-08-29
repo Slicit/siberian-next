@@ -183,3 +183,40 @@ class FakeRouter
 
   def upstreams = @upstreams ||= []
 end
+
+# A probe that agrees with whatever the manifest said.
+#
+# The installer asks a running module whether it serves what it declared. A
+# fake engine serves no HTTP, so without this every install in the suite would
+# fail for a reason that is not about installing.
+#
+# `FakeProbe.answering(false)` is the other half, for the test that the refusal
+# actually stops an install.
+class FakeProbe
+  class << self
+    attr_accessor :honest
+
+    def answering(honest)
+      Class.new(FakeProbe) { self.honest = honest }
+    end
+
+    def refusal(findings)
+      findings.reject(&:ok?).empty? ? nil : "the module does not serve what its manifest declares"
+    end
+  end
+
+  self.honest = true
+
+  def initialize(installed_module, manifest, domain:, **)
+    @manifest = manifest
+    @honest = self.class.honest
+  end
+
+  def call
+    @manifest.system_capabilities.map do |capability|
+      ModuleProbe::Finding.new(what: "capability #{capability['interface']}",
+                               where: capability["endpoint"], status: @honest ? "200" : "404",
+                               ok: @honest)
+    end
+  end
+end

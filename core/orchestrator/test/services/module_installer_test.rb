@@ -58,7 +58,8 @@ class ModuleInstallerTest < ActiveSupport::TestCase
       manifest_object || manifest,
       driver: @engine,
       router: @router,
-      domains: [@domain]
+      domains: [@domain],
+      probe: FakeProbe
     ).call
   end
 
@@ -134,6 +135,28 @@ class ModuleInstallerTest < ActiveSupport::TestCase
     assert_equal 1, InstalledModule.count
   end
 
+  # The probe is the last word on an install. A module that declares something
+  # it does not serve must not end up in the list looking usable.
+  test "a module that does not serve what it declares is refused" do
+    result = ModuleInstaller.new(manifest, driver: @engine, router: @router,
+                                 domains: [@domain], probe: FakeProbe.answering(false)).call
+
+    refute result.success?
+    assert_match(/does not serve what its manifest declares/, result.error)
+    assert_equal "failed", InstalledModule.find_by(name: "demo-tasks").status
+  end
+
+  test "and installing it again says so rather than saying it is installed" do
+    ModuleInstaller.new(manifest, driver: @engine, router: @router,
+                        domains: [@domain], probe: FakeProbe.answering(false)).call
+
+    result = install
+
+    refute result.success?
+    assert_match(/Remove it first/, result.error,
+                 "an operator told 'already installed' about a failed install has nowhere to go")
+  end
+
   test "a system capability is registered against its interface" do
     installed = install.installed_module
 
@@ -207,7 +230,7 @@ class ModuleInstallerTest < ActiveSupport::TestCase
   test "a container that cannot start leaves nothing behind" do
     engine = FakeEngine.new(fail_on: :start)
 
-    result = ModuleInstaller.new(manifest, driver: engine, router: @router, domains: [@domain]).call
+    result = ModuleInstaller.new(manifest, driver: engine, router: @router, domains: [@domain], probe: FakeProbe).call
 
     refute result.success?
     assert_empty engine.containers, "a failed install must not leave containers running"
@@ -217,7 +240,7 @@ class ModuleInstallerTest < ActiveSupport::TestCase
   test "a failed install keeps the record so an operator can see what happened" do
     engine = FakeEngine.new(fail_on: :start)
 
-    ModuleInstaller.new(manifest, driver: engine, router: @router, domains: [@domain]).call
+    ModuleInstaller.new(manifest, driver: engine, router: @router, domains: [@domain], probe: FakeProbe).call
 
     installed = InstalledModule.find_by(name: "demo-tasks")
     assert_equal "failed", installed.status
@@ -227,7 +250,7 @@ class ModuleInstallerTest < ActiveSupport::TestCase
   test "a router that refuses to reload rolls the install back" do
     router = FakeRouter.new(fail_reload: true)
 
-    result = ModuleInstaller.new(manifest, driver: @engine, router: router, domains: [@domain]).call
+    result = ModuleInstaller.new(manifest, driver: @engine, router: router, domains: [@domain], probe: FakeProbe).call
 
     refute result.success?
     assert_empty @engine.containers
@@ -270,7 +293,7 @@ class ModuleInstallerTest < ActiveSupport::TestCase
   test "a failure is recorded with the reason" do
     engine = FakeEngine.new(fail_on: :create)
 
-    ModuleInstaller.new(manifest, driver: engine, router: @router, domains: [@domain]).call
+    ModuleInstaller.new(manifest, driver: engine, router: @router, domains: [@domain], probe: FakeProbe).call
 
     failure = Activity.find_by(action: "install.failed")
     assert failure.present?

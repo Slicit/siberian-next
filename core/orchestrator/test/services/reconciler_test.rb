@@ -62,7 +62,7 @@ class ReconcilerTest < ActiveSupport::TestCase
   end
 
   def install(name, extra = "")
-    ModuleInstaller.new(manifest(name, extra), driver: @engine, router: @router, domains: [@domain])
+    ModuleInstaller.new(manifest(name, extra), driver: @engine, router: @router, domains: [@domain], probe: FakeProbe)
                    .call.installed_module
   end
 
