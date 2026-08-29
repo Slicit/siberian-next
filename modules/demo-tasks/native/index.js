@@ -27,6 +27,11 @@ export function TaskList({ siberian }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState({});
   const [showArchived, setShowArchived] = useState(false);
+  // The browser asks before deleting, on a page of its own. The phone asks in
+  // the row: the button becomes the question, and a tap somewhere else answers
+  // no. A single tap that destroys something is the one place parity should not
+  // mean matching the smaller gesture.
+  const [confirming, setConfirming] = useState(null);
 
   const theme = siberian.theme || {};
   const styles = useMemo(() => sheet(theme), [theme]);
@@ -85,7 +90,11 @@ export function TaskList({ siberian }) {
   const setArchived = (task, archived) =>
     act(task.id, `tasks/${task.id}/${archived ? "archive" : "unarchive"}`);
 
-  const remove = (task) => act(task.id, `tasks/${task.id}/delete`);
+  const remove = (task) => {
+    if (confirming !== task.id) return setConfirming(task.id);
+    setConfirming(null);
+    return act(task.id, `tasks/${task.id}/delete`);
+  };
 
   if (tasks === null) return <ActivityIndicator style={styles.centre} color={theme.accent} />;
 
@@ -110,7 +119,13 @@ export function TaskList({ siberian }) {
         </View>
       ) : null}
 
-      <Pressable onPress={() => setShowArchived((on) => !on)} style={styles.tab}>
+      <Pressable
+        onPress={() => {
+          setConfirming(null);
+          setShowArchived((on) => !on);
+        }}
+        style={styles.tab}
+      >
         <Text style={styles.tabLabel}>{showArchived ? "Back to open tasks" : "Archived"}</Text>
       </Pressable>
 
@@ -143,7 +158,9 @@ export function TaskList({ siberian }) {
 
             {showArchived ? (
               <Pressable onPress={() => remove(item)} style={styles.action}>
-                <Text style={styles.danger}>Delete</Text>
+                <Text style={styles.danger}>
+                  {confirming === item.id ? "Delete for good?" : "Delete"}
+                </Text>
               </Pressable>
             ) : null}
           </View>
