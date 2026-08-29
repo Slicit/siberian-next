@@ -32,7 +32,17 @@ class ModuleInstaller
 
   def call
     @manifest.validate!
-    raise AlreadyInstalled, "#{@manifest.name} is already installed" if InstalledModule.exists?(name: @manifest.name)
+    existing = InstalledModule.find_by(name: @manifest.name)
+
+    if existing&.status == "failed"
+      # Distinguished, because "already installed" is the one thing a failed
+      # install is not, and an operator told that has no idea what to do next.
+      raise AlreadyInstalled,
+            "#{@manifest.name} is here from an install that failed (#{existing.last_error}). " \
+            "Remove it first, then install again."
+    end
+
+    raise AlreadyInstalled, "#{@manifest.name} is already installed" if existing
 
     check_interface_conflicts!
 

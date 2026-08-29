@@ -87,9 +87,16 @@ class ModuleProbe
 
     ATTEMPTS.times do |attempt|
       status = get(path)
-      # 000 is "did not answer at all", which a container that is still starting
-      # gives. Anything else is a real answer and there is no reason to wait.
-      break unless status == "000"
+      # Two answers mean "ask again": nothing answered at all, which a container
+      # that is still starting gives, and 404, which is what the Router says
+      # about a module whose upstream map it has not reloaded yet.
+      #
+      # 404 is also exactly what a module that does not serve the path says, and
+      # the two are indistinguishable from here. Retrying both costs a wrong
+      # manifest a few seconds at install time and saves an honest module from
+      # being refused because nginx was a moment behind. Installs are rare;
+      # refusing a correct one is expensive.
+      break unless %w[000 404].include?(status)
 
       sleep(BETWEEN) unless attempt == ATTEMPTS - 1
     end
