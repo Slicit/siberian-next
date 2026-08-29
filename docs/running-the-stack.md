@@ -15,12 +15,15 @@ convenience.
 | | |
 |---|---|
 | Host | `claude-machine-01.home`, user `claude`, passwordless sudo. Address it by name: the box takes its address by DHCP, so the IP moves. It was `192.168.1.86` when this was written |
-| SSH | `ssh siberian` (alias in `~/.ssh/config`, key `~/.ssh/siberian_debian`) |
+| SSH | `ssh claude-machine-01`, or the older alias `ssh siberian`. Key `~/.ssh/siberian_debian`. There is more than one box: see the `claude-machine` skill before running anything destructive |
 | Repo | `~/siberian-next`, remote over SSH, pushes as `Slicit` |
 | Engine | Docker 29.7.2 |
-| Services | 13 containers: 7 Rails apps, a mail worker, a build worker, the Router, two Postgres clusters, and Garage |
-| Domain | `siberian.test` over HTTPS, behind a local CA |
+| Services | 13 containers: 7 Rails apps, a mail worker, a build worker, the Router, two Postgres clusters, and the object store |
+| Domains | Every domain in the `domains` table is served, each with its own shell, Backoffice, and object store door. `siberian.test` is the one with a certificate |
+| Object store | Behind a driver (`lib/object_store`), Garage by default, S3 for AWS or anything speaking its API. Reachable from a browser at `s3.<domain>` for signed URLs |
+| Credentials | One secret per pair of services, not one shared admin token. `SIBERIAN_CALLERS` and `SIBERIAN_CALLEES` per service |
 | Housekeeping | Nightly at 04:30 via `/etc/cron.d/siberian-housekeeping`, logging to `/var/log/siberian-housekeeping.log`. Installed by `deploy/maintenance/install.sh` |
+| Checks | Nightly at 05:00 via `/etc/cron.d/siberian-checks`, logging to `/var/log/siberian-checks.log`. The Overview shows the result |
 | Assistant | `ANTHROPIC_API_KEY` in `.env`, read by the Mobile service alone. Absent, the app studio says so and everything else works |
 
 The laptop is for authoring. The loop is edit locally, commit, push, pull on the
@@ -124,28 +127,61 @@ Every one of these drives the real stack. They are the fastest way to answer
 "is it still working" without reading a transcript.
 
 ```
-./bin/check            architecture and convention checks, no stack needed
-./bin/reload           make the running stack match the checkout, after a pull
-./bin/test-lib         the shared library suite
-./bin/test-engine      the engine driver against a real daemon
-./bin/smoke-auth       sign in, and the cookie lands scoped and Secure
-./bin/smoke-access     every page against three roles, and a surgical deny
-./bin/smoke-storage    register, provision, and every verb and refusal
-./bin/smoke-quotas     all three quota levels, including a refusal from each
-./bin/smoke-domains    a domain allowance set before a module stores anything
-./bin/smoke-mobile     the phone app for a domain, its capabilities, and its queue
-./bin/smoke-cms        a page of blocks, in the browser and as JSON for the app
-./bin/smoke-push       an inbox, and read, archive and delete staying different
-./bin/smoke-mail       enqueue, deliver, acknowledge, and a permanent rejection
-./bin/smoke-backoffice every Backoffice page, as an operator and as a plain user
-./bin/smoke-demo       the demo module end to end over HTTPS
-./bin/smoke-modules    both reference modules, PHP and Python
+./bin/check              architecture and convention checks, no stack needed
+./bin/check-boot         every service loads what it names, and boots in production
+./bin/reload             make the running stack match the checkout, after a pull
+./bin/test-lib           the shared library suite
+./bin/test-engine        the engine driver against a real daemon
+./bin/smoke-auth         sign in, and the cookie lands scoped and Secure
+./bin/smoke-access       every page against three roles, and a surgical deny
+./bin/smoke-storage      register, provision, and every verb and refusal
+./bin/smoke-quotas       all three quota levels, including a refusal from each
+./bin/smoke-domains      a domain allowance set before a module stores anything
+./bin/smoke-domains-served  every domain in the database answers on all three doors
+./bin/smoke-public-media public files served from the object store, and four refusals
+./bin/smoke-s3-backend   the object store driver against a second, different store
+./bin/smoke-reconcile    a registration the Mobile service lost, put back
+./bin/smoke-mobile       the phone app for a domain, its capabilities, and its queue
+./bin/smoke-cms          a page of blocks, in the browser and as JSON for the app
+./bin/smoke-push         an inbox, and read, archive and delete staying different
+./bin/smoke-mail         enqueue, deliver, acknowledge, and a permanent rejection
+./bin/smoke-backoffice   every Backoffice page, as an operator and as a plain user
+./bin/smoke-demo         the demo module end to end over HTTPS
+./bin/smoke-modules      both reference modules, PHP and Python
 ```
 
-Two of them are slow on purpose. `smoke-access` waits out the 30 second
+`bin/check` runs two architecture guards worth knowing by name, because they
+fail the build rather than warn: `check-engine-leak` refuses a container engine
+named outside `lib/siberian_engine`, and `check-storage-leak` refuses an object
+store backend named outside `lib/object_store`.
+
+Two smokes are slow on purpose. `smoke-access` waits out the 30 second
 permission cache to prove a revocation actually bites, and `smoke-mail` waits
 for the worker to pick up a message. Shortening either would test a shorter
 window than the one that ships.
+
+`smoke-s3-backend` pulls an image for a second object store and skips rather
+than fails when it cannot, so a registry hiccup does not turn the sweep red.
+
+### All of them, nightly and unattended
+
+```
+./deploy/maintenance/nightly-checks.sh
+```
+
+Runs everything above, records each result rather than stopping at the first
+failure, and writes `deploy/checks/latest.json`, which the Backoffice Overview
+reads. Installed by `deploy/maintenance/install.sh` to run at 05:00 as the user
+who owns the checkout, after housekeeping has freed the disk.
+
+It refuses to run as root. The smokes keep working files at fixed paths in
+`/tmp`, so a root run leaves root-owned files there and the next run by a person
+cannot overwrite them, which surfaces as a smoke reporting that the bytes came
+back wrong.
+
+The Overview card is red when the sweep failed and also when the sweep is more
+than forty hours old, because a green tick from a sweep that stopped running is
+the failure this exists to remove.
 
 Rails suites run per service:
 
