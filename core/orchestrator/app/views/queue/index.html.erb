@@ -1,0 +1,81 @@
+<% content_for :title, "Mail queue" %>
+
+<div class="spread" style="margin-bottom:1.2rem">
+  <div>
+    <h1>Mail queue</h1>
+    <p class="muted" style="margin:0">
+      Every message the system has been handed, and what happened to it. A
+      message that fails is retried with backoff and gives up into a dead state
+      rather than looping; nothing here disappears quietly.
+    </p>
+  </div>
+</div>
+
+<% if @report.nil? %>
+  <div class="alert">
+    The Mailer did not answer. Queued mail is still queued; this page just
+    cannot show it.
+  </div>
+<% else %>
+  <div class="card">
+    <header>
+      <h2>By state</h2>
+    </header>
+
+    <div class="row wrap" style="gap:.4rem">
+      <%= link_to "All", queue_path, class: "button#{' on' unless @state}" %>
+      <% Array(@counts.keys).each do |state| %>
+        <%= link_to "#{state.humanize} (#{@counts[state]})", queue_path(state: state),
+              class: "button#{' on' if @state == state}" %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="card">
+    <header>
+      <h2><%= @state ? "#{@state.humanize} messages" : "Recent messages" %></h2>
+      <%# Deliberately no message body. A password reset link is a credential,
+          and a page that showed one would let whoever can read it take over the
+          account it belongs to. What is here is enough to answer "why is mail
+          not arriving" without handing over the answer to somebody's inbox. %>
+      <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+        Addressees and outcomes, not contents. A reset link is a credential, and
+        this page is not where one should be readable.
+      </p>
+    </header>
+
+    <% if @messages.any? %>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>To</th><th>Subject</th><th>From</th><th>State</th><th>Attempts</th><th>Last error</th><th></th></tr>
+          </thead>
+          <tbody>
+            <% @messages.each do |message| %>
+              <tr>
+                <td class="mono"><%= message["to"] %></td>
+                <td><%= message["subject"] %></td>
+                <td class="muted small"><%= message["module_name"] %></td>
+                <td>
+                  <span class="badge<%= ' accent' if message['state'] == 'sent' %>"><%= message["state"] %></span>
+                  <% unless message["acknowledged"] || !%w[sent dead cancelled].include?(message["state"]) %>
+                    <span class="muted small" title="The sender has not said it has seen this outcome.">unacknowledged</span>
+                  <% end %>
+                </td>
+                <td class="muted small"><%= message["attempts"] %> of <%= message["max_attempts"] %></td>
+                <td class="muted small"><%= truncate(message["last_error"].to_s, length: 90) %></td>
+                <td class="right">
+                  <% if %w[dead cancelled].include?(message["state"]) && allow?("core.modules.install") %>
+                    <%= button_to "Retry", retry_message_path(message["id"]), method: :post, class: "button" %>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <div class="empty">Nothing here<%= " in that state" if @state %>.</div>
+    <% end %>
+  </div>
+<% end %>

@@ -6,7 +6,7 @@ class ApplicationController < ActionController::Base
 
   before_action :require_signed_in!
 
-  helper_method :current_user, :current_domain, :catalog, :allow?
+  helper_method :current_user, :current_domain, :catalog, :allow?, :nightly_sweep
 
   # Declares what a controller needs, checked before every action in it.
   #
@@ -35,6 +35,18 @@ class ApplicationController < ActionController::Base
 
   def auth
     @auth ||= Siberian::AuthClient.new
+  end
+
+  # Read once per request and only when a page asks. It is a file on disk, so
+  # the cost is a stat and a parse, and the banner in the layout is the only
+  # thing in this system that tells an operator something is wrong before they
+  # go looking.
+  def nightly_sweep
+    return @nightly_sweep if defined?(@nightly_sweep)
+
+    @nightly_sweep = NightlyChecks.new
+  rescue StandardError
+    @nightly_sweep = nil
   end
 
   # Every check after the first is a set lookup on a resolved answer, which is
