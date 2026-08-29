@@ -47,7 +47,7 @@ module Siberian
           { label: "Mail queue", route: :queue_path, permission: "core.modules.read",
             controller: "queue" },
           { label: "Database audit", route: :audit_path, permission: "core.audit.read",
-            controller: "queue" },
+            controller: "audit_trail" },
           { label: "Activity", route: :activity_path, permission: "core.audit.read", controller: "activities" }
         ]
       }

@@ -76,7 +76,7 @@ Rails.application.routes.draw do
   # reading somebody else's tables.
   get "queue", to: "queue#index", as: :queue
   post "queue/:id/retry", to: "queue#retry_message", as: :retry_message
-  get "audit-trail", to: "queue#audit", as: :audit
+  get "audit-trail", to: "audit_trail#index", as: :audit
 
   get "interfaces", to: "interfaces#index", as: :interfaces
   get "activity", to: "activities#index", as: :activity
