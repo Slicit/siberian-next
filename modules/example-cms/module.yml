@@ -6,13 +6,13 @@
 # same API. Nothing about a block is described twice.
 schema_version: 1
 name: example-cms
-version: 1.1.0
+version: 1.2.0
 title: Pages
 description: Pages assembled from blocks, with navigation. The same content renders in the browser and natively in the phone app.
 
 containers:
   - service: web
-    image: siberian/example-cms:1.1.0
+    image: siberian/example-cms:1.2.0
     role: http
     internal_port: 8080
     health:

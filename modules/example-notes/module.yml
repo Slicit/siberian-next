@@ -5,13 +5,13 @@
 # imports anything that knows Siberian exists.
 schema_version: 1
 name: example-notes
-version: 1.1.0
+version: 1.2.0
 title: Notes
 description: Markdown notes with full CRUD, written in PHP to show the contract does not care about language.
 
 containers:
   - service: web
-    image: siberian/example-notes:1.1.0
+    image: siberian/example-notes:1.2.0
     role: http
     internal_port: 8080
     health:

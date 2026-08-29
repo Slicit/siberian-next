@@ -522,3 +522,14 @@ def web_delete(identifier):
         cursor.execute("DELETE FROM notifications WHERE id = %s AND user_email = %s", (identifier, user["email"]))
 
     return redirect(request.referrer or url_for("index"))
+
+
+@app.after_request
+def remember_theme(response):
+    """The palette the app opened this module with, kept for the pages after it.
+
+    Without this the first screen is themed and everything reached from it is
+    not, which reads as the theme being broken rather than as the link having
+    dropped it.
+    """
+    return siberian.theme.remember(response)

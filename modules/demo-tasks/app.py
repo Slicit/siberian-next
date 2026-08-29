@@ -539,5 +539,18 @@ def download(task_id):
     return redirect(siberian.storage.signed_url(f"tasks/{task_id}/{task[4]}"))
 
 
+@app.after_request
+def remember_theme(response):
+    """The palette the app opened this module with, kept for the pages after it.
+
+    Without this the first screen is themed and everything reached from it is
+    not, which reads as the theme being broken rather than as the link having
+    dropped it.
+    """
+    return siberian.theme.remember(response)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, threaded=True)
+
+

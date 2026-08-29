@@ -7,13 +7,13 @@
 # WebView, with no way to reach the notification tray.
 schema_version: 1
 name: example-push
-version: 1.1.0
+version: 1.2.0
 title: Notifications
 description: An inbox for push notifications, with read, archive, and delete. Requires the push capability to reach the notification tray.
 
 containers:
   - service: web
-    image: siberian/example-push:1.1.0
+    image: siberian/example-push:1.2.0
     role: http
     internal_port: 8080
     health:

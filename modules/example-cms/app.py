@@ -990,3 +990,14 @@ def add_link(slug, block_id):
 @app.post("/<slug>/blocks/<int:block_id>/links/remove")
 def remove_link(slug, block_id):
     return edit_links(slug, block_id, lambda links, target, _known, _here: [s for s in links if s != target])
+
+
+@app.after_request
+def remember_theme(response):
+    """The palette the app opened this module with, kept for the pages after it.
+
+    Without this the first screen is themed and everything reached from it is
+    not, which reads as the theme being broken rather than as the link having
+    dropped it.
+    """
+    return siberian.theme.remember(response)

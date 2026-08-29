@@ -238,9 +238,87 @@ const THEME_VARIABLES = [
     '--surface' => 'surface',
 ];
 
+/** Where the palette is left for the pages after the first one. */
+const THEME_COOKIE = 'siberian_theme';
+
+/**
+ * The palette the app opened this module with, kept for the pages after it.
+ *
+ * The shell puts the palette on one URL. Every link, form and redirect after
+ * that is this module's own, and none of them can be expected to thread nine
+ * colours through by hand: the second page would render unstyled and going
+ * back would change the colours again, which reads as the theme being broken
+ * rather than as the link having dropped it.
+ *
+ * Scoped to this module's own path, so one module's palette is not another's,
+ * and session scoped, so it goes when the browser does. A module reached
+ * without a palette never sets one and never reads one, which is what keeps an
+ * ordinary browser visit unthemed.
+ */
+function themeRemember(): void
+{
+    if (!isset($_GET['theme']) || $_GET['theme'] === '' || headers_sent()) {
+        return;
+    }
+
+    $remembered = ['theme' => themeKey(), 'theme_scheme' => themeScheme()];
+    foreach (THEME_DEFAULTS as $field => $fallback) {
+        $parameter = 'theme_' . lcfirst(str_replace(' ', '', ucwords(str_replace('-', ' ', $field))));
+        $remembered[$parameter] = themeColour($field, $fallback);
+    }
+
+    // The Router sets the module name on the way in, and it is the one part of
+    // the external path this module can know: the prefix is stripped before
+    // the request reaches here.
+    $module = $_SERVER['HTTP_X_SIBERIAN_MODULE'] ?? '';
+    $path = $module !== '' ? '/m/' . $module : '/';
+
+    setcookie(THEME_COOKIE, http_build_query($remembered), [
+        'path' => $path,
+        'samesite' => 'Lax',
+        'secure' => true,
+        'httponly' => false,
+    ]);
+}
+
+/** The palette left behind by an earlier request, if there was one. */
+function themeRemembered(): array
+{
+    static $parsed = null;
+
+    if ($parsed === null) {
+        $parsed = [];
+        parse_str((string) ($_COOKIE[THEME_COOKIE] ?? ''), $parsed);
+    }
+
+    return $parsed;
+}
+
+/** A theme parameter, from this request or from the one that opened the module. */
+function themeParameter(string $name): string
+{
+    $asked = trim((string) ($_GET[$name] ?? ''));
+
+    return $asked !== '' ? $asked : trim((string) (themeRemembered()[$name] ?? ''));
+}
+
+function themeKey(): string
+{
+    $asked = themeParameter('theme');
+
+    return preg_match('/\A[a-z0-9_-]{1,32}\z/', $asked) === 1 ? $asked : 'default';
+}
+
+function themeScheme(): string
+{
+    return themeParameter('theme_scheme') === 'dark' ? 'dark' : 'light';
+}
+
 function themeAsked(): bool
 {
-    return isset($_GET['theme']) && $_GET['theme'] !== '';
+    // Either this request carried a palette, or the one that opened the module
+    // did and left it behind.
+    return themeParameter('theme') !== '';
 }
 
 function themeColour(string $field, string $fallback): string
@@ -248,7 +326,7 @@ function themeColour(string $field, string $fallback): string
     // The query parameter is camelCase where the CSS name is kebab: the app
     // sends theme_onAccent for what becomes --theme-on-accent.
     $parameter = 'theme_' . lcfirst(str_replace(' ', '', ucwords(str_replace('-', ' ', $field))));
-    $value = trim((string) ($_GET[$parameter] ?? ''));
+    $value = themeParameter($parameter);
 
     return ($value !== '' && preg_match(THEME_COLOUR, $value) === 1) ? $value : $fallback;
 }
@@ -270,7 +348,7 @@ function themeBridge(string $selector = ':root'): string
         return '';
     }
 
-    $scheme = ($_GET['theme_scheme'] ?? '') === 'dark' ? 'dark' : 'light';
+    $scheme = themeScheme();
 
     $palette = '';
     foreach (THEME_DEFAULTS as $field => $fallback) {
@@ -308,6 +386,10 @@ function redirect(string $path): never
 }
 
 // ------------------------------------------------------------------- routing
+
+// Before anything is written, because a cookie is a header: every response
+// this request produces carries the palette on, page or redirect alike.
+themeRemember();
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

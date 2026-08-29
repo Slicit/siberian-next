@@ -18,6 +18,7 @@ looking at, and must not be able to control anything else on it.
 """
 
 import re
+from urllib.parse import parse_qs, urlencode
 
 # What a colour may look like. Hex, rgb/rgba, hsl/hsla, or a plain CSS keyword.
 #
@@ -51,12 +52,19 @@ DEFAULTS = {
 
 SCHEMES = ("light", "dark")
 
+# Where the palette is left for the rest of the module.
+#
+# Session scoped and set only on a request that carried one, so a module opened
+# in an ordinary browser is never given a theme it then cannot get rid of.
+COOKIE = "siberian_theme"
+
 
 class Theme:
     """The palette for the current request."""
 
     def __init__(self, source):
         self._source = source
+        self._cookie = None
 
     @property
     def key(self):
@@ -104,11 +112,76 @@ class Theme:
         return f"{selector}{{color-scheme:{self.scheme};{declarations}}}"
 
     def _get(self, name):
+        asked = self._parameter(name)
+        if asked:
+            return asked
+
+        # Not in the query string, so this is a page the app navigated to
+        # rather than the one it opened. See COOKIE below.
+        return self._remembered().get(name)
+
+    def _parameter(self, name):
         try:
             return self._source.args.get(name)
         except Exception:
             # No request, or not a Flask one. The defaults are the answer.
             return None
+
+    def _remembered(self):
+        if self._cookie is None:
+            try:
+                raw = self._source.cookies.get(COOKIE) or ""
+            except Exception:
+                raw = ""
+            # Every value is revalidated on the way out, so a hand-edited
+            # cookie is exactly as harmless as a hand-edited query string.
+            self._cookie = {key: values[0] for key, values in parse_qs(raw).items()}
+
+        return self._cookie
+
+    def remember(self, response, path=None):
+        """Carry the palette to the rest of this module.
+
+        The shell opens one URL with the palette on it. Every link, form and
+        redirect after that is the module's own, and none of them can be
+        expected to thread nine colours through by hand: the second page would
+        render unstyled and going back would change the colours again, which is
+        worse than never having themed it.
+
+        So the first themed request leaves the palette behind, scoped to this
+        module's own path, and lives only as long as the browser session. A
+        module reached without a palette never sets one and never reads one,
+        which is what keeps an ordinary browser visit unthemed.
+        """
+        if not self._asked_directly():
+            return response
+
+        remembered = urlencode({
+            "theme": self.key,
+            "theme_scheme": self.scheme,
+            **{f"theme_{field}": value for field, value in self.colours().items()},
+        })
+
+        response.set_cookie(COOKIE, remembered, path=path or self._module_path(),
+                            samesite="Lax", secure=True, httponly=False)
+        return response
+
+    def _module_path(self):
+        """This module's own prefix, so one module's palette is not another's.
+
+        The Router sets the module name on the way in and it is the one part of
+        the external path a module can know: it never sees its own prefix,
+        because the Router strips it before proxying.
+        """
+        try:
+            name = self._source.headers.get("X-Siberian-Module")
+        except Exception:
+            name = None
+
+        return f"/m/{name}" if name else "/"
+
+    def _asked_directly(self):
+        return bool(self._parameter("theme"))
 
     def _colour(self, name, fallback):
         value = self._get(name)
