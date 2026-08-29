@@ -20,8 +20,10 @@ class AuthAttemptTest < ActiveSupport::TestCase
   end
 
   test "a source is refused after its limit, against any address" do
-    3.times do |i|
-      record(9, identifier: "person#{i}@example.test", ip: "10.0.0.1")
+    # Thirty from one source, spread thin enough that no single address is
+    # anywhere near its own limit of ten.
+    5.times do |i|
+      record(6, identifier: "person#{i}@example.test", ip: "10.0.0.1")
     end
 
     assert AuthAttempt.exhausted?(kind: AuthAttempt::SIGN_IN,

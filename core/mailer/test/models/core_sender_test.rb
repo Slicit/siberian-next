@@ -62,11 +62,21 @@ class CoreSenderTest < ActiveSupport::TestCase
     assert_equal "demo-tasks", from_module.to_payload[:module_name]
   end
 
-  test "idempotency is scoped to the core sender" do
+  # The index refuses it, not a validation, which is the same way a module's
+  # idempotency key is enforced. The controller looks the key up and answers
+  # with the existing message before it ever tries to insert, so this raising
+  # is the floor under that rather than the path a caller takes.
+  test "the same idempotency key cannot be used twice by one core sender" do
     assert core_message(idempotency_key: "reset-1").save
-    duplicate = core_message(idempotency_key: "reset-1")
 
-    refute duplicate.save,
-           "a caller retrying after a timeout must not send a second copy of a reset link"
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      core_message(idempotency_key: "reset-1").save
+    end
+  end
+
+  test "two core senders may each use the same key" do
+    assert core_message(idempotency_key: "reset-1").save
+    assert core_message(core_sender: "core-orchestrator", idempotency_key: "reset-1").save,
+           "one sender's keys are not another's namespace"
   end
 end
