@@ -109,6 +109,49 @@ already reserved for core paths, so it cannot collide with a module base route
 or with a page a CMS publishes at the root, and a regex location means it wins
 over the catch-all the way `/-/public/` already does.
 
+
+### 2026-08-30: a person can now manage their own account
+
+Everything here was possible for an operator and impossible for the person the
+account belongs to, which is the wrong way round for a product whose audience is
+the app user. Changing a password meant asking for a reset link to an address
+you were already signed in with. Changing a name meant asking somebody.
+
+Two details worth keeping:
+
+**The current password is required to change it, even while signed in.** A
+session left open on a borrowed laptop is the case: whoever is holding it can
+already read everything, and the one thing they must not be able to do is take
+the account.
+
+**Changing a password signs out the other devices and not this one.** Somebody
+doing it because they think their password is known wants the others gone;
+being signed out of the phone in their hand as well is a surprise. Signing out
+everywhere is a separate action, and that one does include the device asking.
+
+### 2026-08-30: deleting an account cannot free the address, because modules key by it
+
+This was found while building deletion, and it changed its shape.
+
+Every module keys its rows by the person's email. `demo-tasks` has `user_email
+text NOT NULL`; `example-notes` inserts by it. So if deleting an account freed
+the address, the next person to sign up with that address would open the app and
+find the previous person's tasks, notes and notifications waiting for them.
+
+That is a privacy hole that deletion itself would have opened, which is the
+worst kind: the feature meant to protect somebody creating the exposure.
+
+So the row survives and keeps its address, which keeps it claimed. What goes is
+the ability to sign in, every session, the password, the name and the
+verification. The response says so in words rather than implying it, including
+that module data is not removed, because the core cannot reach into a module's
+database and pretending otherwise would be worse than the gap.
+
+**The durable fix is not this.** Modules should key by the stable id the
+identity already carries rather than by an address that can change hands. That
+is a change to every module and to the contract, and until it happens, an
+address that has been used cannot be reused. It is the next thing worth doing to
+this area, and it is cheaper now than after there is real data.
 ## Outcome
 
 An account belongs to one domain, signs in on any number of devices, is seen by
