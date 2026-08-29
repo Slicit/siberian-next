@@ -154,8 +154,12 @@ class PhoneAppController < ApplicationController
     # this section spent its whole life so far saying it to a refused request.
     @builds_unavailable = queue.nil? || !queue["ok"]
     @builds = Array(queue && queue["builds"])
-    @queued = queue && queue["queued"].to_i
-    @building = queue && queue["building"].to_i
+    # Per lane, because there are two queues now and "a build is running" is
+    # the wrong thing to say when the one running is an Android build and the
+    # preview somebody is waiting for is next in a different lane.
+    lanes = queue.to_h["lanes"].to_h
+    @native = lanes["native"].to_h
+    @preview_lane = lanes["preview"].to_h
 
     # What the preview iframe points at. The most recent web build that
     # finished, because a queued one has nothing to show and a failed one would

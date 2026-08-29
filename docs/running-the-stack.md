@@ -315,6 +315,7 @@ Deliberate, not forgotten:
   Routing these calls through the Router the way module traffic already goes
   would make the domain asserted rather than claimed. Not built because
   nothing yet needs it, and it is a change to every core-to-core call.
-- **One builder.** Two domains asking at once are two rows in a queue. The
-  claim query is already written for more than one worker, so adding a second
-  is a compose change, but nothing scales itself yet.
+- **One builder per lane.** Two domains asking for an Android build at once
+  are two rows in a queue. The claim query is written for more than one
+  worker and there are now two, one per lane, so a third is a compose change,
+  but nothing scales itself yet.

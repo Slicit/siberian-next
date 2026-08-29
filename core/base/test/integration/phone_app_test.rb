@@ -106,6 +106,18 @@ class PhoneAppTest < ShellTest
     assert_match "2 waiting", response.body
   end
 
+  # The sentence is about the Android lane, so a preview building next to it
+  # must not appear in it. Before the split there was one number and it was
+  # right; with two lanes the same number would tell somebody the Android
+  # queue was busy when the thing running was the preview they just asked for.
+  test "a preview building does not make the Android queue look busy" do
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue(previews_building: 1))) do
+      get "/app", headers: headers
+    end
+
+    assert_no_match "Right now:", response.body
+  end
+
   test "and is not mentioned when it is empty" do
     as_owner(mobile: FakeMobile.new(app: APP, builds: queue)) do
       get "/app", headers: headers
