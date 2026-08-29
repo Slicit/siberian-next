@@ -42,11 +42,16 @@ class ModuleProbe
   BETWEEN = 1
 
   def initialize(installed_module, manifest, domain:,
-                 base: ENV.fetch("SIBERIAN_MODULES_URL", "http://modules"))
+                 base: ENV.fetch("SIBERIAN_MODULES_URL", "http://modules"),
+                 attempts: ATTEMPTS, between: BETWEEN)
     @installed = installed_module
     @manifest = manifest
     @domain = domain
     @base = base
+    # Injectable so a test can ask once without waiting. Twelve seconds per
+    # missing endpoint is right at install time and wrong in a suite.
+    @attempts = attempts
+    @between = between
   end
 
   # Every declared address, checked. Returns findings rather than raising, so
@@ -85,7 +90,7 @@ class ModuleProbe
   def probe(what, path)
     status = nil
 
-    ATTEMPTS.times do |attempt|
+    @attempts.times do |attempt|
       status = get(path)
       # Two answers mean "ask again": nothing answered at all, which a container
       # that is still starting gives, and 404, which is what the Router says
@@ -98,7 +103,7 @@ class ModuleProbe
       # refusing a correct one is expensive.
       break unless %w[000 404].include?(status)
 
-      sleep(BETWEEN) unless attempt == ATTEMPTS - 1
+      sleep(@between) unless attempt == @attempts - 1
     end
 
     Finding.new(what: what, where: path, status: status, ok: acceptable?(status))
