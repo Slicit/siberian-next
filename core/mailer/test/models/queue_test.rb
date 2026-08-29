@@ -247,8 +247,11 @@ class QueueTest < ActiveSupport::TestCase
     message.update!(max_attempts: 2)
 
     2.times do
+      # The backoff a failure sets would otherwise keep the next claim from
+      # finding it, so the wait is skipped rather than waited out.
+      message.reload.update_columns(next_attempt_at: 1.hour.ago)
       Message.claim_next!
-      message.reload.update_columns(updated_at: (Message::STALE_AFTER + 60).seconds.ago, next_attempt_at: 1.hour.ago)
+      message.reload.update_columns(updated_at: (Message::STALE_AFTER + 60).seconds.ago)
       Message.release_stale!
     end
 
