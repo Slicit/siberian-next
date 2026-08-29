@@ -26,6 +26,7 @@ from flask import Flask, jsonify, request, redirect, url_for, Response
 from markupsafe import escape
 
 from siberian import Module, Refused
+from siberian.theme import bridge as theme_bridge
 
 app = Flask(__name__)
 
@@ -153,7 +154,11 @@ a{color:var(--accent)}
 
 
 def render(body, title="Tasks"):
-    return Response(PAGE.format(style=STYLE, body=body, title=title), mimetype="text/html")
+    # The app's palette, when an app is asking. Appended after this module's
+    # own rules so it wins, and empty otherwise so a browser still gets the
+    # module's own light and dark styling.
+    style = STYLE + theme_bridge(siberian.theme)
+    return Response(PAGE.format(style=style, body=body, title=title), mimetype="text/html")
 
 
 def wants_json():

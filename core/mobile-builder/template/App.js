@@ -22,10 +22,50 @@ const Tab = createBottomTabNavigator();
 // is still reachable from Home, which is the one tab that is always there.
 const MAX_TABS = 4;
 
-function bridgeFor(screen) {
+// Which palette to draw in.
+//
+// The app is built with one, and carries all of them, so the preview can try
+// another by asking for it in the query string. That is the whole mechanism:
+// a theme is data the shell reads at render time, so switching costs a reload
+// rather than a ten minute build.
+//
+// Only on the web, and deliberately. On a phone the app was built for a theme
+// and there is no address bar to override it from, so reading a query string
+// there would be a setting with no way to reach it.
+function activeThemeKey() {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    const asked = new URLSearchParams(window.location.search).get("theme");
+    if (asked && config.themes && config.themes[asked]) return asked;
+  }
+  return config.theme;
+}
+
+function paletteFor(key) {
+  const theme = (config.themes && config.themes[key]) || {};
+  // Every field has a fallback, so a theme added with a missing colour renders
+  // in something reasonable rather than in nothing. A blank screen is a worse
+  // way to learn about a typo than an off palette.
+  return {
+    background: theme.background || "#f7f8fa",
+    surface: theme.surface || "#ffffff",
+    text: theme.text || "#111827",
+    muted: theme.muted || "#6b7280",
+    line: theme.line || "#e5e7eb",
+    accent: theme.accent || "#2563eb",
+    onAccent: theme.onAccent || "#ffffff",
+    danger: theme.danger || "#b3261e",
+    dangerSurface: theme.dangerSurface || "#fee2e2",
+    scheme: theme.scheme || "light"
+  };
+}
+
+function bridgeFor(screen, theme) {
   return {
     domain: config.domain,
     capabilities: config.capabilities,
+    // A native screen draws in the app's colours rather than its own, which is
+    // the difference between a module inside an app and a module beside one.
+    theme,
     call(path, options = {}) {
       const base = `${config.api.base_url}${screen.apiBase}`.replace(/\/$/, "");
       return fetch(`${base}/${String(path).replace(/^\//, "")}`, {
@@ -36,10 +76,24 @@ function bridgeFor(screen) {
   };
 }
 
+// A module's web face, told which colours to render in.
+//
+// Without this an embedded page is the one part of the app that ignores the
+// theme, which is exactly where it is most obvious: a dark app with a white
+// page in the middle of it. The palette travels as query parameters because a
+// module's stylesheet already uses CSS variables, so applying them is a few
+// lines rather than a redesign, and a module that ignores them still works.
+function themedUrl(url, key, theme) {
+  const separator = url.includes("?") ? "&" : "?";
+  const parameters = new URLSearchParams({ theme: key });
+  Object.keys(theme).forEach((field) => parameters.set(`theme_${field}`, theme[field]));
+  return `${url}${separator}${parameters.toString()}`;
+}
+
 // One header for every screen, so the way back is in the same place on all of
 // them. On Home the left side is empty rather than a button that goes where you
 // already are.
-function TopBar({ route, navigation, options }) {
+function TopBar({ route, navigation, options, styles, theme }) {
   const home = route.name === "Home";
 
   return (
@@ -47,7 +101,7 @@ function TopBar({ route, navigation, options }) {
       <View style={styles.topSide}>
         {!home ? (
           <Pressable onPress={() => navigation.navigate("Home")} style={styles.back}>
-            <Text style={styles.backLabel}>‹ Home</Text>
+            <Text style={styles.backLabel}>Home</Text>
           </Pressable>
         ) : null}
       </View>
@@ -61,7 +115,7 @@ function TopBar({ route, navigation, options }) {
   );
 }
 
-function Home({ navigation }) {
+function Home({ navigation, styles }) {
   if (screens.length === 0) {
     return (
       <View style={styles.empty}>
@@ -74,7 +128,7 @@ function Home({ navigation }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.list}>
+    <ScrollView contentContainerStyle={styles.list} style={styles.fill}>
       <Text style={styles.lead}>{config.domain}</Text>
 
       {screens.map((screen) => (
@@ -94,55 +148,94 @@ function Home({ navigation }) {
   );
 }
 
-function WebScreen({ url }) {
+function WebScreen({ url, styles, theme }) {
   const [loading, setLoading] = React.useState(true);
 
   // React Native for Web has no WebView. An iframe is the same thing on the
   // web, and pretending otherwise would leave the preview with a blank panel
   // exactly where a module without native code should appear.
   if (Platform.OS === "web") {
-    return <View style={styles.fill}>{React.createElement("iframe", { src: url, style: { border: 0, width: "100%", height: "100%" } })}</View>;
+    return (
+      <View style={styles.fill}>
+        {React.createElement("iframe", {
+          src: url,
+          style: { border: 0, width: "100%", height: "100%", background: theme.background }
+        })}
+      </View>
+    );
   }
 
   return (
     <View style={styles.fill}>
       <WebView source={{ uri: url }} sharedCookiesEnabled onLoadEnd={() => setLoading(false)} style={styles.fill} />
-      {loading ? <ActivityIndicator style={styles.spinner} /> : null}
+      {loading ? <ActivityIndicator style={styles.spinner} color={theme.accent} /> : null}
     </View>
   );
 }
 
-function screenComponent(screen) {
+function screenComponent(screen, key, theme, styles) {
   if (screen.kind === "native" && screen.component) {
     const Native = screen.component;
-    return (props) => <Native {...props} siberian={bridgeFor(screen)} />;
+    return (props) => <Native {...props} siberian={bridgeFor(screen, theme)} />;
   }
 
-  return () => <WebScreen url={screen.url} />;
+  const url = themedUrl(screen.url, key, theme);
+  return () => <WebScreen url={url} styles={styles} theme={theme} />;
 }
 
 export default function App() {
+  const key = activeThemeKey();
+  const theme = useMemo(() => paletteFor(key), [key]);
+  const styles = useMemo(() => sheet(theme), [theme]);
+
   const tabs = useMemo(() => screens.slice(0, MAX_TABS), []);
   const rest = useMemo(() => screens.slice(MAX_TABS), []);
 
+  // The navigator's own surfaces, so the frame around a screen is themed as
+  // well as the screen. Without this a dark app has a white gap behind every
+  // transition.
+  const navigationTheme = useMemo(
+    () => ({
+      dark: theme.scheme === "dark",
+      colors: {
+        primary: theme.accent,
+        background: theme.background,
+        card: theme.surface,
+        text: theme.text,
+        border: theme.line,
+        notification: theme.danger
+      },
+      fonts: {
+        regular: { fontFamily: "System", fontWeight: "400" },
+        medium: { fontFamily: "System", fontWeight: "500" },
+        bold: { fontFamily: "System", fontWeight: "700" },
+        heavy: { fontFamily: "System", fontWeight: "800" }
+      }
+    }),
+    [theme]
+  );
+
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       <Tab.Navigator
         screenOptions={{
-          header: (props) => <TopBar {...props} />,
-          tabBarActiveTintColor: "#2563eb",
-          tabBarInactiveTintColor: "#6b7280",
+          header: (props) => <TopBar {...props} styles={styles} theme={theme} />,
+          tabBarActiveTintColor: theme.accent,
+          tabBarInactiveTintColor: theme.muted,
           tabBarStyle: styles.tabBar,
-          tabBarLabelStyle: styles.tabLabel
+          tabBarLabelStyle: styles.tabLabel,
+          sceneContainerStyle: { backgroundColor: theme.background }
         }}
       >
-        <Tab.Screen name="Home" component={Home} options={{ title: config.domain }} />
+        <Tab.Screen name="Home" options={{ title: config.domain }}>
+          {(props) => <Home {...props} styles={styles} />}
+        </Tab.Screen>
 
         {tabs.map((screen) => (
           <Tab.Screen
             key={`${screen.module}:${screen.capability}`}
             name={screen.capability}
-            component={screenComponent(screen)}
+            component={screenComponent(screen, key, theme, styles)}
             options={{ title: screen.title, tabBarLabel: screen.title }}
           />
         ))}
@@ -152,7 +245,7 @@ export default function App() {
           <Tab.Screen
             key={`${screen.module}:${screen.capability}`}
             name={screen.capability}
-            component={screenComponent(screen)}
+            component={screenComponent(screen, key, theme, styles)}
             options={{ title: screen.title, tabBarButton: () => null }}
           />
         ))}
@@ -161,26 +254,27 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  spinner: { position: "absolute", top: "50%", left: 0, right: 0 },
-  top: {
-    flexDirection: "row", alignItems: "center", paddingHorizontal: 12,
-    paddingTop: Platform.OS === "web" ? 12 : 48, paddingBottom: 12,
-    backgroundColor: "#ffffff", borderBottomWidth: 1, borderBottomColor: "#e5e7eb"
-  },
-  topSide: { width: 88, justifyContent: "center" },
-  back: { paddingVertical: 4 },
-  backLabel: { fontSize: 15, fontWeight: "600", color: "#2563eb" },
-  topTitle: { flex: 1, textAlign: "center", fontSize: 16, fontWeight: "700" },
-  tabBar: { borderTopColor: "#e5e7eb", backgroundColor: "#ffffff" },
-  tabLabel: { fontSize: 11, fontWeight: "600" },
-  lead: { fontSize: 13, color: "#6b7280", marginBottom: 6 },
-  list: { padding: 16, gap: 10 },
-  row: { padding: 16, borderRadius: 12, backgroundColor: "#f3f4f6" },
-  rowTitle: { fontSize: 16, fontWeight: "600" },
-  rowMeta: { fontSize: 12, color: "#6b7280", marginTop: 4 },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-  emptyTitle: { fontSize: 18, fontWeight: "600" },
-  emptyBody: { fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 8 }
-});
+const sheet = (t) =>
+  StyleSheet.create({
+    fill: { flex: 1, backgroundColor: t.background },
+    spinner: { position: "absolute", top: "50%", left: 0, right: 0 },
+    top: {
+      flexDirection: "row", alignItems: "center", paddingHorizontal: 12,
+      paddingTop: Platform.OS === "web" ? 12 : 48, paddingBottom: 12,
+      backgroundColor: t.surface, borderBottomWidth: 1, borderBottomColor: t.line
+    },
+    topSide: { width: 88, justifyContent: "center" },
+    back: { paddingVertical: 4 },
+    backLabel: { fontSize: 15, fontWeight: "600", color: t.accent },
+    topTitle: { flex: 1, textAlign: "center", fontSize: 16, fontWeight: "700", color: t.text },
+    tabBar: { borderTopColor: t.line, backgroundColor: t.surface },
+    tabLabel: { fontSize: 11, fontWeight: "600" },
+    lead: { fontSize: 13, color: t.muted, marginBottom: 6 },
+    list: { padding: 16, gap: 10 },
+    row: { padding: 16, borderRadius: 12, backgroundColor: t.surface, borderWidth: 1, borderColor: t.line },
+    rowTitle: { fontSize: 16, fontWeight: "600", color: t.text },
+    rowMeta: { fontSize: 12, color: t.muted, marginTop: 4 },
+    empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, backgroundColor: t.background },
+    emptyTitle: { fontSize: 18, fontWeight: "600", color: t.text },
+    emptyBody: { fontSize: 14, color: t.muted, textAlign: "center", marginTop: 8 }
+  });

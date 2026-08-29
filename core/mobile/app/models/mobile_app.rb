@@ -11,11 +11,19 @@ class MobileApp < ApplicationRecord
 
   validates :domain, presence: true, uniqueness: true
   validates :name, presence: true
+  # A theme that is not in the catalogue would build an app with no colours,
+  # so it is refused here rather than discovered by the builder.
+  validates :theme, inclusion: { in: -> (_) { Siberian::MobileThemes.keys },
+                                message: "is not one of the available themes" }
   validates :bundle_identifier, presence: true, uniqueness: true,
                                 format: { with: /\A[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+\z/,
                                           message: "must look like com.example.app" }
 
   scope :ordered, -> { order(:domain) }
+
+  # The palette this app is built in. Asked of the app rather than looked up
+  # by every caller, so a default and an override are one question.
+  def palette = Siberian::MobileThemes.palette(theme)
 
   # A sensible identifier from a hostname, reversed the way both stores expect.
   # siberian.test becomes test.siberian, and a label that cannot start an

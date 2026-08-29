@@ -11,6 +11,7 @@ from .auth import SESSION_COOKIE, AuthClient
 from .core import DEFAULT_CORE_URL, CoreClient
 from .database import Database
 from .storage import Storage
+from .theme import Theme
 
 
 class Module:
@@ -46,6 +47,15 @@ class Module:
         self.auth = AuthClient(self.core, self._adapter.session_token)
         self.db = Database(self.core, self.database_token, self._adapter.domain, schema=schema)
         self.storage = Storage(self.core, self.storage_token, name, self._adapter.domain)
+
+    @property
+    def theme(self):
+        """The colours the app is asking this page to render in.
+
+        Per request rather than held, because the same container serves
+        every domain and, in the preview, every theme in turn.
+        """
+        return Theme(self._adapter.request)
 
     @property
     def domain(self):
@@ -86,18 +96,18 @@ class FlaskAdapter:
     """
 
     def __init__(self, flask_request):
-        self._request = flask_request
+        self.request = flask_request
 
     def domain(self):
         # The header the Router set, falling back to the host for the case
         # where something is being driven directly in development.
-        return (self._request.headers.get("X-Siberian-Domain")
-                or self._request.host.split(":")[0])
+        return (self.request.headers.get("X-Siberian-Domain")
+                or self.request.host.split(":")[0])
 
     def session_token(self):
         # Read, never interpreted. Only Auth can say what this means, which is
         # what stops a module treating a cookie as proof of anything.
-        return self._request.cookies.get(SESSION_COOKIE)
+        return self.request.cookies.get(SESSION_COOKIE)
 
 
 def _flask_adapter():
