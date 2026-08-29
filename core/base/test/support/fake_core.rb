@@ -106,8 +106,9 @@ end
 # The menu. Raising is a case of its own: the shell must render without one
 # rather than refuse to render at all.
 class FakeDirectory
-  def initialize(groups: [], raises: nil)
+  def initialize(groups: [], capabilities: [], raises: nil)
     @groups = groups
+    @capabilities = capabilities
     @raises = raises
   end
 
@@ -116,4 +117,19 @@ class FakeDirectory
 
     @groups
   end
+
+  # The real one matches on either the id or its slug, and a module page is
+  # reached by the slug, so a stand-in that only matched ids would pass tests
+  # against a door nobody can open.
+  def find(domain:, id:)
+    @capabilities.find { |capability| capability.id == id || capability.slug == id }
+  end
+end
+
+def a_capability(id: "notes.all", module_name: "example-notes", title: "Notes",
+                 area: "sidebar.entities", url: "https://example-notes.apps.owner.test")
+  CapabilityDirectory::Capability.new(
+    id: id, title: title, area: area, icon: nil, module_name: module_name,
+    module_title: title, status: "running", url: url, path: "/"
+  )
 end
