@@ -208,8 +208,7 @@ class AlertScan
       # Worth sending. An alert with no end is one somebody has to go and check
       # by hand to find out whether it is still true.
       body << "Resolved:\n\n"
-      closed.each { |condition| body << "  #{condition.key}
-" }
+      closed.each { |condition| body << "  #{condition.key}\n" }
       body << "\n"
     end
 
