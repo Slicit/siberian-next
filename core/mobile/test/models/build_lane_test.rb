@@ -81,6 +81,40 @@ class BuildLaneTest < ActiveSupport::TestCase
   end
 
 
+
+  # Sized per lane, because before the split there was one number to pick and it
+  # had to suit a twenty minute Gradle build. A preview abandoned by a worker
+  # that was restarted underneath it then blocked its own queue for an hour and
+  # a half, on a lane whose whole purpose is being quick.
+  test "an abandoned preview is put back after ten minutes" do
+    build = queued(Build::WEB)
+    Build.claim_next!(lanes: [Build::PREVIEW])
+    build.update_columns(claimed_at: 11.minutes.ago)
+
+    Build.release_stale!
+
+    assert_equal Build::FAILED, build.reload.state
+  end
+
+  test "and an Android build is left alone at the same age, because it is still building" do
+    build = queued(Build::ANDROID)
+    Build.claim_next!(lanes: [Build::NATIVE])
+    build.update_columns(claimed_at: 11.minutes.ago)
+
+    Build.release_stale!
+
+    assert_equal Build::BUILDING, build.reload.state
+  end
+
+  test "an Android build is put back eventually" do
+    build = queued(Build::ANDROID)
+    Build.claim_next!(lanes: [Build::NATIVE])
+    build.update_columns(claimed_at: 91.minutes.ago)
+
+    Build.release_stale!
+
+    assert_equal Build::FAILED, build.reload.state
+  end
   # The belt to the lane filter's braces. A worker handed a build it should not
   # have puts it back rather than doing it, and this is the endpoint that lets
   # it: without one, a misrouted build sits in BUILDING until the stale timeout.

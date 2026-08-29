@@ -36,8 +36,15 @@ class Build < ApplicationRecord
 
   # A build claimed by a worker that then died would sit in `building` forever.
   # Nothing else can tell the difference between that and a slow build, so the
-  # only honest answer is a limit longer than any build should take.
-  STALE_AFTER = 90 * 60
+  # only honest answer is a limit longer than any build of that kind should
+  # take. Which is why it is per lane: ninety minutes is a sensible ceiling for
+  # a Gradle build and an absurd one for an export that takes a minute, and
+  # before the lanes existed there was only the one number to pick.
+  #
+  # A preview abandoned by a worker that was restarted underneath it used to
+  # block its own queue for an hour and a half, which on a lane whose whole
+  # purpose is being quick is the same as being broken.
+  STALE_AFTER = { NATIVE => 90 * 60, PREVIEW => 10 * 60 }.freeze
 
   belongs_to :mobile_app
   has_many :build_attempts, dependent: :destroy
@@ -115,11 +122,14 @@ class Build < ApplicationRecord
   # it back in the queue is safe because a build has no side effect until its
   # artifact is uploaded, and the artifact is named for the build.
   def self.release_stale!
-    where(state: BUILDING)
-      .where(arel_table[:claimed_at].lt(STALE_AFTER.seconds.ago))
-      .find_each do |build|
-        build.record_failure!(error: "the builder stopped answering", duration_ms: nil)
-      end
+    STALE_AFTER.each do |lane, seconds|
+      in_lanes(lane)
+        .where(state: BUILDING)
+        .where(arel_table[:claimed_at].lt(seconds.seconds.ago))
+        .find_each do |build|
+          build.record_failure!(error: "the builder stopped answering", duration_ms: nil)
+        end
+    end
   end
 
   def record_success!(artifact_path:, artifact_bytes:, duration_ms:, log: nil)

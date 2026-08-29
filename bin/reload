@@ -35,6 +35,11 @@ echo "Restarting the Rails services, which load lib/ at boot..."
 # shellcheck disable=SC2086
 compose restart $RAILS_SERVICES
 
+# Both lanes. Adding the preview builder and leaving this naming only the
+# native one would mean a maintenance command that quietly half worked: the
+# lane somebody is actually watching would keep running the old code.
+BUILDERS="mobile-builder mobile-builder-web"
+
 # Recreated rather than restarted: a restart keeps the old mount, and the old
 # mount is the problem.
 #
@@ -48,8 +53,8 @@ if [ "${running:-0}" != "0" ] && [ "${FORCE:-}" != "true" ]; then
   echo "Leaving the builder alone: $running build(s) in flight."
   echo "Set FORCE=true to recreate anyway, which abandons them."
 else
-  echo "Recreating the builder, whose /builder is a bind mount..."
-  compose up -d --force-recreate mobile-builder
+  echo "Recreating both builders, whose /builder is a bind mount..."
+  compose up -d --force-recreate $BUILDERS
 fi
 
 echo
