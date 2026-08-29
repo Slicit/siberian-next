@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Parses every script in bin/ and deploy/maintenance/ without running it.
+#
+# `bin/hosts-file` embeds a Ruby program inside a single-quoted shell string,
+# and a comment in that Ruby said "the object store's door". The apostrophe
+# closed the string, the shell tried to parse the Ruby that followed, and the
+# script died on a syntax error. It stayed broken for a week because nothing
+# runs it: it is a thing a person invokes when setting up a laptop, so no smoke
+# covers it and no check looked at it.
+#
+# Parsing is cheap and catches exactly that. It does not run anything, so a
+# script that talks to the stack is as safe to check as one that does not.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+failed=0
+
+for script in bin/* deploy/maintenance/*.sh; do
+  [ -f "$script" ] || continue
+  # Only shell. The repository also has Ruby and Python under bin/ in principle,
+  # and asking bash to parse those would report a problem that is not one.
+  head -1 "$script" | grep -qE '^#!.*(bash|/sh)' || continue
+
+  if ! output=$(bash -n "$script" 2>&1); then
+    echo "$script" >&2
+    echo "$output" | sed 's/^/    /' >&2
+    failed=$((failed + 1))
+  fi
+done
+
+if [ "$failed" -gt 0 ]; then
+  echo >&2
+  echo "$failed script(s) do not parse. They fail when somebody runs them, which" >&2
+  echo "for a setup script is the worst moment to find out." >&2
+  exit 1
+fi
+
+echo "Every script in bin/ and deploy/maintenance/ parses."

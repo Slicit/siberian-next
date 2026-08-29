@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 ./bin/check-engine-leak
 ./bin/check-storage-leak
+./bin/check-scripts
 
 if command -v node >/dev/null 2>&1; then
   node -e "JSON.parse(require('fs').readFileSync('lib/contracts/module_manifest.schema.json','utf8'))" \
