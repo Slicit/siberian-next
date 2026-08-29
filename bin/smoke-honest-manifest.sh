@@ -47,11 +47,8 @@ STATE=$(runner 'm = InstalledModule.find_by(name: "example-liar"); puts m ? m.st
 check "the record says failed" "$STATE" "failed"
 RETRY=$(runner '
 e = ModuleCatalog.new.find("example-liar")
-begin
-  ModuleInstaller.new(e.manifest, registrar: ServiceRegistrar.new).call
-rescue ModuleInstaller::AlreadyInstalled => e
-  puts e.message
-end
+r = ModuleInstaller.new(e.manifest, registrar: ServiceRegistrar.new).call
+puts r.error.to_s
 ' | tail -1)
 contains "installing again explains what to do" "$RETRY" "Remove it first"
 
