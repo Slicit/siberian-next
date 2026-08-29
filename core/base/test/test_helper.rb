@@ -2,10 +2,6 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 
-# The Base App owns no data: every page is another service's answer over HTTP.
-# Standing a fake in front of a constructor is the only seam that does not mean
-# reshaping the app around its tests.
-require "minitest/mock"
 
 require_relative "support/fake_core"
 
@@ -35,12 +31,24 @@ class ShellTest < ActionDispatch::IntegrationTest
   # Signed in, allowed in, with a menu and a Mobile service, unless a test says
   # otherwise. Yielded so a test can read what the fakes were asked.
   def as_owner(person: FakePerson.new, mobile: FakeMobile.new, directory: FakeDirectory.new)
-    Siberian::AuthClient.stub(:new, FakeAuth.new(person)) do
-      Siberian::MobileClient.stub(:new, mobile) do
-        CapabilityDirectory.stub(:new, directory) do
+    standing_in(Siberian::AuthClient, FakeAuth.new(person)) do
+      standing_in(Siberian::MobileClient, mobile) do
+        standing_in(CapabilityDirectory, directory) do
           yield mobile
         end
       end
     end
+  end
+
+  # Minitest 6 no longer ships Object#stub, and the alternatives are adding a
+  # gem to every service or giving the app class-level slots it only needs
+  # because of its tests. Swapping one constructor for the length of a block is
+  # the smaller price, and it is confined to here.
+  def standing_in(klass, double)
+    original = klass.method(:new)
+    klass.define_singleton_method(:new) { |*, **| double }
+    yield
+  ensure
+    klass.define_singleton_method(:new, original)
   end
 end

@@ -5,7 +5,7 @@ require "test_helper"
 # The shell every page is drawn inside: who gets in, and what they see.
 class ShellAccessTest < ShellTest
   test "somebody who is not signed in is sent to sign in" do
-    Siberian::AuthClient.stub(:new, FakeAuth.new(nil)) do
+    standing_in(Siberian::AuthClient, FakeAuth.new(nil)) do
       get "/", headers: headers
     end
 
