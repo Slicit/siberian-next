@@ -84,6 +84,40 @@ measured and bought. It is the right thing to give up, and it is recorded there
 rather than by editing reasoning that was correct when one builder did
 everything.
 
+
+### 2026-08-30: the split leaked once, during its own rollout
+
+The preview worker took an Android build and spent twenty minutes on it while
+two previews waited. Exactly the failure the split exists to prevent, and it
+looked like a preview that was taking a while.
+
+The cause was version skew of my own making: the builders and the Mobile service
+were deployed separately, so for a few minutes a builder that sent `lanes` was
+talking to a service that ignored it. The design already handled the opposite
+skew, where an old builder sends nothing and gets anything, and that is the one
+that was thought about.
+
+So the lane travels with the build now and the worker checks it too. A mismatch
+is put back through a new `release` endpoint rather than failed, so it keeps its
+attempts and the right worker takes it within a poll rather than after the stale
+timeout. Belt and braces, because the cost of one wrong claim is the whole
+feature for as long as the build lasts.
+
+### 2026-08-30: the stale timeout was sized for the slow lane
+
+Ninety minutes is a sensible ceiling for a Gradle build and an absurd one for an
+export that takes sixty seconds. There had only ever been one number to pick and
+it had to suit the slow case.
+
+That was invisible until the lanes existed, and then it was not: a preview
+abandoned by a worker restarted underneath it blocked its own queue for an hour
+and a half. Ten minutes for the preview lane, ninety for the native one.
+
+`bin/reload` learned the second builder in the same change. Naming only the
+first made it a maintenance command that quietly half worked, leaving the lane
+somebody is actually watching on the old code, which is how the leak above
+lasted as long as it did.
+
 ## Outcome
 
 A preview takes about a minute whether or not an Android build is running, down
