@@ -80,12 +80,27 @@ asks for `/app/_expo/...` and gets nothing.
 Worth recording because neither failure is visible. A 422 on the bundle renders
 a blank white phone, not an error.
 
+
+### 2026-08-30: they could look at a theme and not choose one
+
+The three palettes were switchable from the Backoffice and nowhere else, so the
+app owner saw whichever one an operator had set. Trying one on is a query string
+the built app already answers, which costs a reload of the frame rather than a
+build; keeping one is the button next to it, because looking is not choosing.
+
+Adding the picker exposed a constant that had been one short circuit from a 500
+for several commits: the Base App never required `mobile_themes`, and the frame
+only named the default when no theme was saved. It is in the shared contract
+now, next to `mobile_capabilities`, rather than in a third service's
+initializer. A list two of three services remembered to require is a mistake
+waiting to be made a second time.
+
 ## Outcome
 
 The page lists the domain's builds, says where a waiting one is in line, says
 plainly when the queue could not be reached rather than calling that an empty
 queue, and shows the built app running in a phone-shaped frame with the theme
-that is saved.
+that is saved, which they can change to either of the others and keep.
 
 `bin/smoke-owner-app` drives it as an app owner and reads what the page says
 rather than what it answered, because it answered 200 the whole time it was
