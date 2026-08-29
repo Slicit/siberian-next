@@ -6,6 +6,10 @@ module Admin
     include Siberian::ServiceAuthentication
     permit_services :orchestrator
 
+    # Long enough that a quiet hour is not mistaken for a broken transport, short
+    # enough that a transport which started working again says so.
+    RECENT_WINDOW = 60 * 60
+
     # GET /admin/modules
     #
     # What this service knows, so the Orchestrator can compare it against what
@@ -59,6 +63,15 @@ module Admin
         stalled: Message.where(state: Message::SENDING)
                         .where(Message.arel_table[:updated_at].lt(Message::STALE_AFTER.seconds.ago))
                         .count,
+        # What has happened lately, which is a different question from what has
+        # ever happened. A lifetime ratio of dead to sent never recovers: a
+        # system that had one bad week reports a broken transport forever, and
+        # the first thing that does is teach somebody to ignore it.
+        recent: {
+          window_minutes: RECENT_WINDOW / 60,
+          sent: Message.where(state: Message::SENT).where(updated_at: RECENT_WINDOW.seconds.ago..).count,
+          dead: Message.where(state: Message::DEAD).where(updated_at: RECENT_WINDOW.seconds.ago..).count
+        },
         unacknowledged: Message.unacknowledged.count,
         modules: ModuleRegistration.active.pluck(:module_name)
       }

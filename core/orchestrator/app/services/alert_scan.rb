@@ -142,22 +142,28 @@ class AlertScan
     # sending: it names what to restart.
     "#{stalled} message(s) stuck sending; the mail worker is not draining the queue"
   end
+  # "Is mail failing now", which is a different question from "has mail ever
+  # failed". The first version asked the second, fired on twenty five deaths
+  # from a transport that had been fixed hours earlier, and would have kept
+  # firing forever, which is precisely how an alert becomes something people
+  # filter.
+  #
+  # Recent deaths with no recent successes. One message getting through is
+  # enough to say the transport works, and clears this by itself.
   def mail_transport_failing
     report = @mailer.queue(limit: 1)
     return nil if report.nil?
 
-    counts = report["counts"] || {}
-    dead = counts["dead"].to_i
-    sent = counts["sent"].to_i
-    return nil if dead < 5
-    # Proportion rather than a count, so a system that has sent ten thousand
-    # messages and lost six is not reported alongside one that has lost all six
-    # of the six it tried.
-    return nil if sent.positive? && dead < (sent / 4.0)
+    recent = report["recent"] || {}
+    dead = recent["dead"].to_i
+    sent = recent["sent"].to_i
 
-    "#{dead} messages are dead against #{sent} sent; the transport may be refusing everything"
+    return nil if dead < 3
+    return nil if sent.positive?
+
+    "#{dead} messages died in the last #{recent['window_minutes'] || 60} minutes and none were " \
+      "delivered; the transport is refusing everything"
   end
-
   def storage_conditions
     report = @storage.quotas
     return {} if report.nil?

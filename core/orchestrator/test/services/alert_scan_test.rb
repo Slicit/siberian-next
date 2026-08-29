@@ -63,7 +63,10 @@ class AlertScanTest < ActiveSupport::TestCase
     ]
   }.freeze
 
-  HEALTHY_QUEUE = { "counts" => { "sent" => 100, "dead" => 0 }, "stalled" => 0 }.freeze
+  HEALTHY_QUEUE = {
+    "counts" => { "sent" => 100, "dead" => 0 }, "stalled" => 0,
+    "recent" => { "window_minutes" => 60, "sent" => 20, "dead" => 0 }
+  }.freeze
   NO_DOMAINS = { "domains" => [] }.freeze
 
   def scan(mailer: HEALTHY_QUEUE, storage: NO_DOMAINS, checks: Checks.new, free: 20_000, post: Post.new)
@@ -129,25 +132,29 @@ class AlertScanTest < ActiveSupport::TestCase
   # Each of these was considered for the list and left off.
   test "an ordinary queue with a few dead messages is not an alert" do
     post = Post.new
-    queue = { "counts" => { "sent" => 1000, "dead" => 6 }, "stalled" => 0 }
+    queue = { "counts" => { "sent" => 1000, "dead" => 6 }, "stalled" => 0,
+              "recent" => { "window_minutes" => 60, "sent" => 40, "dead" => 6 } }
     2.times { scan(mailer: queue, post: post).call }
 
-    assert_empty post.sent, "six bad addresses in a thousand is not a broken transport"
+    assert_empty post.sent,
+                 "mail is getting through, so six that did not is six bad addresses"
   end
 
   test "but a transport refusing everything is" do
     post = Post.new
-    queue = { "counts" => { "sent" => 2, "dead" => 30 }, "stalled" => 0 }
+    queue = { "counts" => { "sent" => 2, "dead" => 30 }, "stalled" => 0,
+              "recent" => { "window_minutes" => 60, "sent" => 0, "dead" => 9 } }
     2.times { scan(mailer: queue, post: post).call }
 
     assert_equal 1, post.sent.length
-    assert_match(/transport/, post.sent.first[:text_body])
+    assert_match(/refusing everything/, post.sent.first[:text_body])
   end
 
   test "a busy queue is not a stalled one" do
     post = Post.new
     # Messages in `sending` right now, none of them old enough to count.
-    queue = { "counts" => { "sent" => 100, "dead" => 0 }, "stalled" => 0 }
+    queue = { "counts" => { "sent" => 100, "dead" => 0 }, "stalled" => 0,
+              "recent" => { "window_minutes" => 60, "sent" => 5, "dead" => 0 } }
     2.times { scan(mailer: queue, post: post).call }
 
     assert_empty post.sent
@@ -155,7 +162,8 @@ class AlertScanTest < ActiveSupport::TestCase
 
   test "a worker that is not draining is" do
     post = Post.new
-    queue = { "counts" => { "sent" => 100, "dead" => 0 }, "stalled" => 4 }
+    queue = { "counts" => { "sent" => 100, "dead" => 0 }, "stalled" => 4,
+              "recent" => { "window_minutes" => 60, "sent" => 5, "dead" => 0 } }
     2.times { scan(mailer: queue, post: post).call }
 
     assert_match(/not draining/, post.sent.first[:text_body])
@@ -225,5 +233,19 @@ class AlertScanTest < ActiveSupport::TestCase
 
     assert_empty post.sent,
                  "the Mailer restarting must not be reported as the Mailer being broken"
+  end
+
+  # The one reality caught within a minute of this being switched on. The first
+  # version compared lifetime dead against lifetime sent, fired on deaths from a
+  # transport that had been fixed hours earlier, and would have gone on firing
+  # forever: a ratio over all time never recovers.
+  test "a transport that was broken and is working again goes quiet" do
+    post = Post.new
+    broken = { "counts" => { "sent" => 71, "dead" => 29 }, "stalled" => 0,
+               "recent" => { "window_minutes" => 60, "sent" => 12, "dead" => 0 } }
+    2.times { scan(mailer: broken, post: post).call }
+
+    assert_empty post.sent,
+                 "twenty nine deaths from last week is history, not an incident"
   end
 end
