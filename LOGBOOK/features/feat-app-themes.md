@@ -124,16 +124,28 @@ with more disk to spare.
 Three palettes in `lib/mobile_themes.rb`: Daylight, Midnight and Meadow. One
 list, read by the builder, the Backoffice picker and a module inside a WebView.
 
-Verified against the running stack:
+Every action the native screen offers, exercised against the running module:
 
 | | |
 |---|---|
-| module with no theme asked | keeps its own styling, no override emitted |
-| module framed in Midnight | `color-scheme:dark`, accent mapped through |
+| list, create, tick, untick | the row comes back, in JSON |
+| archive, restore | moves between the two lists |
+| delete | `{"deleted": true}`, and 404 the second time |
+| the same routes from a browser | still redirect, unchanged |
+
+And the theme, checked the same way:
+
+| | |
+|---|---|
+| module with no theme asked | keeps its own styling, no `--theme-` emitted |
+| module framed in Midnight | `color-scheme:dark`, the palette mapped through |
 | a value trying to close the declaration | falls back, no injected rule |
 | a `url()` value | falls back, no request |
+| the built web export | carries all three palettes and picks by query string |
 
 Twelve tests on the catalogue, including contrast floors: text against
 background, accent against surface, and a button label against its button. A
 palette where two colours that must differ do not is a theme somebody cannot
 read, and that is worth failing a build over rather than noticing later.
+
+136 runs green, `bin/check` clean, and the fourteen smoke checks pass.
