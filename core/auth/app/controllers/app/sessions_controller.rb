@@ -152,22 +152,7 @@ module App
     private
 
     def send_verification(account)
-      token = account.start_verification!
-
-      Siberian::CoreMailClient.new(logger: Rails.logger).deliver(
-        domain: current_domain,
-        to: account.email,
-        subject: "Confirm your email address",
-        text_body: <<~BODY,
-          Somebody created an account for #{account.email} on #{current_domain}.
-
-          https://#{current_domain}/-/auth/verify?token=#{token}
-
-          You can use the app either way. This only confirms the address is
-          yours, which is what lets anybody rely on it.
-        BODY
-        idempotency_key: "app-verification-#{account.id}-#{Digest::SHA256.hexdigest(token)[0, 12]}"
-      )
+      AppVerification.new.send_to(account, domain: current_domain)
     end
 
     def issue(account)

@@ -66,6 +66,8 @@ Rails.application.routes.draw do
   post "app-users/:id", to: "app_users#create"
   patch "app-users/:id/registration", to: "app_users#registration", as: :app_registration
   post "app-users/:id/accounts/:account_id/active", to: "app_users#set_active", as: :app_user_active
+  patch "app-users/:id/accounts/:account_id/password", to: "app_users#set_password",
+        as: :app_user_password
   delete "app-users/:id/accounts/:account_id/devices/:device_id", to: "app_users#revoke_device",
          as: :app_user_device
 
