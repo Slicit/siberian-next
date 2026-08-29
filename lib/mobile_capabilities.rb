@@ -74,6 +74,19 @@ module Siberian
         settings: []
       },
       {
+        id: "document_picker",
+        package: "expo-document-picker",
+        label: "Choose a file",
+        summary: "Opening the phone's file picker so somebody can attach a document.",
+        # No usage sentence: this opens the system picker, and the person
+        # choosing a file is the permission. Nothing is readable that they did
+        # not hand over, which is why this is not the same as file system
+        # access.
+        usage: nil,
+        severity: :low,
+        settings: []
+      },
+      {
         id: "device_info",
         package: "expo-device",
         label: "Device information",
