@@ -290,11 +290,6 @@ Deliberate, not forgotten:
 - **No wildcard DNS.** Adding a module means editing a hosts file. `bin/hosts-file`
   generates the block rather than leaving it to be remembered, but pasting it
   still does not scale past a handful of modules.
-- **No Backoffice view of the mail queue or the database audit trail.** Both
-  exist behind `/admin` endpoints and an operator currently needs curl to see
-  why mail is not arriving, which is the moment they would least want to.
-- **No alerting anywhere.** The Backoffice shows storage usage; a domain filling
-  up overnight tells nobody.
 - **No `tmp` sweeper in Storage**, and no Router rule for `/-/public/<path>`.
   No module has needed either, and building them first would be guessing.
 - **No templates in the Mailer**, no inbound mail, no bounce handling.
@@ -312,6 +307,14 @@ Deliberate, not forgotten:
 - **No over the air updates, and no store submission.** A build produces an
   artifact; getting one onto a phone that already has the app is a different
   mechanism.
+- **No Router door between core services.** A core service calling another
+  reaches it directly, so when it acts for one domain it names that domain
+  rather than having the Router stamp it. The Mobile service pins the Base
+  App to one domain and refuses it the view across all of them, which stops
+  the accident; it cannot stop a compromised caller naming somebody else.
+  Routing these calls through the Router the way module traffic already goes
+  would make the domain asserted rather than claimed. Not built because
+  nothing yet needs it, and it is a change to every core-to-core call.
 - **One builder.** Two domains asking at once are two rows in a queue. The
   claim query is already written for more than one worker, so adding a second
   is a compose change, but nothing scales itself yet.
