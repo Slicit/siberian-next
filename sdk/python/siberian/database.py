@@ -20,9 +20,19 @@ come from a pool.
 """
 
 import threading
+from urllib.parse import quote
 
 import psycopg
 from psycopg_pool import ConnectionPool
+
+
+# The logical name a module gets when it does not ask for one.
+#
+# It matches the name a manifest should give a module's only database. They have
+# to agree: the SDK asks for this, the Database service provisions what the
+# manifest declared, and a manifest saying anything else describes a database
+# the module cannot reach.
+DEFAULT_DATABASE = "primary"
 
 
 class Database:
@@ -61,17 +71,27 @@ class Database:
         self._pool_lock = threading.Lock()
         self._migrate_lock = threading.Lock()
 
-    def dsn(self, domain=None):
+    def dsn(self, domain=None, name=DEFAULT_DATABASE):
         """The connection string the core issued for this (module, domain).
 
         Nothing proxies the connection itself. The Database service mints a
         credential scoped to the pair and gets out of the way, which is what
         keeps it off the path of a module reading its own rows.
+
+        `name` is the logical name from the manifest. A module declaring one
+        database should call it `primary` and never pass this; a module
+        declaring several passes the one it wants. Before this existed the SDK
+        could only ever ask for `primary`, so a manifest declaring any other
+        name described a database the module could not reach, and found out at
+        runtime.
         """
         domain = domain or self._domain_source()
-        return self._core.call("/database/v1/credentials", self._token)["url"]
+        path = "/database/v1/credentials"
+        if name != DEFAULT_DATABASE:
+            path += "?name=" + quote(name)
+        return self._core.call(path, self._token)["url"]
 
-    def connection(self):
+    def connection(self, name=DEFAULT_DATABASE):
         """A pooled connection, as a context manager.
 
             with siberian.db.connection() as connection:
@@ -81,9 +101,9 @@ class Database:
         Returning it to the pool is the caller's business only in the sense
         that leaving the `with` block does it for them.
         """
-        return self._pool_for(self._domain_source()).connection()
+        return self._pool_for(self._domain_source(), name).connection()
 
-    def migrate(self, schema=None):
+    def migrate(self, schema=None, name=DEFAULT_DATABASE):
         """Apply the schema for the current domain, once.
 
         Safe to call as often as anyone likes: it does the work the first time
@@ -96,17 +116,18 @@ class Database:
             return
 
         domain = self._domain_source()
-        if domain in self._migrated:
+        key = (domain, name)
+        if key in self._migrated:
             return
 
         # Outside the migration lock, deliberately. See the note on the locks.
-        pool = self._pool_for(domain)
+        pool = self._pool_for(domain, name)
 
         with self._migrate_lock:
             # Checked again inside the lock: two requests for a new domain
             # arriving together would otherwise both run the DDL, and while
             # `IF NOT EXISTS` makes that harmless it also makes it pointless.
-            if domain in self._migrated:
+            if key in self._migrated:
                 return
 
             with pool.connection() as connection:
@@ -114,7 +135,7 @@ class Database:
                     for statement in statements:
                         cursor.execute(statement)
 
-            self._migrated.add(domain)
+            self._migrated.add(key)
 
     def close(self):
         with self._pool_lock:
@@ -125,13 +146,16 @@ class Database:
         with self._migrate_lock:
             self._migrated.clear()
 
-    def _pool_for(self, domain):
-        pool = self._pools.get(domain)
+    # Keyed by (domain, name), so a module with two databases gets two pools
+    # rather than the first one it happened to open.
+    def _pool_for(self, domain, name=DEFAULT_DATABASE):
+        key = (domain, name)
+        pool = self._pools.get(key)
         if pool is not None:
             return pool
 
         with self._pool_lock:
-            pool = self._pools.get(domain)
+            pool = self._pools.get(key)
             if pool is not None:
                 return pool
 
@@ -139,7 +163,7 @@ class Database:
             # credential is an error at startup rather than a surprise in the
             # middle of somebody's page.
             pool = ConnectionPool(
-                conninfo=self.dsn(domain),
+                conninfo=self.dsn(domain, name=name),
                 min_size=self._min_size,
                 max_size=self._max_size,
                 # Autocommit matches how the reference modules were written and
@@ -147,9 +171,9 @@ class Database:
                 # should not have to remember to commit it.
                 kwargs={"autocommit": True},
                 open=True,
-                name=f"siberian-{domain}",
+                name=f"siberian-{domain}-{name}",
             )
-            self._pools[domain] = pool
+            self._pools[key] = pool
             return pool
 
 
