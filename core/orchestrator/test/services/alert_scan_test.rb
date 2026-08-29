@@ -266,15 +266,27 @@ class AlertScanTest < ActiveSupport::TestCase
                  "a second occurrence must not be deduplicated into the first"
   end
 
-  test "but a retry inside one occurrence is not" do
+  # The other half is the Mailer's, not this class's: two scans racing, or a
+  # send retried after a timeout, arrive at the Mailer with the same key and are
+  # deduplicated there. What this has to guarantee is that the key is stable
+  # within an occurrence and different across them, and the occurrence number is
+  # what does both.
+  test "the key names the occurrence, which is what makes a retry safe" do
     post = Post.new
     2.times { scan(free: 100, post: post).call }
-    first = post.sent.first[:idempotency_key]
 
-    AlertCondition.find_by(key: "disk.low").update!(state: AlertCondition::PENDING)
-    scan(free: 100, post: post).call
+    assert_match(/\Aalert-[0-9a-f]{16}-boss@example\.test\z/, post.sent.first[:idempotency_key])
+    assert_equal 1, AlertCondition.find_by(key: "disk.low").occurrences
+  end
 
-    assert_equal first, post.sent.last[:idempotency_key],
-                 "the same occurrence reported twice is one email, which is what the key is for"
+  test "and the count is worth reading on its own" do
+    post = Post.new
+    3.times do
+      2.times { scan(free: 100, post: post).call }
+      scan(free: 50_000, post: post).call
+    end
+
+    assert_equal 3, AlertCondition.find_by(key: "disk.low").occurrences,
+                 "the fourth time this week is a different sentence from this is happening"
   end
 end
