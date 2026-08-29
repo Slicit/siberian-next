@@ -237,6 +237,8 @@
       </div>
       <p class="faint" style="font-size:.75rem; text-align:center">
         Built <%= @preview_build["finished_at"] %>.
+        <% if @preview_pending %>A newer one is building; this is the last finished.
+        <% end %>
         <%= link_to "Open it in a tab", "#{preview_phone_app_path}/index.html", target: "_blank", rel: "noopener" %>
       </p>
     <% elsif @preview_pending %>
@@ -263,7 +265,7 @@
             <% if @building.to_i.positive? || @queued.to_i.positive? %>
               <br>
               Right now: <%= pluralize(@building.to_i, "build") %> running,
-              <%= pluralize(@queued.to_i, "waiting") %> across every domain.
+              <%= @queued.to_i %> waiting, across every domain.
             <% end %>
           </p>
         </div>

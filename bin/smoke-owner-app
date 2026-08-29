@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# The phone app page an app owner uses on their own domain: their builds, their
+# queue position, and a preview of the app they built. It showed none of those
+# and reported no error while doing it.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-owner-app.sh
