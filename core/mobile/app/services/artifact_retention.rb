@@ -31,13 +31,29 @@ class ArtifactRetention
     @storage = storage
   end
 
+  # What a web build records instead of a path.
+  #
+  # A preview is not a per-build artifact. Every web build writes the same
+  # place, `previews/<bundle identifier>/`, so a superseded one was overwritten
+  # the moment the next build finished and there is nothing left to reclaim.
+  # The row still claims a path, which is a lie worth clearing: the sweep used
+  # to ask Storage to delete "preview", get a 404, record an error, and try
+  # again the next night, forever.
+  PREVIEW = "preview"
+
   def call(dry_run: false)
     removed = 0
     bytes = 0
-    kept = 0
     errors = []
 
     superseded.each do |build|
+      # Nothing to delete, and the field is cleared so the row stops claiming
+      # a binary that has not existed since the build after it.
+      if build.artifact_path == PREVIEW
+        build.update_columns(artifact_path: nil) unless dry_run
+        next
+      end
+
       if dry_run
         removed += 1
         bytes += build.artifact_bytes.to_i
@@ -57,10 +73,8 @@ class ArtifactRetention
       end
     end
 
-    kept = keepers.length
-    Result.new(removed: removed, bytes: bytes, kept: kept, errors: errors)
+    Result.new(removed: removed, bytes: bytes, kept: keepers.length, errors: errors)
   end
-
   private
 
   # The newest artifacts, one set per app and platform, which are the ones to
