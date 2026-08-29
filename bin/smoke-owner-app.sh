@@ -114,4 +114,25 @@ c -o /tmp/owner_page2 "https://$DOMAIN/app"
 contains "and the person is told where they were in line" \
   "$(grep -o 'Build queued[^<]*' /tmp/owner_page2 | head -1)" "in line"
 
+echo "6. a preview does not wait for an Android build"
+# The reason the split exists. Asserted against the claim itself rather than
+# by timing a build: a test that waits twenty minutes to find out is a test
+# nobody runs.
+contains "web is the preview lane" \
+  "$(runner mobile "puts Build.lane_for('web')")" "preview"
+contains "android and ios are the native one" \
+  "$(runner mobile "puts [Build.lane_for('android'), Build.lane_for('ios')].uniq.join")" "native"
+contains "the queue reports each lane separately" \
+  "$(runner mobile "puts Build.in_lanes('preview').where(platform: 'android').count")" "0"
+
+# Both containers, and each taking only its own. A second worker that quietly
+# died leaves the preview queue served by nobody, which looks exactly like a
+# preview that is taking a while.
+contains "the native lane is running" \
+  "$($COMPOSE ps --format '{{.Service}} {{.State}}' mobile-builder)" "running"
+contains "and so is the preview lane" \
+  "$($COMPOSE ps --format '{{.Service}} {{.State}}' mobile-builder-web)" "running"
+contains "each told which queue it takes" \
+  "$($COMPOSE exec -T mobile-builder-web printenv BUILDER_LANES </dev/null | tr -d '')" "preview"
+
 finish "owner app"
