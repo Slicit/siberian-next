@@ -20,11 +20,12 @@ rm -f $J
 c() { curl -s --cacert "$CA" -b $J -c $J "$@"; }
 runner() { $COMPOSE exec -T "$1" bin/rails runner "$2" </dev/null 2>/dev/null | tail -1 | tr -d '\r'; }
 
-# The token is per form, so the one for the build button is not the one at the
-# top of the page. Taking the first would test a 422 rather than a build.
-token_for() {
-  tr '<' '\n' < "$1" \
-    | awk '/^form/{f=1;b=""} f{b=b $0 "|"} /^\/form/{if (b ~ /'"$2"'/ && b ~ /'"$3"'/) print b; f=0}' \
+# The token is per form, so the one at the top of the page is not the one the
+# build button carries. Taking the first would test a 422 rather than a build.
+# Each form is folded onto one line so that grep can pick out the right one.
+token_for() { # token_for <file> <action> <a value in that form>
+  tr -d '\n' < "$1" | sed 's|</form>|</form>\n|g' \
+    | grep "$2" | grep "$3" | head -1 \
     | grep -o 'authenticity_token" value="[^"]*"' | head -1 | sed 's/.*value="//; s/"//'
 }
 
@@ -36,8 +37,7 @@ c -o /dev/null -X POST --data-urlencode "authenticity_token=$TOKEN" \
 check "the page answers" "$(c -o /tmp/owner_page -w '%{http_code}' "https://$DOMAIN/app")" "200"
 
 echo "1. the builds it shows are this domain's builds"
-KNOWN=$(runner mobile "puts Build.where(domain: '$DOMAIN').count")
-present "the database has builds for it" "$KNOWN"
+present "the database has builds for it" "$(runner mobile "puts Build.where(domain: '$DOMAIN').count")"
 check "the page does not claim there are none" "$(grep -c 'Nothing built yet' /tmp/owner_page)" "0"
 check "and did not fail to ask" "$(grep -c 'did not answer' /tmp/owner_page)" "0"
 check "the table is drawn" "$(grep -c '<tbody>' /tmp/owner_page)" "1"
@@ -79,14 +79,16 @@ BEFORE=$(runner mobile "puts Build.count")
 BUILD_TOKEN=$(token_for /tmp/owner_page 'action="/app/build"' 'value="web"')
 present "the build button carries its own token" "$BUILD_TOKEN"
 check "and posting it redirects rather than refusing" \
-  "$(c -o /tmp/owner_post -w '%{http_code}' -X POST \
+  "$(c -o /dev/null -w '%{http_code}' -X POST \
      --data-urlencode "authenticity_token=$BUILD_TOKEN" --data-urlencode "platform=web" \
      "https://$DOMAIN/app/build")" "302"
-AFTER=$(runner mobile "puts Build.count")
-check "a build row exists that did not before" "$AFTER" "$((BEFORE + 1))"
+check "a build row exists that did not before" "$(runner mobile "puts Build.count")" "$((BEFORE + 1))"
 
+# Read from the flash rather than the table, because by the time the page is
+# fetched the builder may already have picked the build up, and a build that is
+# running is not waiting for anything.
 c -o /tmp/owner_page2 "https://$DOMAIN/app"
-contains "the person is told where they are in line" \
-  "$(grep -o 'number [0-9]* in line' /tmp/owner_page2 | head -1)" "in line"
+contains "and the person is told where they were in line" \
+  "$(grep -o 'Build queued[^<]*' /tmp/owner_page2 | head -1)" "in line"
 
 finish "owner app"
