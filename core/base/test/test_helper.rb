@@ -2,6 +2,11 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 
+# The Base App owns no data: every page is another service's answer over HTTP.
+# Standing a fake in front of a constructor is the only seam that does not mean
+# reshaping the app around its tests.
+require "minitest/mock"
+
 require_relative "support/fake_core"
 
 module ActiveSupport
