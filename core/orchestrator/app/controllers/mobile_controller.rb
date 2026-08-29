@@ -35,7 +35,20 @@ class MobileController < ApplicationController
     @app = mobile.app(@domain.hostname)
     @app = nil unless @app && @app["ok"]
     @catalogue = Array(mobile.apps&.[]("catalogue"))
-    @builds = Array(mobile.builds(domain: @domain.hostname)&.[]("builds"))
+    queue = mobile.builds(domain: @domain.hostname)
+
+    # Told apart rather than both becoming an empty list. A Mobile service that
+    # is not answering and a domain that has never been built look identical
+    # otherwise, and the product side had exactly that bug for its whole life.
+    @builds_unavailable = queue.nil? || !queue["ok"]
+    @builds = Array(queue && queue["builds"])
+
+    # Per lane, because there are two workers now. "A build is running" is the
+    # wrong thing to say when the one running is somebody else's Android build
+    # and the preview an operator just asked for is already going.
+    lanes = queue.to_h["lanes"].to_h
+    @native = lanes["native"].to_h
+    @previews = lanes["preview"].to_h
   end
 
   # One app per domain, so this creates or updates rather than asking an
