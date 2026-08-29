@@ -314,3 +314,27 @@ dialog.confirm .actions { display: flex; justify-content: flex-end; gap: .5rem; 
   background: #fff; box-shadow: var(--shadow);
 }
 .phone iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+/* Theme swatches, for picking what a phone app is built in.
+ *
+ * A name and a sentence are not enough to choose a palette by, so each option
+ * shows its own colours. The swatch is the preview: three bands in the theme's
+ * background, surface and accent, which is what somebody is actually deciding
+ * between. */
+.swatch {
+  display: flex; flex-direction: column; gap: .35rem;
+  padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 10px;
+  cursor: pointer; min-width: 11rem; flex: 1 1 11rem; background: var(--bg);
+}
+.swatch.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.swatch input { margin: 0; }
+.swatch-colours { display: flex; height: 1.5rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+.swatch-colours span { flex: 1; }
+.swatch-name { font-weight: 600; font-size: .88rem; }
+.swatch-note { color: var(--muted); font-size: .76rem; line-height: 1.3; }
+
+/* The live preview switcher. Marks which palette the frame is showing, which is
+ * not necessarily the one that is saved. */
+.preview-theme { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; padding: .25rem .6rem; }
+.preview-theme.on { border-color: var(--accent); color: var(--accent); }
+.preview-theme .dot { width: .7rem; height: .7rem; border-radius: 50%; display: inline-block; }

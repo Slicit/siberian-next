@@ -43,6 +43,25 @@
         </div>
       </div>
 
+      <div class="field">
+        <%= label_tag :theme, "Theme" %>
+        <div class="row wrap" style="gap:.5rem">
+          <% current_theme = (@app && @app["theme"]) || Siberian::MobileThemes::DEFAULT %>
+          <% Siberian::MobileThemes.all.each do |key, palette| %>
+            <label class="swatch<%= " on" if key == current_theme %>">
+              <%= radio_button_tag :theme, key, key == current_theme %>
+              <span class="swatch-colours">
+                <span style="background: <%= palette[:background] %>"></span>
+                <span style="background: <%= palette[:surface] %>"></span>
+                <span style="background: <%= palette[:accent] %>"></span>
+              </span>
+              <span class="swatch-name"><%= palette[:name] %></span>
+              <span class="swatch-note"><%= palette[:description] %></span>
+            </label>
+          <% end %>
+        </div>
+      </div>
+
       <p class="faint" style="margin:0; font-size:.8rem">
         Build number <%= @app ? @app["build_number"].to_i : 0 %> so far. The
         builder increments it on success and never on a failure, so no two
@@ -83,8 +102,24 @@
     </header>
 
     <% if preview_build && preview_build["state"] == "succeeded" %>
+      <%# Switching costs a reload of the iframe, not a rebuild: the app
+          carries every palette and picks one from its query string, so
+          trying a theme on is a question the built app can already
+          answer. What it previews is the theme, not the saved setting. %>
+      <div class="row wrap" style="gap:.4rem; margin-bottom:.7rem">
+        <span class="faint" style="font-size:.78rem">Preview in</span>
+        <% Siberian::MobileThemes.all.each do |key, palette| %>
+          <button type="button" class="button preview-theme" data-theme="<%= key %>">
+            <span class="dot" style="background: <%= palette[:accent] %>"></span><%= palette[:name] %>
+          </button>
+        <% end %>
+      </div>
+
       <div class="phone">
-        <iframe src="<%= mobile_preview_path(@domain) %>/index.html" title="App preview" loading="lazy"></iframe>
+        <iframe id="app-preview"
+                data-base="<%= mobile_preview_path(@domain) %>/index.html"
+                src="<%= mobile_preview_path(@domain) %>/index.html?theme=<%= (@app && @app["theme"]) || Siberian::MobileThemes::DEFAULT %>"
+                title="App preview" loading="lazy"></iframe>
       </div>
       <p class="faint" style="font-size:.78rem; margin:.6rem 0 0">
         Exported <%= preview_build["finished_at"] %>. It shows what a build made
@@ -362,4 +397,27 @@
       <div class="empty">Nothing built yet for this domain.</div>
     <% end %>
   </div>
+<% end %>
+
+<% if @app %>
+  <%# Reloading the iframe with a different theme, which the app answers itself.
+      Written here rather than in the shared stylesheet's script because it is
+      about this page: nothing else previews an app. %>
+  <script>
+    (function () {
+      var frame = document.getElementById("app-preview");
+      if (!frame) return;
+
+      document.querySelectorAll(".preview-theme").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var base = frame.getAttribute("data-base");
+          frame.setAttribute("src", base + "?theme=" + encodeURIComponent(button.dataset.theme));
+
+          document.querySelectorAll(".preview-theme").forEach(function (other) {
+            other.classList.toggle("on", other === button);
+          });
+        });
+      });
+    })();
+  </script>
 <% end %>
