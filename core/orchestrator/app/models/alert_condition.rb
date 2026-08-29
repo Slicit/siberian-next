@@ -41,7 +41,8 @@ class AlertCondition < ApplicationRecord
       nil
     when PENDING
       update!(state: FIRING, detail: detail, firing_since: Time.current,
-              notified_at: Time.current, cleared_at: nil)
+              notified_at: Time.current, cleared_at: nil,
+              occurrences: occurrences + 1)
       :opened
     else
       update!(state: PENDING, detail: detail, pending_since: Time.current, cleared_at: nil)

@@ -227,9 +227,11 @@ class AlertScan
     # deduplicated into an email somebody read and dealt with weeks earlier. The
     # smoke caught it by running the same scenario twice.
     #
-    # `firing_since` is what makes one occurrence different from the next, so a
-    # retry inside an occurrence is still deduplicated and a recurrence is not.
-    occurrence = opened.map { |c| "#{c.key}@#{c.firing_since.to_i}" } + closed.map { |k| "clear:#{k}" }
+    # The occurrence counter is what makes one firing different from the next,
+    # so a retry inside one is still deduplicated and a recurrence is not. A
+    # timestamp was tried first and collided: two firings inside one second
+    # share a second.
+    occurrence = opened.map { |c| "#{c.key}##{c.occurrences}" } + closed.map { |k| "clear:#{k}" }
     stamp = Digest::SHA256.hexdigest(occurrence.sort.join("|"))[0, 16]
 
     recipients.each do |address|
