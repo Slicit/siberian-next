@@ -115,14 +115,19 @@ class RouteReconciler
     path = ENV.fetch("SIBERIAN_CERT_PATH", "/var/lib/siberian/certs/server.pem")
     return [] unless File.exist?(path)
 
-    names = OpenSSL::X509::Certificate.new(File.read(path))
-                                      .extensions
-                                      .find { |e| e.oid == "subjectAltName" }
-                                      &.value.to_s
-                                      .split(",")
-                                      .filter_map { |entry| entry.strip.delete_prefix("DNS:") }
+    san = OpenSSL::X509::Certificate.new(File.read(path))
+                                    .extensions
+                                    .find { |extension| extension.oid == "subjectAltName" }
+    return [] if san.nil?
 
-    names.map { |name| name.sub(/\A\*\./, "") }.uniq
+    # DNS entries only. The SAN list also carries `IP Address:127.0.0.1`, and a
+    # filter that merely strips a prefix keeps whatever it failed to strip.
+    san.value.to_s.split(",").filter_map do |entry|
+      entry = entry.strip
+      next unless entry.start_with?("DNS:")
+
+      entry.delete_prefix("DNS:").sub(/\A\*\./, "")
+    end.uniq
   rescue StandardError => e
     # An unreadable certificate is not a reason to fail a reconcile, and saying
     # nothing about coverage is better than claiming a domain is uncovered
