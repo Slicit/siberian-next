@@ -39,7 +39,9 @@ class AppUser < ApplicationRecord
   normalizes :email, with: ->(email) { email.to_s.strip.downcase }
   normalizes :domain, with: ->(domain) { domain.to_s.strip.downcase }
 
-  scope :active, -> { where(active: true) }
+  # Deleted accounts are excluded everywhere `active` is used, which is every
+  # path that can sign somebody in.
+  scope :active, -> { where(active: true, deleted_at: nil) }
   scope :on, ->(domain) { where(domain: domain.to_s.strip.downcase) }
   scope :ordered, -> { order(:email) }
 
@@ -82,6 +84,37 @@ class AppUser < ApplicationRecord
   # What a password reset ends. Named here rather than reached for, because the
   # two kinds of account keep their sessions in different tables.
   def sessions_to_end = app_sessions.active
+
+  # Ended by the person whose account it is.
+  #
+  # The row survives, and keeps its address, because every module keys its rows
+  # by email: freeing the address would hand the next person to sign up with it
+  # the previous one's tasks and notes. Being unable to reuse an address is a
+  # smaller harm than inheriting a stranger's data.
+  #
+  # What actually goes: the ability to sign in, every session on every device,
+  # the password, and the name. What remains is an address that cannot be
+  # claimed and a date.
+  def erase!
+    transaction do
+      app_sessions.find_each(&:revoke!)
+      app_password_resets.usable.update_all(used_at: Time.current)
+
+      update!(
+        deleted_at: Time.current,
+        active: false,
+        name: nil,
+        verified_at: nil,
+        verification_digest: nil,
+        # A password nobody can present. `has_secure_password` will not accept a
+        # nil, and leaving the old digest in place would leave a credential for
+        # an account that is supposed to be gone.
+        password: SecureRandom.urlsafe_base64(48)
+      )
+    end
+  end
+
+  def deleted? = deleted_at.present?
 
   def deactivate!
     transaction do

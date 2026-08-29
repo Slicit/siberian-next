@@ -28,6 +28,12 @@ Rails.application.routes.draw do
     delete "sign-out", to: "sessions#destroy"
     get "verify", to: "sessions#verify"
     get "me", to: "sessions#show"
+    # What a person can do to their own account.
+    patch "me", to: "account#update"
+    delete "me", to: "account#destroy"
+    post "password", to: "account#change_password"
+    post "sign-out-everywhere", to: "account#sign_out_everywhere"
+
     get "devices", to: "sessions#devices"
     delete "devices/:id", to: "sessions#revoke_device"
   end
