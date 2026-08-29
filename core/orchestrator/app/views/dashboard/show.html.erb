@@ -12,6 +12,35 @@
 </div>
 
 <div class="grid">
+  <%# What is wrong right now, as opposed to what was wrong last night. The
+      banner in the layout says something is up; this says what, and how long
+      it has been true, which is the difference between an alert and a nag. %>
+  <% if @alerts&.any? %>
+    <div class="card">
+      <header>
+        <h2>Needs attention</h2>
+        <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+          Each of these was emailed once when it started and will be emailed
+          once when it stops. Nothing is sent again while it stays true.
+        </p>
+      </header>
+
+      <div class="stack" style="--gap:.5rem">
+        <% @alerts.each do |alert| %>
+          <div>
+            <span class="row"><span class="dot danger"></span><%= alert.detail %></span>
+            <p class="muted small" style="margin:.15rem 0 0">
+              <span class="mono"><%= alert.key %></span>
+              <% if alert.for_how_long %>
+                &middot; for <%= alert.for_how_long %> minute<%= "s" unless alert.for_how_long == 1 %>
+              <% end %>
+            </p>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
   <div class="card">
     <header><h2>Core</h2></header>
     <div class="stack" style="--gap:.5rem">

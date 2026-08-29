@@ -267,6 +267,15 @@ screen is themed and everything reached from it is not.
 [`docs/theming-a-module.md`](theming-a-module.md) has the whole contract;
 `modules/example-notes` implements it in PHP with no SDK.
 
+**Alerts stopped arriving, or arrive too often.** The scan runs every quarter of
+an hour from cron (`deploy/maintenance/alert-scan.sh`, log at
+`/var/log/siberian-alerts.log`) and deliberately says almost nothing: a
+condition must hold across two scans before an email is sent, and is never sent
+again while it stays true. `AlertCondition` is the record of what has been said;
+the dashboard lists what is firing now. If nothing arrives at all, check that
+somebody holds a role granting a `core.` permission, because that is who gets
+told.
+
 **A permission change has not taken effect.** It is cached for 30 seconds per
 session. Wait, or use the endpoint that never caches.
 

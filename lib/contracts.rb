@@ -11,6 +11,7 @@ require_relative "mobile_capabilities"
 require_relative "auth_client"
 require_relative "mobile_client"
 require_relative "mailer_client"
+require_relative "core_mail_client"
 require_relative "database_client"
 require_relative "navigation"
 

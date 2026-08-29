@@ -4,6 +4,10 @@ class DashboardController < ApplicationController
   before_action :require_any_backoffice_permission!
 
   def show
+    # What is firing now. Read rather than scanned: the scan runs on its own
+    # schedule from the host, and a page that re-evaluated everything on every
+    # load would ask the Mailer and the Storage service a question per visitor.
+    @alerts = AlertCondition.firing.ordered.to_a
     @modules = allow?("core.modules.read") ? InstalledModule.ordered.includes(:module_containers) : []
     @domains = allow?("core.domains.manage") ? Domain.ordered : []
     @activities = allow?("core.audit.read") ? Activity.recent.includes(:installed_module).limit(8) : []
