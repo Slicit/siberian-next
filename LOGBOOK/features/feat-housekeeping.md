@@ -53,6 +53,43 @@ Out of scope for this feature:
 - **Why:** truncating is a cure and the cap is the prevention. The cap only applies to containers created after the daemon restarts, which is why both exist.
 - **Impact:** 10 MB, three files, per container. The routine still truncates anything over 20 MB, which is how the containers that predate the cap are handled.
 
+
+### 2026-08-29: the artifact sweep shared a guard it did not need
+
+Artifact retention sat behind the same in-flight check as the workspace
+cleanup, on the reasoning that deleting an artifact while its build is running
+would race the upload.
+
+It cannot. A build in flight has uploaded nothing, so it holds no
+`artifact_path` and is not a candidate; and if it finishes mid sweep it becomes
+the newest for its app and platform, which is the one thing always kept. The
+race is real for workspaces, which are deleted from under a running build, and
+that guard stays.
+
+The cost of sharing it was invisible and large. On a box whose build queue is
+rarely empty, the sweep effectively never ran: thirteen superseded APKs and 723
+megabytes had accumulated, on a disk at ninety six percent, while the nightly
+log said nothing at all because the whole block was skipped rather than
+reporting zero.
+
+Fixed, and the difference is visible in one run: the artifact line now appears
+with a build in flight, where it used to be absent.
+
+### 2026-08-29: a preview is not an artifact
+
+A web build records the sentinel `preview` rather than a path, because every web
+build writes to `previews/<bundle identifier>/` and a superseded one was
+overwritten the moment the next finished.
+
+The sweep did not know that, so for each superseded web build it asked Storage
+to delete an object called "preview", got a 404, recorded an error, and tried
+again the next night. Forever, and for nothing: those files had been gone since
+the build after them.
+
+Now the row is simply forgotten: the field is cleared, no delete is attempted,
+and nothing is reported as reclaimed, because reporting megabytes freed from
+something that occupied none is a lie in the direction that makes a disk look
+healthier than it is.
 ## Outcome
 
 Shipped 2026-08-20. The immediate problem was 44 GB used of 47 with nothing
