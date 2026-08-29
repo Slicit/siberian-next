@@ -7,6 +7,15 @@
 # app they have any business configuring. The controller never passes a domain
 # it was given: it passes the one the Router put on the request.
 class PhoneAppController < ApplicationController
+  # The preview serves the exported app's own JavaScript, and Rails refuses to
+  # send a JavaScript response to a request it cannot prove came from here: the
+  # rule exists to stop another site pulling a signed-in page in with a script
+  # tag and reading it. What comes back here is a build artifact rather than
+  # anything about the person asking, it is a GET that changes nothing, and the
+  # domain is the Router's rather than the caller's, so there is nothing for that
+  # rule to protect. Signing in and holding core.mobile.manage is still required.
+  skip_forgery_protection only: :preview
+
   before_action :require_permission!
 
   def show
