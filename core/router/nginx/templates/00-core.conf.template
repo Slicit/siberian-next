@@ -135,16 +135,27 @@ server {
   server_name modules;
   resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
 
-  # /<module>/<path> proxies to the module short name, which resolves on that
-  # module network. Nothing here learns a uuid or a container name.
+  # /<module>/<path> proxies to the module's declared address. Nothing here
+  # learns a uuid or a container name.
+  #
+  # Through the same map the app's door at /m/<module>/ uses, and that is the
+  # point rather than tidiness. This block used to say `http://$module_name`
+  # with no port, so it always tried port 80. It appeared to work because the
+  # only module anything reached this way was a stock nginx image, and every
+  # module that declares a port declares 8080: the first module here that
+  # served its own traffic answered every core call with 502.
   location ~ ^/([a-z0-9][a-z0-9-]*)/(.*)$ {
     set $module_name $1;
     set $module_path $2;
-    set $upstream_module "http://$module_name";
+    # An unknown module maps to nothing. 404 here is "no such module", which is
+    # a different thing to tell a core service than a 502 from proxying at a
+    # name that is not there.
+    if ($module_upstream = "") { return 404 "no such module\n"; }
+
+    set $upstream_module "http://$module_upstream";
     proxy_pass $upstream_module/$module_path$is_args$args;
     include /etc/nginx/siberian/internal_headers.conf;
   }
-
   location / {
     return 404 "address a module as /<module-name>/<path>";
   }
