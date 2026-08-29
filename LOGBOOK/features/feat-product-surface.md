@@ -98,8 +98,12 @@ against the running stack.
 - **Two schemes, three themes.** Meadow and Daylight are both light, so a light
   phone gets whichever the operator chose and a dark one always gets Midnight.
   A second dark theme would need a rule for choosing between them.
-- **The picker was verified by a web build, not on a device.** It bundles and
-  the screen renders; whether the system file picker behaves on Android and iOS
-  is not something this box can answer.
+- **The picker has not been through a build yet.** The screen parses, the
+  package exists and is installed through `expo install` so the SDK picks the
+  version, and the capability gating is checked by the smoke. What is not proved
+  is that `expo-document-picker` bundles: the web build that would show it is
+  queued behind two Android builds, each over half an hour on a box capped at
+  one core. Whether the system picker then behaves on a real Android or iOS
+  device is a further question this box cannot answer at all.
 - **No size limit before the upload starts.** A large file is refused by the
   storage quota after being sent, which is the wrong end.
