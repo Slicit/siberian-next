@@ -7,6 +7,7 @@ class User < ApplicationRecord
   has_secure_password
 
   has_many :sessions, dependent: :destroy
+  has_many :user_password_resets, dependent: :destroy
   has_many :role_assignments, dependent: :destroy
   has_many :roles, through: :role_assignments
   has_many :permission_grants, dependent: :destroy
@@ -45,6 +46,8 @@ class User < ApplicationRecord
   def bump_permissions_version!
     increment!(:permissions_version)
   end
+
+  def sessions_to_end = sessions.active
 
   def deactivate!
     transaction do

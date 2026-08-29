@@ -1,0 +1,38 @@
+<% content_for :title, "Reset your password" %>
+
+<div class="centred">
+  <div class="card stack">
+    <div class="brand" style="margin-bottom:.6rem">
+      <span class="mark">S</span>
+      <span>Siberian</span>
+    </div>
+
+    <div>
+      <h1 style="font-size:1.25rem">Reset your password</h1>
+      <p class="muted" style="margin:0">
+        We will send a link to the address on the account. It works once and
+        stops working after two hours.
+      </p>
+    </div>
+
+    <% if flash.now[:alert] || flash[:alert] %>
+      <div class="alert"><%= flash.now[:alert] || flash[:alert] %></div>
+    <% end %>
+
+    <%= form_with url: forgot_path, method: :post, class: "stack", data: { turbo: false } do |form| %>
+      <div class="field">
+        <%= form.label :email, "Email" %>
+        <%= form.email_field :email, value: params[:email], autofocus: true,
+              autocomplete: "username", required: true, placeholder: "you@example.com" %>
+      </div>
+
+      <button type="submit" class="primary" style="width:100%; justify-content:center">
+        Send the link
+      </button>
+    <% end %>
+
+    <p class="hint" style="margin:0">
+      <%= link_to "Back to signing in", login_path %>
+    </p>
+  </div>
+</div>

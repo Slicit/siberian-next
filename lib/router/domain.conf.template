@@ -187,10 +187,10 @@ server {
     include /etc/nginx/siberian/forwarded_headers.conf;
   }
 
-  # Sign in and out are served by Auth on the main domain, so the cookie it
-  # sets is scoped to the domain every module frame sits under. The Base App
-  # never sees a password.
-  location ~ ^/(login|logout)$ {
+  # Signing in, out, and back in after forgetting: all served by Auth on the
+  # main domain, so the cookie it sets is scoped to the domain every module
+  # frame sits under. The Base App never sees a password.
+  location ~ ^/(login|logout|forgot|reset)$ {
     set $upstream_auth "http://auth:3000";
     proxy_pass $upstream_auth;
     include /etc/nginx/siberian/forwarded_headers.conf;

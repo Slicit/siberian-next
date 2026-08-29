@@ -12,7 +12,7 @@
 # to it.
 class AppUsersController < ApplicationController
   requires "core.modules.read"
-  requires "core.mobile.manage", only: %i[create registration set_active revoke_device]
+  requires "core.mobile.manage", only: %i[create registration set_active revoke_device set_password]
 
   def index
     @domains = Domain.ordered
@@ -54,6 +54,22 @@ class AppUsersController < ApplicationController
 
     redirect_to domain_app_users_path(domain),
                 **flash_for(result, open ? "Anyone can now sign up on this domain." : "Sign-up closed.")
+  end
+
+  # An operator setting a password for somebody who cannot receive the email.
+  #
+  # The last resort rather than the normal path: the reset link exists so that
+  # nobody has to be told their password by another person. It is here because
+  # a mail transport that is down would otherwise mean nobody can get back in
+  # at all.
+  def set_password
+    domain = Domain.find_by(id: params[:id])
+    return redirect_to app_users_path, alert: "No such domain." if domain.nil?
+
+    result = auth.update_app_user(domain.hostname, params[:account_id], password: params[:password])
+
+    redirect_to domain_app_users_path(domain),
+                **flash_for(result, "Password set. Tell them in person, not by email.")
   end
 
   def set_active

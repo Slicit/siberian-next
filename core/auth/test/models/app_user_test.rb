@@ -57,6 +57,45 @@ class AppUserTest < ActiveSupport::TestCase
                "an inactive account with a live session on a phone is an active account"
   end
 
+
+  test "a new account has not verified its address" do
+    refute @account.verified?
+    refute @account.to_identity[:verified]
+  end
+
+  test "following the link verifies it, once" do
+    token = @account.start_verification!
+
+    assert_equal @account, AppUser.verify!(token)
+    assert @account.reload.verified?
+    assert_nil AppUser.verify!(token),
+               "a link that keeps working is a second credential sitting in a mailbox"
+  end
+
+  test "a token nobody issued verifies nobody" do
+    @account.start_verification!
+
+    assert_nil AppUser.verify!("not-a-real-token")
+    assert_nil AppUser.verify!(nil)
+    refute @account.reload.verified?
+  end
+
+  test "asking again replaces the link rather than adding one" do
+    first = @account.start_verification!
+    second = @account.start_verification!
+
+    assert_nil AppUser.verify!(first)
+    assert_equal @account, AppUser.verify!(second)
+  end
+
+  # Recorded, never enforced. A broken mail transport must not be able to lock
+  # every new account out of a product that was working.
+  test "an unverified account can still sign in" do
+    _, token = AppSession.start!(app_user: @account, device_id: "phone")
+
+    refute @account.verified?
+    assert AppSession.authenticate(token)
+  end
   test "the identity carries the domain, because the same address exists elsewhere" do
     assert_equal "one.test", @account.to_identity[:domain]
   end

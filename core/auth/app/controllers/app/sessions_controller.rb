@@ -11,6 +11,8 @@
 #
 # So one sign-in produces both. The token is what the app holds; the cookie is
 # what the pages it frames carry.
+require "digest"
+
 module App
   class SessionsController < ActionController::API
     include ActionController::Cookies
@@ -41,7 +43,22 @@ module App
                       status: :unprocessable_entity
       end
 
+      send_verification(account)
       issue(account)
+    end
+
+    # GET /-/auth/verify?token=...
+    #
+    # Followed from an email, so it answers to a browser as well as to an app.
+    def verify
+      account = AppUser.verify!(params[:token])
+
+      unless account
+        return render json: { verified: false, error: "that link is not valid" },
+                      status: :unprocessable_entity
+      end
+
+      render json: { verified: true, user: account.to_identity }
     end
 
     # POST /-/auth/sign-in
@@ -133,6 +150,10 @@ module App
     end
 
     private
+
+    def send_verification(account)
+      AppVerification.new.send_to(account, domain: current_domain)
+    end
 
     def issue(account)
       session_record, token = AppSession.start!(

@@ -38,6 +38,11 @@ module Internal
       )
 
       if account.save
+        # The same link a self signed-up account gets. An operator vouching for
+        # somebody does not make the address theirs, and an account that can
+        # never be verified is permanently marked unverified through no fault
+        # of the person using it.
+        AppVerification.new.send_to(account, domain: @domain)
         render json: summary(account), status: :created
       else
         render json: { error: account.errors.full_messages.to_sentence },
