@@ -42,6 +42,24 @@ class StorageAccess
     { path: "files/#{path}", bytes: byte_count(body) }
   end
 
+  # Takes one out again.
+  #
+  # Used by artifact retention rather than by a build: a superseded APK is sixty
+  # megabytes that nothing will install, and nothing used to remove one.
+  def remove(domain:, path:)
+    response = request(Net::HTTP::Delete, "/v1/#{path}", nil, {
+                         "Authorization" => "Bearer #{module_token}",
+                         "X-Siberian-Domain" => domain
+                       })
+
+    # 404 is success for a delete: the object is not there, which is the state
+    # being asked for.
+    code = response.code.to_i
+    return true if code.between?(200, 299) || code == 404
+
+    raise Refused, "could not remove #{path}: #{code}"
+  end
+
   # Reads one back. The builder never holds this credential, so an asset it
   # needs comes to it through here, the same way the artifact goes out.
   def fetch(domain:, path:)
