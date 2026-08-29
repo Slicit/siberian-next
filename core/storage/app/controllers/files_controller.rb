@@ -60,6 +60,79 @@ class FilesController < ApplicationController
     render json: { error: "not found" }, status: :not_found
   end
 
+  # POST /v1/uploads/:space/*path
+  #
+  # An address to write one object to, so the bytes never come through here.
+  #
+  # The quota is checked against the size the caller declares, which is exactly
+  # what the ordinary PUT already does: it reads `Content-Length`, which the
+  # client also chose. So this is no more trusting than the path it replaces,
+  # and the accounting is settled by `confirm` against what actually arrived.
+  #
+  # An unconfirmed upload is the one thing this adds. The object exists and the
+  # counters do not know, which `bin/reconcile-quotas` and the Backoffice's
+  # recount both correct by asking the object store. That is a slow correction
+  # rather than a lost one.
+  def upload_url
+    declared = params[:content_length].to_i
+    if declared <= 0
+      return render json: { error: "content_length is required, and is what the quota is checked against" },
+                    status: :bad_request
+    end
+
+    refusal = current_bucket.refusal_for(declared)
+    return render_quota_exceeded(refusal) if refusal
+
+    unless StoredObjects.public_endpoint
+      return render json: { error: "this deployment has no public object store address" },
+                    status: :not_implemented
+    end
+
+    ttl = params.fetch(:expires_in, DEFAULT_URL_TTL).to_i.clamp(MIN_URL_TTL, MAX_URL_TTL)
+    content_type = params[:content_type].presence || "application/octet-stream"
+
+    render json: {
+      url: store.presigned_put_url(space, path, expires_in: ttl, content_type: content_type),
+      method: "PUT",
+      # Named because the signature covers it: a PUT that sends a different
+      # Content-Type is refused by the object store with a signature error,
+      # which reads as a bug in the signing rather than in the caller.
+      headers: { "Content-Type" => content_type },
+      expires_in: ttl,
+      confirm: "/v1/uploads/#{space}/#{path}/confirm"
+    }
+  end
+
+  # POST /v1/uploads/:space/*path/confirm
+  #
+  # Settles the accounting after a direct write. Asks the object store how big
+  # the object actually is rather than believing the caller twice.
+  def confirm_upload
+    stored = store.head(space, path)
+
+    # Recounted from the object store rather than added to.
+    #
+    # The counters are a running total kept by this service, and a direct write
+    # happened without it. Adding the size would be wrong twice over: a second
+    # confirm would count the object again, and so would an upload that
+    # overwrote something already counted.
+    #
+    # Asking the store what the bucket holds is exact and idempotent, and it is
+    # the same correction the Backoffice recount performs. It costs a walk of
+    # the bucket, which is the price of not having per-object accounting, and
+    # it is paid once per upload rather than once per request.
+    current_bucket.recalculate!
+    current_bucket.domain_quota.recalculate!(deep: false)
+
+    render json: {
+      path: path, space: space, size: stored.size,
+      bucket_remaining_bytes: current_bucket.reload.remaining_bytes,
+      domain_remaining_bytes: current_bucket.domain_quota.reload.remaining_bytes
+    }
+  rescue StoredObjects::NotFound
+    render json: { error: "nothing was uploaded to that address" }, status: :not_found
+  end
+
   # GET /v1/urls/:space/*path
   #
   # A signed URL for one of this module's own objects, so the module can send a

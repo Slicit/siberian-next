@@ -6,6 +6,7 @@ Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 
 ## 2026-08-29
 
+- The PHP SDK is not needed for the reason the Python one was. `example-notes` calls `currentUser()` once per request and holds its PDO and its settings in `static`, so PHP-FPM already reuses them per worker: the connection-per-request and DDL-per-request costs the Python SDK exists to remove were a consequence of the Python modules being written per request, not of hand-rolling the contract. An SDK for PHP is still worth having as a convenience, and should be written when a PHP module wants something it does not have rather than to match a count. (trigger: alternative, source: feat-php-sdk investigation 2026-08-29, agent: claude-code)
 - The certificate is reissued by hand. The reconciler names the served domains it does not cover and the exact command, but adding a domain still needs somebody to run `bin/generate-certs` and reload the Router. Automating it means the Orchestrator holding the CA key, which is a larger decision than the convenience. (trigger: gap, source: feat-domain-gaps Outcome 2026-08-29, agent: claude-code)
 
 ## 2026-08-22
