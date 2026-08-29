@@ -99,6 +99,19 @@ class ModuleProbeTest < ActiveSupport::TestCase
     assert_includes ModuleProbe.refusal(findings).to_s, "/up"
   end
 
+  # Found by upgrading. nginx caches a container address for ten seconds, so a
+  # container that has just been replaced answers 502 for a moment, and the
+  # probe accepted that as "the endpoint is there": a version declaring a path
+  # it did not serve upgraded cleanly.
+  test "a gateway error is not evidence that an endpoint exists" do
+    %w[502 503 504].each do |status|
+      findings = probe({ "/internal/mail" => status, "/up" => "200" }, RELAY).call
+
+      assert ModuleProbe.refusal(findings),
+             "#{status} is the Router saying it cannot reach the module"
+    end
+  end
+
   test "a module that never answers is refused" do
     findings = probe({ "/internal/mail" => "000", "/up" => "000" }, RELAY).call
 

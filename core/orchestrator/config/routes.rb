@@ -6,6 +6,9 @@ Rails.application.routes.draw do
   get "modules", to: "modules#index", as: :modules
   get "modules/:name", to: "modules#show", as: :module
   post "modules/:name/refresh", to: "modules#refresh", as: :refresh_module
+  # An upgrade keeps the module's identity and data and replaces its
+  # containers, and puts the old ones back when the new ones do not come up.
+  post "modules/:name/upgrade", to: "modules#upgrade", as: :upgrade_module
   delete "modules/:name", to: "modules#destroy"
 
   post "routes/reconcile", to: "routes#reconcile", as: :reconcile_routes
