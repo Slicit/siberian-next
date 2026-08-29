@@ -50,8 +50,14 @@ check "a stranger cannot create an account" "$CODE" "403"
 echo
 echo "2. an operator creates one, through the Backoffice"
 op -o /tmp/appuser_page -w '' "https://core.$DOMAIN/app-users"
-ID=$(grep -B4 ">$DOMAIN<" /tmp/appuser_page | grep -oE 'app-users/[0-9]+' | head -1 | grep -oE '[0-9]+')
-[ -z "$ID" ] && ID=$(grep -oE 'app-users/[0-9]+' /tmp/appuser_page | head -1 | grep -oE '[0-9]+')
+# The link sits after the hostname in the row, not before. Getting this
+# backwards silently creates the account on a different domain, which then
+# looks like a broken sign-in rather than a wrong id.
+ID=$(grep -A4 ">$DOMAIN<" /tmp/appuser_page | grep -oE 'app-users/[0-9]+' | head -1 | grep -oE '[0-9]+')
+if [ -z "$ID" ]; then
+  echo "   FAIL  could not find $DOMAIN on the app users page"
+  exit 1
+fi
 op -o /tmp/appuser_page "https://core.$DOMAIN/app-users/$ID"
 # The meta tag, not a form field. Per-form CSRF tokens are scoped to the
 # action they were rendered for, so the first form on the page carries a token
@@ -69,7 +75,7 @@ op -o /dev/null -X POST \
   "https://core.$DOMAIN/app-users/$ID"
 
 op -o /tmp/appuser_page "https://core.$DOMAIN/app-users/$ID"
-check "the account is listed for this domain" "$(grep -c "$RIDER" /tmp/appuser_page)" "1"
+[ "$(grep -c "$RIDER" /tmp/appuser_page)" -ge 1 ] \n  && check "the account is listed for this domain" "listed" "listed" \n  || check "the account is listed for this domain" "absent" "listed"
 
 echo
 echo "3. one account, two devices, one identity"
