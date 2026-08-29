@@ -11,26 +11,55 @@ core has no opinion, and the contract is HTTP plus a Postgres DSN.
 
 import json
 import os
-import urllib.error
-import urllib.request
 
-import psycopg
-from flask import Flask, jsonify, redirect, request, url_for
+from flask import Flask, g, jsonify, redirect, request, url_for
 from markupsafe import escape
 
-app = Flask(__name__)
+from siberian import Module, Refused
 
-CORE = os.environ.get("SIBERIAN_CORE_URL", "http://core")
-DATABASE_TOKEN = os.environ.get("SIBERIAN_DATABASE_TOKEN", "")
-STORAGE_TOKEN = os.environ.get("SIBERIAN_STORAGE_TOKEN", "")
+app = Flask(__name__)
 
 # This module's own name, which is the segment the Router's public media path
 # is addressed by. It matches `name:` in module.yml; a module that renamed
 # itself in one place and not the other would serve broken images.
 MODULE_NAME = "example-cms"
-SESSION_COOKIE = "siberian_session"
 
-_dsn_cache = {}
+# Applied once per domain rather than on every request. These are the same
+# statements that used to sit inside the connection helper, where they ran as
+# DDL on every page view: Postgres takes an ACCESS EXCLUSIVE lock to decide it
+# has nothing to do, and a page builder holding that twice per render is a page
+# builder that stops working under load.
+SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS pages (
+      id         serial PRIMARY KEY,
+      slug       text NOT NULL UNIQUE,
+      title      text NOT NULL,
+      position   integer NOT NULL DEFAULT 0,
+      published  boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS blocks (
+      id         serial PRIMARY KEY,
+      page_id    integer NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+      kind       text NOT NULL,
+      position   integer NOT NULL DEFAULT 0,
+      data       jsonb NOT NULL DEFAULT '{}'::jsonb,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    # Ordering is what a page builder is for, so it is indexed rather than
+    # sorted in the application.
+    "CREATE INDEX IF NOT EXISTS blocks_page_position ON blocks (page_id, position)",
+    # Added after the first release. A column rather than a migration runner,
+    # because a module owning two tables does not need one.
+    "ALTER TABLE pages ADD COLUMN IF NOT EXISTS next_slug text",
+    "ALTER TABLE pages ADD COLUMN IF NOT EXISTS prev_slug text",
+]
+
+siberian = Module(MODULE_NAME, schema=SCHEMA)
 
 # The block kinds, in one place.
 #
@@ -49,28 +78,10 @@ BLOCK_KINDS = {
 }
 
 
-# --- talking to the core ----------------------------------------------------
-
-def core_call(path, token, method="GET", body=None, content_type=None, raw=False):
-    """One helper for every core call. No SDK, no signing, no client library."""
-    req = urllib.request.Request(f"{CORE}{path}", method=method, data=body)
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
-    req.add_header("X-Siberian-Domain", current_domain())
-    if content_type:
-        req.add_header("Content-Type", content_type)
-
-    try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            payload = response.read()
-            return payload if raw else json.loads(payload or b"{}")
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", "replace")[:300]
-        raise RuntimeError(f"{method} {path} -> {error.code}: {detail}") from error
-
+# --- talking to the core -----------------------------------------------------
 
 def current_domain():
-    return request.headers.get("X-Siberian-Domain") or request.host.split(":")[0]
+    return siberian.domain
 
 
 def current_user():
@@ -78,79 +89,65 @@ def current_user():
 
     The module never reads the session cookie as a credential. It hands it to
     Auth, which is the only service that can say what it means.
+
+    Cached for thirty seconds by the SDK, the same ceiling the core services
+    use. A page that draws a nav, a block list and a footer asks this several
+    times, and it used to be a round trip every time.
     """
-    token = request.cookies.get(SESSION_COOKIE)
-    if not token:
-        return None
-
-    req = urllib.request.Request(f"{CORE}/auth/internal/session")
-    req.add_header("X-Siberian-Session", token)
-    req.add_header("X-Siberian-Domain", current_domain())
-    try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            payload = json.loads(response.read() or b"{}")
-    except Exception:
-        return None
-
-    return payload.get("user") if payload.get("authenticated") else None
+    return siberian.current_user()
 
 
 def product_name():
     """A granted read of a table this module does not own. Audited by the core."""
     try:
-        payload = core_call("/database/v1/system/core.configuration/settings", DATABASE_TOKEN)
-        rows = {row["key"]: row["value"] for row in payload.get("rows", [])}
+        rows = {row["key"]: row["value"]
+                for row in siberian.granted_read("core.configuration", "settings")}
         return rows.get("product_name", "Pages")
     except Exception:
+        # A module that will not render because an optional read failed is worse
+        # than one that renders with a default name.
         return "Pages"
 
 
 # --- its own database -------------------------------------------------------
 
 def db():
-    domain = current_domain()
-    if domain not in _dsn_cache:
-        _dsn_cache[domain] = core_call("/database/v1/credentials", DATABASE_TOKEN)["url"]
+    """One pooled connection, shared by everything in this request.
 
-    connection = psycopg.connect(_dsn_cache[domain], autocommit=True)
-    ensure_schema(connection)
-    return connection
+    Nothing proxies this. The core handed over a DSN and got out of the way; the
+    SDK keeps one pool per domain so that staying out of the way does not mean a
+    fresh connection and an authentication round trip on every page view.
+
+    Held on the request context rather than handed out fresh, for two reasons.
+    A page here calls this several times, and it used to open a connection for
+    each. And a pooled connection has to be given back: the previous version
+    never closed one at all, which worked only because Python eventually
+    collected them, and against a pool would empty it instead.
+    """
+    if "cms_connection" not in g:
+        siberian.db.migrate()
+        # The context manager is kept so teardown can close it the way the
+        # `with` block it replaces would have.
+        g.cms_pooled = siberian.db.connection()
+        g.cms_connection = g.cms_pooled.__enter__()
+
+    return g.cms_connection
 
 
-def ensure_schema(connection):
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS pages (
-              id         serial PRIMARY KEY,
-              slug       text NOT NULL UNIQUE,
-              title      text NOT NULL,
-              position   integer NOT NULL DEFAULT 0,
-              published  boolean NOT NULL DEFAULT true,
-              created_at timestamptz NOT NULL DEFAULT now()
-            )
-            """
-        )
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS blocks (
-              id         serial PRIMARY KEY,
-              page_id    integer NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
-              kind       text NOT NULL,
-              position   integer NOT NULL DEFAULT 0,
-              data       jsonb NOT NULL DEFAULT '{}'::jsonb,
-              created_at timestamptz NOT NULL DEFAULT now()
-            )
-            """
-        )
-        # Ordering is what a page builder is for, so it is indexed rather than
-        # sorted in the application.
-        cursor.execute("CREATE INDEX IF NOT EXISTS blocks_page_position ON blocks (page_id, position)")
+@app.teardown_appcontext
+def return_connection(error):
+    """Give the connection back when the request ends, however it ends."""
+    pooled = g.pop("cms_pooled", None)
+    g.pop("cms_connection", None)
+    if pooled is None:
+        return
 
-        # Added after the first release. A column rather than a migration
-        # runner, because a module owning two tables does not need one.
-        cursor.execute("ALTER TABLE pages ADD COLUMN IF NOT EXISTS next_slug text")
-        cursor.execute("ALTER TABLE pages ADD COLUMN IF NOT EXISTS prev_slug text")
+    # The exception is passed on when there was one, so the pool rolls back
+    # rather than handing a connection mid-transaction to whoever asks next.
+    if error is None:
+        pooled.__exit__(None, None, None)
+    else:
+        pooled.__exit__(type(error), error, error.__traceback__)
 
 
 def slugify(value, fallback="page"):
@@ -894,13 +891,21 @@ def upload_media(slug, block_id):
 
         name = os.path.basename(uploaded.filename)[:120]
         path = f"blocks/{block_id}/{name}"
-        core_call(
-            f"/storage/v1/public/{path}",
-            STORAGE_TOKEN,
-            method="PUT",
-            body=uploaded.read(),
-            content_type=uploaded.mimetype or "application/octet-stream",
-        )
+        try:
+            siberian.storage.put(
+                path, uploaded.read(), space="public",
+                content_type=uploaded.mimetype or "application/octet-stream",
+            )
+        except Refused as refusal:
+            # A full quota is not a crash. It is a sentence somebody can act on,
+            # and the operator who can raise it is not the person looking at
+            # this page.
+            return render(
+                f"<h1>That file could not be stored</h1>"
+                f"<p class='muted'>{escape(str(refusal))}</p>"
+                f"<p><a class='button' href='{url_for('edit', slug=slug)}'>Back</a></p>",
+                title="Upload refused",
+            )
         stored.append(path)
         if single:
             break

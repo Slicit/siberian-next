@@ -17,105 +17,98 @@ import os
 import urllib.error
 import urllib.request
 
-import psycopg
-from flask import Flask, jsonify, redirect, request, url_for
+from flask import Flask, g, jsonify, redirect, request, url_for
 from markupsafe import escape
+
+from siberian import Module
 
 app = Flask(__name__)
 
-CORE = os.environ.get("SIBERIAN_CORE_URL", "http://core")
-DATABASE_TOKEN = os.environ.get("SIBERIAN_DATABASE_TOKEN", "")
-SESSION_COOKIE = "siberian_session"
-
 # Expo's push service. The token the app registers is an ExponentPushToken, and
 # this is the only thing that knows how to turn one into a delivery.
+#
+# Reached with urllib rather than through the SDK, and deliberately: the SDK
+# talks to the core, and Expo is a third party on the internet. A client that
+# blurred the two would make "who is this module talking to" a question about
+# reading the call site rather than the import.
 EXPO_ENDPOINT = os.environ.get("EXPO_PUSH_ENDPOINT", "https://exp.host/--/api/v2/push/send")
 EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN", "")
 
-_dsn_cache = {}
+# Applied once per domain rather than on every request, which is where these
+# statements used to run: inside the connection helper, as DDL, on every call.
+SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS devices (
+      id          serial PRIMARY KEY,
+      user_email  text NOT NULL,
+      token       text NOT NULL UNIQUE,
+      platform    text,
+      last_seen   timestamptz NOT NULL DEFAULT now(),
+      created_at  timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS notifications (
+      id           serial PRIMARY KEY,
+      user_email   text NOT NULL,
+      title        text NOT NULL,
+      body         text NOT NULL DEFAULT '',
+      data         jsonb NOT NULL DEFAULT '{}'::jsonb,
+      read_at      timestamptz,
+      archived_at  timestamptz,
+      delivery     jsonb NOT NULL DEFAULT '{}'::jsonb,
+      created_at   timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS notifications_for_person ON notifications (user_email, archived_at, created_at DESC)",
+]
+
+siberian = Module("example-push", schema=SCHEMA)
 
 
 # --- talking to the core ----------------------------------------------------
 
-def core_call(path, token, method="GET", body=None, content_type=None):
-    req = urllib.request.Request(f"{CORE}{path}", method=method, data=body)
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
-    req.add_header("X-Siberian-Domain", current_domain())
-    if content_type:
-        req.add_header("Content-Type", content_type)
-
-    try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            return json.loads(response.read() or b"{}")
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", "replace")[:300]
-        raise RuntimeError(f"{method} {path} -> {error.code}: {detail}") from error
-
-
 def current_domain():
-    return request.headers.get("X-Siberian-Domain") or request.host.split(":")[0]
+    return siberian.domain
 
 
 def current_user():
-    token = request.cookies.get(SESSION_COOKIE)
-    if not token:
-        return None
+    """Who is looking at this page.
 
-    req = urllib.request.Request(f"{CORE}/auth/internal/session")
-    req.add_header("X-Siberian-Session", token)
-    req.add_header("X-Siberian-Domain", current_domain())
-    try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            payload = json.loads(response.read() or b"{}")
-    except Exception:
-        return None
-
-    return payload.get("user") if payload.get("authenticated") else None
+    The module hands the cookie to Auth, which is the only service that can say
+    what it means. Cached for thirty seconds by the SDK, the same ceiling the
+    core services use.
+    """
+    return siberian.current_user()
 
 
 def db():
-    domain = current_domain()
-    if domain not in _dsn_cache:
-        _dsn_cache[domain] = core_call("/database/v1/credentials", DATABASE_TOKEN)["url"]
+    """One pooled connection, shared by everything in this request.
 
-    connection = psycopg.connect(_dsn_cache[domain], autocommit=True)
-    ensure_schema(connection)
-    return connection
+    Held on the request context rather than handed out fresh: a pooled
+    connection has to be given back, and the previous version never closed one
+    at all, which worked only because Python eventually collected them.
+    """
+    if "push_connection" not in g:
+        siberian.db.migrate()
+        g.push_pooled = siberian.db.connection()
+        g.push_connection = g.push_pooled.__enter__()
+
+    return g.push_connection
 
 
-def ensure_schema(connection):
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS devices (
-              id          serial PRIMARY KEY,
-              user_email  text NOT NULL,
-              token       text NOT NULL UNIQUE,
-              platform    text,
-              last_seen   timestamptz NOT NULL DEFAULT now(),
-              created_at  timestamptz NOT NULL DEFAULT now()
-            )
-            """
-        )
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS notifications (
-              id           serial PRIMARY KEY,
-              user_email   text NOT NULL,
-              title        text NOT NULL,
-              body         text NOT NULL DEFAULT '',
-              data         jsonb NOT NULL DEFAULT '{}'::jsonb,
-              read_at      timestamptz,
-              archived_at  timestamptz,
-              delivery     jsonb NOT NULL DEFAULT '{}'::jsonb,
-              created_at   timestamptz NOT NULL DEFAULT now()
-            )
-            """
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS notifications_for_person ON notifications (user_email, archived_at, created_at DESC)"
-        )
+@app.teardown_appcontext
+def return_connection(error):
+    """Give the connection back when the request ends, however it ends."""
+    pooled = g.pop("push_pooled", None)
+    g.pop("push_connection", None)
+    if pooled is None:
+        return
+
+    if error is None:
+        pooled.__exit__(None, None, None)
+    else:
+        pooled.__exit__(type(error), error, error.__traceback__)
 
 
 # --- sending ----------------------------------------------------------------

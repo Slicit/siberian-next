@@ -61,12 +61,31 @@ echo "   media URL: $(grep -oE 'https://[^"]*cms_shot.png' /tmp/cms_api | head -
 
 # The door decides the prefix. A URL built for the browser points at the product
 # shell when the phone asks, and every image in the app would be a 404.
-echo "6. that URL actually serves -> $(c -o /dev/null -w '%{http_code}' "$(grep -oE 'https://[^"]*cms_shot.png' /tmp/cms_api | head -1)")   (expect 200)"
+#
+# Followed, because the module no longer serves these itself: Storage answers
+# with a redirect to a signed URL and the object store sends the bytes. Checking
+# the first hop alone would report 302 and prove nothing, which is what this did
+# until the byte path changed underneath it.
+#
+# Asserted rather than printed. It printed "expect 200", got 302, and exited
+# zero, so the sweep stayed green while the line said otherwise, which is worse
+# than either being right or being red.
+media_serves() { # media_serves <json file>
+  url=$(grep -oE 'https://[^"]*cms_shot.png' "$1" | head -1)
+  [ -n "$url" ] || { echo "FAIL: no media URL in the payload"; exit 1; }
+  rm -f /tmp/cms_media
+  code=$(c -L -o /tmp/cms_media -w '%{http_code}' "$url")
+  echo "$code"
+  [ "$code" = "200" ] || { echo "   FAIL: the media URL answered $code"; exit 1; }
+  [ -s /tmp/cms_media ] || { echo "   FAIL: the media URL served nothing"; exit 1; }
+}
+
+echo "6. that URL actually serves -> $(media_serves /tmp/cms_api)   (expect 200, following the redirect)"
 
 echo "7. and through its own origin"
 c -o /tmp/cms_api2 "$MODULE/api/pages/$SLUG"
 echo "   media URL: $(grep -oE 'https://[^"]*cms_shot.png' /tmp/cms_api2 | head -1)"
-echo "   serves      -> $(c -o /dev/null -w '%{http_code}' "$(grep -oE 'https://[^"]*cms_shot.png' /tmp/cms_api2 | head -1)")   (expect 200)"
+echo "   serves      -> $(media_serves /tmp/cms_api2)   (expect 200)"
 
 echo
 echo "9. linking pages"

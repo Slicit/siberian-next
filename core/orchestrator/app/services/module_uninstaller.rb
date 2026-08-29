@@ -72,7 +72,26 @@ class ModuleUninstaller
   def remove_network
     return if @installed.network_name.blank?
 
+    # The Router is not the only thing attached. `RouteReconciler` also joins
+    # the module data cluster to every module network, so a module can reach
+    # Postgres directly, and nothing used to take it off again.
+    #
+    # A network with anything still attached cannot be removed, and the failure
+    # was swallowed by `attempt`, so every uninstall left one behind. That is
+    # invisible until Docker runs out of address pools, at which point no module
+    # can be installed at all and the error names subnets rather than uninstall.
+    detach_data_cluster
+
     attempt("remove network #{@installed.network_name}") { @driver.remove_network(@installed.network_name) }
+  end
+
+  def detach_data_cluster
+    container = ENV["SIBERIAN_MODULEDB_CONTAINER"].presence
+    return if container.nil?
+
+    attempt("detach the data cluster from #{@installed.network_name}") do
+      @driver.detach(container, network: @installed.network_name)
+    end
   end
 
   # Revoking a module's identity is not the same as destroying what it wrote.
