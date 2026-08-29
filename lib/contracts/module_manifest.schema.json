@@ -184,6 +184,7 @@
               "secure_storage",
               "haptics",
               "file_system",
+              "document_picker",
               "device_info",
               "app_tracking",
               "purchases",
