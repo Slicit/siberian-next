@@ -16,7 +16,9 @@ module Internal
     def claim
       Build.release_stale!
 
-      build = Build.claim_next!
+      # A worker says which lanes it handles. One that says nothing takes
+      # anything, so a builder from before lanes existed still works.
+      build = Build.claim_next!(lanes: requested_lanes)
       return head :no_content if build.nil?
 
       # The plan was fixed when the build was queued, so changing a capability
@@ -143,6 +145,14 @@ module Internal
     end
 
     private
+
+    # Comma separated, and empty means every lane rather than none. A worker
+    # that asks for nothing wants anything; a worker that asks for a lane
+    # nobody has heard of gets nothing, which is the safe way round.
+    def requested_lanes
+      named = params[:lanes].to_s.split(",").map(&:strip).reject(&:empty?)
+      named.empty? ? nil : named
+    end
 
     # Whether there is anything to store, without consuming the stream.
     # Content-Length is what the sender promised; a Rack input that reports a

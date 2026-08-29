@@ -30,8 +30,18 @@ class ShellTest < ActionDispatch::IntegrationTest
     "theme" => "midnight", "primary_color" => "#334455", "capabilities" => []
   }.freeze
 
-  def queue(builds: [], queued: 0, building: 0)
-    { "ok" => true, "queued" => queued, "building" => building, "builds" => builds }
+  # `queued` and `building` name the native lane, because that is the one the
+  # Builds section reports. The totals are kept alongside the breakdown the
+  # way the Mobile service sends them.
+  def queue(builds: [], queued: 0, building: 0, previews_queued: 0, previews_building: 0)
+    { "ok" => true,
+      "queued" => queued + previews_queued,
+      "building" => building + previews_building,
+      "lanes" => {
+        "native" => { "queued" => queued, "building" => building },
+        "preview" => { "queued" => previews_queued, "building" => previews_building }
+      },
+      "builds" => builds }
   end
 
   def a_build(state: "succeeded", platform: "web", **rest)

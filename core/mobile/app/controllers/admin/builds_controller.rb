@@ -18,13 +18,17 @@ module Admin
       builds = builds.where(domain: params[:domain]) if params[:domain].present?
 
       render json: {
-        # The shared queue, across every domain, and deliberately so even for a
-        # caller pinned to one: there is a single builder, the page already says
-        # so, and "two builds ahead of you" is only useful if it counts the ones
-        # that are actually ahead. A count carries no detail about whose they
-        # are.
+        # The shared queues, across every domain, and deliberately so even for
+        # a caller pinned to one: there is one worker per lane, the page says
+        # so, and "one build ahead of you" is only useful if it counts the
+        # ones actually ahead. A count carries no detail about whose they are.
+        #
+        # Kept alongside the per-lane breakdown rather than replaced by it,
+        # because a caller that only wants to know whether anything is
+        # happening should not have to know what a lane is.
         queued: Build.pending.count,
         building: Build.where(state: Build::BUILDING).count,
+        lanes: lane_report,
         builds: builds.limit(50).map { |build| serialize(build) }
       }
     end
@@ -64,7 +68,7 @@ module Admin
 
       build.update!(configuration: plan)
 
-      render json: serialize(build).merge(position: Build.pending.where("id <= ?", build.id).count), status: :accepted
+      render json: serialize(build).merge(position: position_of(build)), status: :accepted
     rescue ActiveRecord::RecordInvalid => e
       render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
     end
@@ -113,10 +117,24 @@ module Admin
       render json: { error: "no such build" }, status: :not_found
     end
 
-    # Where a waiting build sits in the shared queue. Answered for anybody
-    # waiting, because "queued" with no number is the kind of status that makes
-    # somebody press the button again.
-    def position_of(build) = Build.pending.where("id <= ?", build.id).count
+    # Where a waiting build sits in its own lane. Its own, not the whole
+    # queue: a preview waits behind previews and not behind the Android build
+    # running next to it, and a position counted across both would tell
+    # somebody they are third when they are next.
+    # What each lane is doing, so a page can say "an Android build is running"
+    # rather than "a build is running" when the thing somebody is waiting for
+    # is in the other lane and is next.
+    def lane_report
+      [Build::PREVIEW, Build::NATIVE].to_h do |lane|
+        in_lane = Build.in_lanes(lane)
+        [lane, { queued: in_lane.pending.count,
+                 building: in_lane.where(state: Build::BUILDING).count }]
+      end
+    end
+
+    def position_of(build)
+      Build.pending.in_lanes(build.lane).where("id <= ?", build.id).count
+    end
 
     def serialize(build)
       {
