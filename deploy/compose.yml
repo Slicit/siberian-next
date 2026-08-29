@@ -353,6 +353,9 @@ services:
       SIBERIAN_STORAGE_URL: http://storage:3000
       SIBERIAN_BUILDER_TOKEN: ${SIBERIAN_BUILDER_TOKEN:-builder_dev_only}
       BUILDER_POLL_INTERVAL: "${BUILDER_POLL_INTERVAL:-10}"
+      # Named rather than left as "everything", so that adding a lane does not
+      # silently give it to the container that takes twenty minutes a build.
+      BUILDER_LANES: native
       # Gradle and Metro both assume a home they can write to.
       HOME: /home/builder
     volumes:
@@ -383,6 +386,55 @@ services:
         limits:
           cpus: "${SIBERIAN_BUILDER_CPUS:-1.0}"
           memory: ${SIBERIAN_BUILDER_MEMORY:-3G}
+    depends_on:
+      mobile:
+        condition: service_started
+    networks: [core]
+
+
+  # The preview lane.
+  #
+  # Same image and same code as the builder above, told to take a different
+  # queue. A web export is about a minute and a Gradle build is twenty, and one
+  # queue for both meant somebody pressing "Rebuild preview" behind an Android
+  # build waited a third of an hour to look at a page. Long enough that they
+  # stop asking, which is the real cost.
+  #
+  # Its own volumes rather than the ones above, and not for isolation's sake:
+  # the worker sweeps every workspace it can see at startup, on the correct
+  # assumption that anything left belongs to a run that died. Two workers
+  # sharing a workspace means the second one starting deletes the first one's
+  # build out from under it.
+  mobile-builder-web:
+    restart: unless-stopped
+    build:
+      context: ..
+      dockerfile: core/mobile-builder/Dockerfile
+    environment:
+      SIBERIAN_MOBILE_URL: http://mobile:3000
+      SIBERIAN_STORAGE_URL: http://storage:3000
+      SIBERIAN_BUILDER_TOKEN: ${SIBERIAN_BUILDER_TOKEN:-builder_dev_only}
+      # Shorter than the native lane's. The whole point of this container is
+      # that somebody is watching, and ten seconds of polling is a tenth of the
+      # build they are waiting for.
+      BUILDER_POLL_INTERVAL: "${SIBERIAN_PREVIEW_POLL_INTERVAL:-3}"
+      BUILDER_LANES: preview
+      HOME: /home/builder
+    volumes:
+      - ../core/mobile-builder:/builder
+      - ../modules:/modules:ro
+      - preview_workspace:/workspace
+      - preview_cache:/home/builder
+    # Lower than the native lane deliberately. This container exists to be
+    # quick, not to be big: an Expo export is mostly Metro bundling, which does
+    # not use what it is given the way Gradle does. The number that matters is
+    # what is left for the product while both lanes are busy, and on a two core
+    # box that is the whole argument for keeping this one small.
+    deploy:
+      resources:
+        limits:
+          cpus: "${SIBERIAN_PREVIEW_CPUS:-0.75}"
+          memory: ${SIBERIAN_PREVIEW_MEMORY:-2G}
     depends_on:
       mobile:
         condition: service_started
@@ -497,6 +549,8 @@ volumes:
   # waits for.
   builder_workspace:
   builder_cache:
+  preview_workspace:
+  preview_cache:
   moduledb_data:
   configuration_data:
   garage_meta:

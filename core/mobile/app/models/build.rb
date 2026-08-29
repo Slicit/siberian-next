@@ -51,6 +51,33 @@ class Build < ApplicationRecord
   scope :unacknowledged, -> { terminal.where(acknowledged_at: nil) }
   scope :recent, -> { order(created_at: :desc) }
 
+  # Which worker takes a build.
+  #
+  # Derived from the platform rather than stored, because it is not a decision
+  # anybody makes: an Expo export is about a minute and a Gradle build is twenty,
+  # and one queue for both means the minute waits for the twenty. Somebody
+  # pressing "Rebuild preview" behind an Android build waited a third of an hour
+  # to look at a page, which is long enough that they stop asking.
+  #
+  # Two lanes, not two priorities. A priority queue with one worker still has
+  # the Android build holding the worker: the preview does not jump it, it waits
+  # for it to finish. Only a second worker fixes that.
+  PREVIEW = "preview"
+  NATIVE = "native"
+
+  LANES = { WEB => PREVIEW, ANDROID => NATIVE, IOS => NATIVE }.freeze
+
+  # An unknown platform is native, because native is the slow lane and putting
+  # something unknown in the fast one is how the fast one stops being fast.
+  def self.lane_for(platform) = LANES.fetch(platform.to_s, NATIVE)
+
+  def lane = Build.lane_for(platform)
+
+  scope :in_lanes, lambda { |lanes|
+    wanted = Array(lanes).map(&:to_s)
+    where(platform: LANES.select { |_platform, lane| wanted.include?(lane) }.keys)
+  }
+
   STATES.each { |value| define_method("#{value}?") { state == value } }
 
   def terminal? = TERMINAL.include?(state)
@@ -64,9 +91,14 @@ class Build < ApplicationRecord
   # Claims one build that is due, for one worker. SKIP LOCKED is the whole
   # trick: a second worker running this at the same moment steps over the
   # locked row rather than queueing behind it.
-  def self.claim_next!
+  # `lanes` is optional so that a worker which has not been told about lanes
+  # keeps taking anything, which is what makes rolling this out safe: the old
+  # container and the new one can both be running for a moment.
+  def self.claim_next!(lanes: nil)
     transaction do
-      build = pending
+      waiting = lanes ? pending.in_lanes(lanes) : pending
+
+      build = waiting
               .where(arel_table[:next_attempt_at].lteq(Time.current).or(arel_table[:next_attempt_at].eq(nil)))
               .order(:next_attempt_at, :id)
               .lock("FOR UPDATE SKIP LOCKED")

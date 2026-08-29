@@ -1,9 +1,10 @@
 // Claims one build at a time and does it.
 //
-// One worker, one queue. The claim query on the other side is already written
-// for more than one, so adding a second is a compose change rather than a
-// rewrite, but until somebody needs that this stays the simplest thing that
-// cannot lose a build.
+// One worker per lane. The claim query on the other side takes a lock with
+// SKIP LOCKED, so two workers running it at the same moment step over each
+// other rather than queueing, and BUILDER_LANES decides which queue each one
+// is looking at. A worker told nothing takes anything, which is what this was
+// before there were lanes.
 import { spawn } from "node:child_process";
 import { access, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -16,6 +17,15 @@ const TOKEN = process.env.SIBERIAN_BUILDER_TOKEN || "builder_dev_only";
 const POLL = Number(process.env.BUILDER_POLL_INTERVAL || 10) * 1000;
 const WORKSPACES = process.env.BUILDER_WORKSPACE || "/workspace";
 
+// Which queues this worker takes from. Empty means all of them, which is what
+// a single builder was and still is.
+//
+// The point of splitting is that a web export takes about a minute and a
+// Gradle build takes twenty, so one queue made the minute wait for the twenty.
+// Two workers, not two priorities: with one worker a priority queue still
+// leaves the preview waiting for the Android build to let go of it.
+const LANES = (process.env.BUILDER_LANES || "").split(",").map((lane) => lane.trim()).filter(Boolean);
+
 const authorized = (extra = {}) => ({ Authorization: `Bearer ${TOKEN}`, ...extra });
 
 // Installed dependencies, kept between builds and keyed by what was asked for.
@@ -27,7 +37,10 @@ const authorized = (extra = {}) => ({ Authorization: `Bearer ${TOKEN}`, ...extra
 const MODULE_CACHE = path.join(WORKSPACES, ".modules");
 
 async function claim() {
-  const response = await fetch(`${MOBILE}/internal/builds/claim`, {
+  const url = new URL(`${MOBILE}/internal/builds/claim`);
+  if (LANES.length > 0) url.searchParams.set("lanes", LANES.join(","));
+
+  const response = await fetch(url, {
     method: "POST",
     headers: authorized()
   });
