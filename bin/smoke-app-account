@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# What a person can do to their own app account: name, password, signing out
+# everywhere, and ending it.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-app-account.sh
