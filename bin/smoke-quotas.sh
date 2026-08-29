@@ -53,3 +53,20 @@ echo "11. recount                  -> $(q -X POST "$S/admin/quotas/recalculate" 
 echo "   $(head -c 200 /tmp/qb)"
 
 echo "12. put the default back     -> $(q -X PATCH "$S/admin/quotas" -H "$A" -H "Content-Type: application/json" -d "{\"default_bucket_quota_mb\":${WAS:-15}}")   (was ${WAS:-unknown} MB)"
+
+# Take the objects back out, and revoke the module.
+#
+# Every run registers a module named for the second it started and provisions a
+# bucket on the same domain, whose pool this smoke caps at 2 MB. Left behind,
+# each run ate into that pool until step 7 met the domain ceiling rather than
+# the bucket one and reported a refusal for the wrong reason: a check that
+# breaks the next run of itself.
+#
+# The bucket survives the module, deliberately, because Storage keeps data when
+# a module is revoked. So the objects go first and explicitly.
+for object in big-1 big-2 big-3 big-4; do
+  q -X DELETE "$S/v1/files/$object" -H "$T" -H "$D" >/dev/null
+done
+echo "13. objects removed          -> $(q "$S/v1/files" -H "$T" -H "$D"; grep -o '"objects":\[\]' /tmp/qb >/dev/null && echo "the space is empty" || echo "still holding: $(head -c 80 /tmp/qb)")"
+
+echo "14. module revoked           -> $(q -X DELETE "$S/admin/modules/$NAME" -H "$A")   (expect 204)"
