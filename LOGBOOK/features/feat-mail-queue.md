@@ -56,6 +56,37 @@ Out of scope for this feature:
 - **Why:** a message that will never send should stop consuming attempts and start being a visible problem. Jitter because a transport that just came back should not be hit by the whole backlog in the same second.
 - **Impact:** attempts are recorded individually, so "why did this take four hours" has an answer rather than a guess.
 
+
+### 2026-08-29: a message a dead worker was holding sat there for ten days
+
+Found by counting the queue rather than by anything reporting it. Five messages
+in `sending`, four of them for ten days, one of them a password reset from three
+hours earlier: somebody unable to get back into their account, with no retry, no
+dead state, and nothing anywhere saying a delivery had been dropped.
+
+A worker claims a message by moving it to `sending`. If it dies there the row is
+nobody's, and nothing can tell it apart from a delivery still in progress.
+
+`Build` learned this first and carries the same limit for the same reason. The
+difference between them is worth stating, because it is why this took longer to
+arrive: putting a build back is free, since a build has no side effect until its
+artifact is uploaded, and putting a message back may send it twice, because the
+worker could have died after the transport accepted it and before it said so.
+
+Retrying anyway is the right trade for a queue. A duplicate email is confusing; a
+reset link that was never sent and never reported is somebody locked out with
+nothing to look at. The retry is counted like any other, so a message that
+genuinely cannot be delivered still reaches `dead`.
+
+The reclaim runs at the top of the worker's own drain rather than in a nightly
+sweep, so recovery is minutes rather than the next morning, and a restarted
+worker is exactly the thing that should pick up what the dead one dropped. The
+first restart after this landed released all five.
+
+What it does not cover is a worker that is not running at all: nothing then
+calls the reclaim, and the messages stay in `sending` looking like work in
+progress. That is a condition for alerting to notice rather than for the worker
+to fix from inside itself.
 ## Outcome
 
 Shipped 2026-08-19. A message goes in, the worker takes it, the outcome waits to
