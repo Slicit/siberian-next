@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { access, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { assemble, applyAndroidSplashAnimation } from "./assemble.js";
 
 const MOBILE = process.env.SIBERIAN_MOBILE_URL || "http://mobile:3000";
@@ -210,7 +211,6 @@ async function report(id, outcome, body) {
   });
 }
 
-
 // Expo writes its asset references root-absolute: `/_expo/static/js/...`. That
 // is right for a site served from the root of a host, and wrong for this one.
 // The preview is served under `/mobile/:id/preview/`, so the browser asked the
@@ -260,6 +260,7 @@ async function relativiseExport(directory) {
 
   return `made asset paths relative in ${changed} page(s) of ${pages.length}, ${referenced.size} reference(s) checked`;
 }
+
 // The preview, file by file.
 //
 // A static export is a directory, and the builder holds no Storage credential,
@@ -366,7 +367,7 @@ async function exists(target) {
 // it, and the next build runs the code that is checked out.
 async function fingerprint() {
   const hash = createHash("sha256");
-  const here = path.dirname(new URL(import.meta.url).pathname);
+  const here = path.dirname(fileURLToPath(import.meta.url));
 
   for (const name of (await readdir(here)).sort()) {
     if (!name.endsWith(".js")) continue;
