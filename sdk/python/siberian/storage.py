@@ -19,6 +19,8 @@ memory. There are two better ways and this offers both:
 an image or read a manifest, genuinely needs the bytes.
 """
 
+import json
+
 from .errors import SiberianError
 
 SPACES = ("files", "tmp", "public")
@@ -82,6 +84,54 @@ class Storage:
             if getattr(error, "status", None) == 404:
                 return False
             raise
+
+    def upload_url(self, path, content_length, space="files",
+                   content_type=None, expires_in=None):
+        """An address to write one object to, so the bytes skip this process.
+
+        The other direction of `signed_url`. `put` sends the file through the
+        Storage service; this hands back a URL the browser, or whatever holds
+        the bytes, writes to directly.
+
+        `content_length` is what the quota is checked against, and is declared
+        rather than measured, which is exactly what the ordinary write already
+        does: it checks the Content-Length the client chose. Call `confirm`
+        afterwards so the accounting catches up with what actually arrived.
+
+        Returns the whole reply, because the caller needs the headers as well as
+        the URL: the content type is signed into the signature, so a PUT that
+        sends a different one is refused.
+        """
+        self._check_space(space)
+        payload = {"content_length": int(content_length)}
+        if content_type:
+            payload["content_type"] = content_type
+        if expires_in:
+            payload["expires_in"] = int(expires_in)
+
+        return self._core.call(
+            f"/storage/v1/uploads/{space}/{self._clean(path)}",
+            self._token,
+            method="POST",
+            body=json.dumps(payload).encode(),
+            content_type="application/json",
+        )
+
+    def confirm(self, path, space="files"):
+        """Tell Storage the direct write landed, so the quota catches up.
+
+        Skipping this does not lose the file. It leaves the counters behind
+        until something recounts, which the Backoffice does on request. Calling
+        it twice is harmless: it recounts rather than adds.
+        """
+        self._check_space(space)
+        return self._core.call(
+            f"/storage/v1/uploads/{space}/{self._clean(path)}/confirm",
+            self._token,
+            method="POST",
+            body=b"{}",
+            content_type="application/json",
+        )
 
     def signed_url(self, path, space="files", expires_in=None):
         """An address a browser can follow, for one object, for a while.

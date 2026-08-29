@@ -169,6 +169,28 @@ class StoredObjects
     )
   end
 
+  # An address the caller can write one object to, directly.
+  #
+  # The other half of the read path. Bytes coming in still travel through this
+  # service: a finished Android build is tens of megabytes that the builder
+  # hands to the Mobile service, which hands them here, which hands them to the
+  # object store. Streaming stopped that costing memory; it did not stop it
+  # costing three transfers of the same file.
+  #
+  # `content_type` is signed into the URL, so the object arrives with the type
+  # the caller declared rather than whatever the store guesses. That means the
+  # PUT must send exactly this Content-Type or the signature will not match,
+  # which is worth knowing before it is discovered.
+  def presigned_put_url(space, path, expires_in:, content_type: nil)
+    Aws::S3::Presigner.new(client: public_client).presigned_url(
+      :put_object,
+      bucket: @bucket.name,
+      key: @bucket.key_for(space, path),
+      expires_in: expires_in,
+      **(content_type ? { content_type: content_type } : {})
+    )
+  end
+
   # Whether there is a public address to sign against at all. Without one the
   # caller serves the bytes itself rather than handing out a URL to a host that
   # does not resolve.

@@ -65,6 +65,27 @@ return redirect(siberian.storage.signed_url("tasks/1/report.pdf"))
 url = siberian.storage.public_url("logos/header.png")
 ```
 
+### Large files, in
+
+`put` sends the bytes through the Storage service. For anything big, hand out an
+address instead and let whoever holds the bytes write to the object store
+directly:
+
+```python
+mint = siberian.storage.upload_url("builds/app.apk", content_length=size,
+                                   content_type="application/vnd.android.package-archive")
+
+# The caller PUTs to mint["url"] with exactly mint["headers"], because the
+# content type is signed into the signature.
+
+siberian.storage.confirm("builds/app.apk")   # so the quota catches up
+```
+
+The quota is checked against the length you declare, which is what the ordinary
+write already does with `Content-Length`. Skipping `confirm` does not lose the
+file; it leaves the counters behind until something recounts. Calling it twice
+is free, because it recounts rather than adds.
+
 ## What is deliberately not here
 
 - **An S3 client.** A module never holds an object store credential. Storage

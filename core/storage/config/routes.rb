@@ -15,6 +15,15 @@ Rails.application.routes.draw do
     # object store rather than fetching it and copying it out.
     get "urls/:space/*path", to: "files#signed_url", format: false
 
+    # Writing without the bytes coming through here. Mint an address, PUT to it
+    # directly, then confirm so the accounting catches up.
+    #
+    # The confirm route is declared first because `*path` is greedy: it would
+    # otherwise swallow the trailing `/confirm` and mint a URL for an object
+    # named after the confirmation.
+    post "uploads/:space/*path/confirm", to: "files#confirm_upload", format: false
+    post "uploads/:space/*path", to: "files#upload_url", format: false
+
     get ":space", to: "files#index"
     get ":space/*path", to: "files#show", format: false
     # The router has no head DSL method; it would collide with the controller

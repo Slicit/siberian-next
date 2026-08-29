@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Mint an address, write to the object store directly, confirm, and check the
+# quota still counted the bytes that never came through Storage.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-direct-upload.sh
