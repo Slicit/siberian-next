@@ -12,23 +12,36 @@ B="https://$DOMAIN"
 J=/tmp/jar.txt
 rm -f $J
 
+. "$(dirname "$0")/smoke-lib.sh"
+
 c() { curl -s --cacert "$CA" "$@"; }
 
 TOKEN=$(c -c $J $B/login | grep -o 'name="authenticity_token" value="[^"]*"' | head -1 | sed 's/.*value="//; s/"//')
-echo "1. got a CSRF token           -> ${#TOKEN} chars"
+echo "1. the sign-in form"
+present "it carries a CSRF token" "$TOKEN"
 
-STATUS=$(c -b $J -c $J -o /tmp/out -w "%{http_code}" -X POST \
+echo "2. signing in"
+expect "   POST /login               " "$(c -b $J -c $J -o /tmp/out -w '%{http_code}' -X POST \
   --data-urlencode "authenticity_token=$TOKEN" \
   --data-urlencode "email=$EMAIL" \
   --data-urlencode "password=$PASSWORD" \
-  $B/login)
-echo "2. POST /login                -> $STATUS   (expect 302)"
+  $B/login)" 302
 
-echo "3. cookie scope"
-grep siberian_session $J | awk '{print "   domain=" $1 "  secure=" $4 "  name=" $6}'
+echo "3. the cookie it left"
+COOKIE=$(grep siberian_session $J || true)
+present "a session cookie was set" "$COOKIE"
+# The leading dot is what carries it into <module>.apps.<domain>, and Secure is
+# what lets it travel at all. Both have broken before and neither is visible
+# from a page that happens to render.
+contains "scoped to every subdomain" "$COOKIE" ".$DOMAIN"
+contains "marked Secure" "$COOKIE" "TRUE"
 
-echo "4. the Backoffice takes the same cookie -> $(c -b $J -o /dev/null -w '%{http_code}' https://core.$DOMAIN/)   (expect 200)"
+echo "4. what the cookie opens"
+expect "   the Backoffice            " "$(c -b $J -o /dev/null -w '%{http_code}' https://core.$DOMAIN/)" 200
 
-echo "5. wrong password             -> $(c -b $J -o /dev/null -w '%{http_code}' -X POST \
+echo "5. and what it does not"
+expect "   a wrong password          " "$(c -b $J -o /dev/null -w '%{http_code}' -X POST \
   --data-urlencode "authenticity_token=$TOKEN" --data-urlencode "email=$EMAIL" \
-  --data-urlencode "password=nope" $B/login)   (expect 422)"
+  --data-urlencode "password=nope" $B/login)" 422
+
+finish "auth"
