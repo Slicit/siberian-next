@@ -96,6 +96,65 @@ class AppUserTest < ActiveSupport::TestCase
     refute @account.verified?
     assert AppSession.authenticate(token)
   end
+
+  # Ending an account, which the person whose account it is can now do.
+  test "erasing ends every session" do
+    _, phone = AppSession.start!(app_user: @account, device_id: "phone")
+    _, tablet = AppSession.start!(app_user: @account, device_id: "tablet")
+
+    @account.erase!
+
+    assert_nil AppSession.authenticate(phone)
+    assert_nil AppSession.authenticate(tablet)
+  end
+
+  test "erasing leaves nothing to sign in with" do
+    @account.erase!
+
+    refute @account.reload.authenticate("long-enough-1")
+    refute @account.active
+    assert @account.deleted?
+  end
+
+  # The property this whole shape exists for. Every module keys its rows by
+  # email, so freeing the address would hand the next person to claim it the
+  # previous one's tasks and notes.
+  test "the address stays claimed, so it cannot be handed to somebody else" do
+    @account.erase!
+
+    successor = AppUser.new(domain: "one.test", email: "rider@example.test",
+                            password: "somebody-else-2")
+
+    refute successor.valid?,
+           "an address that has been used cannot be recycled while modules key by it"
+  end
+
+  test "an erased account is not active anywhere that matters" do
+    @account.erase!
+
+    assert_nil AppUser.on("one.test").active.find_by(email: "rider@example.test")
+  end
+
+  test "a live reset link does not survive the account" do
+    _, token = AppPasswordReset.start!(@account)
+
+    @account.erase!
+
+    reset, reason = AppPasswordReset.claim(token)
+
+    assert_nil reset
+    refute_equal :ok, reason,
+                 "a link in a mailbox must not outlive the account it opens"
+  end
+
+  test "erasing forgets the name and the verification" do
+    @account.update!(name: "Rider", verified_at: Time.current)
+
+    @account.erase!
+
+    assert_nil @account.reload.name
+    refute @account.verified?
+  end
   test "the identity carries the domain, because the same address exists elsewhere" do
     assert_equal "one.test", @account.to_identity[:domain]
   end
