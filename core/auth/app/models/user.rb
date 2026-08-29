@@ -4,6 +4,10 @@
 # and every module see the same user, which is the point of shipping auth in the
 # core rather than letting every module invent it.
 class User < ApplicationRecord
+  include StableSubject
+
+  subject_prefix "cu"
+
   has_secure_password
 
   has_many :sessions, dependent: :destroy
@@ -74,6 +78,8 @@ class User < ApplicationRecord
     permissions ||= resolved_permissions
 
     {
+      # The stable name a module keys its rows by. See StableSubject.
+      subject: subject,
       id: id,
       email: email,
       name: display_name,

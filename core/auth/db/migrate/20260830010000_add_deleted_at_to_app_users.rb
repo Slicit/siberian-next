@@ -16,10 +16,12 @@
 # So the row stays and keeps its address, which keeps it claimed. What goes is
 # the ability to sign in, every session, and the password.
 #
-# The durable fix is not here: modules should key by the stable id the identity
-# already carries rather than by an address that can change hands. That is a
-# change to every module and to the contract, and until it happens this is the
-# safe shape.
+# The durable fix landed in AddSubjectToIdentities: modules key by the subject
+# the core issues rather than by an address. This is still needed, for a
+# smaller reason. Reads are by subject, so a reused address shows the new
+# person nothing of the old one; what is unsafe is each module's backfill,
+# which finds its own old rows by address and would hand them to whoever took
+# it next. The address can be freed once no module is still running one.
 class AddDeletedAtToAppUsers < ActiveRecord::Migration[8.1]
   def change
     add_column :app_users, :deleted_at, :datetime

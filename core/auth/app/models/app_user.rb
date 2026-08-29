@@ -14,6 +14,10 @@ require "digest"
 # the one place in the system where that is true, because everywhere else the
 # tenant is a column on data rather than on identity.
 class AppUser < ApplicationRecord
+  include StableSubject
+
+  subject_prefix "au"
+
   has_secure_password
 
   has_many :app_sessions, dependent: :destroy
@@ -137,6 +141,11 @@ class AppUser < ApplicationRecord
     permissions = permission_set
 
     {
+      # The stable name. `id` is kept because callers ask for it, but a module
+      # keys its rows by this: an address is how somebody signs in, not who
+      # they are, and the two id sequences overlap between operators and app
+      # users.
+      subject: subject,
       id: id,
       email: email,
       name: display_name,

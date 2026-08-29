@@ -12,6 +12,7 @@ happened". Delete is "this never needs to exist again", and only that one loses
 anything.
 """
 
+import threading
 import json
 import os
 import urllib.error
@@ -61,7 +62,32 @@ SCHEMA = [
       created_at   timestamptz NOT NULL DEFAULT now()
     )
     """,
-    "CREATE INDEX IF NOT EXISTS notifications_for_person ON notifications (user_email, archived_at, created_at DESC)",
+    # The stable name the core hands us, added after the first release.
+    #
+    # These tables were keyed by email address, which is how somebody signs in
+    # rather than who they are. A device token registered under an address that
+    # later changed hands would have pushed one person's notifications to
+    # another person's phone, which is a worse failure here than in a module
+    # that only shows things on a page.
+    #
+    # Nullable, because rows written before this existed have no subject until
+    # their owner next visits. See claim_rows.
+    "ALTER TABLE devices ADD COLUMN IF NOT EXISTS user_subject text",
+    "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS user_subject text",
+    "CREATE INDEX IF NOT EXISTS notifications_for_subject ON notifications (user_subject, archived_at, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS devices_for_subject ON devices (user_subject)",
+    # Only for the backfill, which runs once per person and never again.
+    "CREATE INDEX IF NOT EXISTS devices_by_old_key ON devices (user_email) WHERE user_subject IS NULL",
+    "CREATE INDEX IF NOT EXISTS notifications_by_old_key ON notifications (user_email) WHERE user_subject IS NULL",
+    # The address stops being required, because new rows do not carry one.
+    #
+    # Keeping a copy of everybody's email address in every module database is
+    # a cost with no remaining benefit: the core owns the mapping, and a
+    # module that never stores an address cannot leak one or be asked to
+    # forget one. What is left of this column is the old rows the backfill
+    # still needs to find, and it can be dropped once there are none.
+    "ALTER TABLE devices ALTER COLUMN user_email DROP NOT NULL",
+    "ALTER TABLE notifications ALTER COLUMN user_email DROP NOT NULL",
 ]
 
 siberian = Module("example-push", schema=SCHEMA)
@@ -80,7 +106,51 @@ def current_user():
     what it means. Cached for thirty seconds by the SDK, the same ceiling the
     core services use.
     """
-    return siberian.current_user()
+    user = siberian.current_user()
+
+    # The one place every handler passes through before it can query for
+    # somebody, which is why the backfill hangs off it rather than off each
+    # place this module opens a connection.
+    if user:
+        claim_rows(user)
+
+    return user
+
+
+
+# Rows written before this module knew about subjects, attached to the person
+# they belong to.
+#
+# Done on a visit rather than in a migration because a module cannot ask the
+# core for the subject behind an address, and should not be able to: that is a
+# lookup from an address to a person, which a module has no business doing. When
+# somebody visits, this module is holding both halves and the join is free.
+#
+# Once per process per person, because the statement is a no-op after the first
+# time and a write per page view for a table that will never need it again is
+# the kind of cost nobody goes looking for.
+_claimed = set()
+_claimed_lock = threading.Lock()
+
+
+def claim_rows(user):
+    key = (user["subject"], user["email"])
+
+    with _claimed_lock:
+        if key in _claimed:
+            return
+
+    with db() as connection:
+        with connection.cursor() as cursor:
+            for table in ("devices", "notifications"):
+                cursor.execute(
+                    f"UPDATE {table} SET user_subject = %s "
+                    "WHERE user_email = %s AND user_subject IS NULL",
+                    (user["subject"], user["email"]),
+                )
+
+    with _claimed_lock:
+        _claimed.add(key)
 
 
 def db():
@@ -114,9 +184,9 @@ def return_connection(error):
 
 # --- sending ----------------------------------------------------------------
 
-def tokens_for(connection, email):
+def tokens_for(connection, subject):
     with connection.cursor() as cursor:
-        cursor.execute("SELECT token FROM devices WHERE user_email = %s", (email,))
+        cursor.execute("SELECT token FROM devices WHERE user_subject = %s", (subject,))
         return [row[0] for row in cursor.fetchall()]
 
 
@@ -157,13 +227,13 @@ def push(tokens, title, body, data):
     return {"sent": len(accepted), "detail": "; ".join(filter(None, refused)) or "accepted by the push service"}
 
 
-def deliver(connection, email, title, body, data=None):
-    outcome = push(tokens_for(connection, email), title, body, data or {})
+def deliver(connection, subject, title, body, data=None):
+    outcome = push(tokens_for(connection, subject), title, body, data or {})
 
     with connection.cursor() as cursor:
         cursor.execute(
-            "INSERT INTO notifications (user_email, title, body, data, delivery) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (email, title, body, json.dumps(data or {}), json.dumps(outcome)),
+            "INSERT INTO notifications (user_subject, title, body, data, delivery) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (subject, title, body, json.dumps(data or {}), json.dumps(outcome)),
         )
         identifier = cursor.fetchone()[0]
 
@@ -183,14 +253,14 @@ def serialise(row):
     }
 
 
-def notifications_for(connection, email, archived=False):
+def notifications_for(connection, subject, archived=False):
     clause = "archived_at IS NOT NULL" if archived else "archived_at IS NULL"
     with connection.cursor() as cursor:
         cursor.execute(
             f"""SELECT id, title, body, data, read_at, archived_at, created_at, delivery
-                FROM notifications WHERE user_email = %s AND {clause}
+                FROM notifications WHERE user_subject = %s AND {clause}
                 ORDER BY created_at DESC, id DESC LIMIT 200""",
-            (email,),
+            (subject,),
         )
         return [serialise(row) for row in cursor.fetchall()]
 
@@ -223,11 +293,11 @@ def register_device():
         # One row per token, and the person on it can change: a shared phone
         # signed into a second account should reach the second account.
         cursor.execute(
-            """INSERT INTO devices (user_email, token, platform) VALUES (%s, %s, %s)
-               ON CONFLICT (token) DO UPDATE SET user_email = EXCLUDED.user_email,
+            """INSERT INTO devices (user_subject, token, platform) VALUES (%s, %s, %s)
+               ON CONFLICT (token) DO UPDATE SET user_subject = EXCLUDED.user_subject,
                                                  platform = EXCLUDED.platform,
                                                  last_seen = now()""",
-            (user["email"], token, (payload.get("platform") or "")[:20]),
+            (user["subject"], token, (payload.get("platform") or "")[:20]),
         )
 
     return jsonify({"registered": True})
@@ -244,15 +314,15 @@ def api_notifications():
 
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT count(*) FROM notifications WHERE user_email = %s AND archived_at IS NULL AND read_at IS NULL",
-            (user["email"],),
+            "SELECT count(*) FROM notifications WHERE user_subject = %s AND archived_at IS NULL AND read_at IS NULL",
+            (user["subject"],),
         )
         unread = cursor.fetchone()[0]
 
     return jsonify({
-        "notifications": notifications_for(connection, user["email"], archived=archived),
+        "notifications": notifications_for(connection, user["subject"], archived=archived),
         "unread": unread,
-        "registered_devices": len(tokens_for(connection, user["email"])),
+        "registered_devices": len(tokens_for(connection, user["subject"])),
     })
 
 
@@ -269,7 +339,7 @@ def api_send():
         return jsonify({"error": "a notification needs a title"}), 422
 
     connection = db()
-    identifier, outcome = deliver(connection, user["email"], title, (payload.get("body") or "").strip()[:1000])
+    identifier, outcome = deliver(connection, user["subject"], title, (payload.get("body") or "").strip()[:1000])
 
     return jsonify({"id": identifier, "delivery": outcome})
 
@@ -282,8 +352,8 @@ def act_on(identifier, column, value):
     connection = db()
     with connection.cursor() as cursor:
         cursor.execute(
-            f"UPDATE notifications SET {column} = {value} WHERE id = %s AND user_email = %s",
-            (identifier, user["email"]),
+            f"UPDATE notifications SET {column} = {value} WHERE id = %s AND user_subject = %s",
+            (identifier, user["subject"]),
         )
         changed = cursor.rowcount
 
@@ -320,7 +390,7 @@ def api_delete(identifier):
 
     connection = db()
     with connection.cursor() as cursor:
-        cursor.execute("DELETE FROM notifications WHERE id = %s AND user_email = %s", (identifier, user["email"]))
+        cursor.execute("DELETE FROM notifications WHERE id = %s AND user_subject = %s", (identifier, user["subject"]))
         changed = cursor.rowcount
 
     return jsonify({"deleted": changed == 1}), (200 if changed == 1 else 404)
@@ -392,8 +462,8 @@ def index():
 
     archived = request.args.get("state") == "archived"
     connection = db()
-    notes = notifications_for(connection, user["email"], archived=archived)
-    devices = len(tokens_for(connection, user["email"]))
+    notes = notifications_for(connection, user["subject"], archived=archived)
+    devices = len(tokens_for(connection, user["subject"]))
 
     drawn = "".join(note_html(note, archived) for note in notes)
     if not drawn:
@@ -470,7 +540,7 @@ def send():
         return redirect(url_for("index"))
 
     connection = db()
-    deliver(connection, user["email"], title, (request.form.get("body") or "").strip()[:1000])
+    deliver(connection, user["subject"], title, (request.form.get("body") or "").strip()[:1000])
 
     return redirect(url_for("index"))
 
@@ -483,8 +553,8 @@ def web_action(identifier, column, value):
     connection = db()
     with connection.cursor() as cursor:
         cursor.execute(
-            f"UPDATE notifications SET {column} = {value} WHERE id = %s AND user_email = %s",
-            (identifier, user["email"]),
+            f"UPDATE notifications SET {column} = {value} WHERE id = %s AND user_subject = %s",
+            (identifier, user["subject"]),
         )
 
     return redirect(request.referrer or url_for("index"))
@@ -519,7 +589,7 @@ def web_delete(identifier):
 
     connection = db()
     with connection.cursor() as cursor:
-        cursor.execute("DELETE FROM notifications WHERE id = %s AND user_email = %s", (identifier, user["email"]))
+        cursor.execute("DELETE FROM notifications WHERE id = %s AND user_subject = %s", (identifier, user["subject"]))
 
     return redirect(request.referrer or url_for("index"))
 

@@ -158,7 +158,54 @@ function db(): PDO
         )
     SQL);
 
+    // The stable name the core hands us, added after the first release.
+    //
+    // Notes used to be keyed by email address, which is how somebody signs in
+    // rather than who they are. The core could not let anybody end an account
+    // and free the address, because the next person to claim it would open
+    // this module and find the previous person's notes; and changing an
+    // address would have orphaned every note with nothing reporting it.
+    //
+    // Nullable, because notes written before this existed have no subject
+    // until their owner next visits. See claimRows.
+    $pdo->exec('ALTER TABLE notes ADD COLUMN IF NOT EXISTS user_subject text');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS notes_for_person ON notes (user_subject, updated_at DESC)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS notes_by_old_key ON notes (user_email) WHERE user_subject IS NULL');
+    // The address stops being required, because new notes do not carry one.
+    // Keeping a copy of everybody's address in every module database is a cost
+    // with no remaining benefit: the core owns the mapping, and a module that
+    // never stores an address cannot leak one or be asked to forget one.
+    $pdo->exec('ALTER TABLE notes ALTER COLUMN user_email DROP NOT NULL');
+
     return $pdo;
+}
+
+
+/**
+ * Notes written before this module knew about subjects, attached to the person
+ * they belong to.
+ *
+ * Done on a visit rather than as a migration because a module cannot ask the
+ * core for the subject behind an address, and should not be able to: that is a
+ * lookup from an address to a person, which a module has no business doing.
+ * When somebody visits, this module holds both halves and the join is free.
+ *
+ * PHP starts a fresh process per request, so there is no set to remember this
+ * in the way the Python modules do. The partial index makes the statement cheap
+ * enough that it does not need one: after the first visit it matches nothing.
+ */
+function claimRows(PDO $pdo, array $user): void
+{
+    $statement = $pdo->prepare(
+        'UPDATE notes SET user_subject = ? WHERE user_email = ? AND user_subject IS NULL'
+    );
+    $statement->execute([$user['subject'], $user['email']]);
+
+    // Closed explicitly. A prepared statement left open on a pgsql connection
+    // makes the next one on the same connection return nothing from its
+    // RETURNING clause, which showed up as a note that was created and then
+    // redirected to /notes/ with no id: created successfully, and lost.
+    $statement->closeCursor();
 }
 
 // ---------------------------------------------------------------- rendering
@@ -414,6 +461,7 @@ $brand = $settings['brand_name'] ?? 'the product';
 
 try {
     $pdo = db();
+    claimRows($pdo, $user);
 } catch (Throwable $error) {
     page('<h1>Storage unavailable</h1><p class="muted">' . e($error->getMessage()) . '</p>');
     exit;
@@ -425,8 +473,8 @@ if ($path === '/notes' && $method === 'POST') {
     $body = (string) ($_POST['body'] ?? '');
 
     if ($title !== '') {
-        $statement = $pdo->prepare('INSERT INTO notes (user_email, title, body) VALUES (?, ?, ?) RETURNING id');
-        $statement->execute([$user['email'], $title, $body]);
+        $statement = $pdo->prepare('INSERT INTO notes (user_subject, title, body) VALUES (?, ?, ?) RETURNING id');
+        $statement->execute([$user['subject'], $title, $body]);
         redirect('/notes/' . $statement->fetch()['id']);
     }
     redirect('/');
@@ -438,27 +486,27 @@ if (preg_match('#^/notes/(\d+)/update$#', $path, $matches) && $method === 'POST'
     $body = (string) ($_POST['body'] ?? '');
 
     if ($title !== '') {
-        // user_email in the WHERE clause, not only in the INSERT. One tenant's
+        // user_subject in the WHERE clause, not only in the INSERT. One tenant's
         // database still holds several people.
         $statement = $pdo->prepare(
-            'UPDATE notes SET title = ?, body = ?, updated_at = now() WHERE id = ? AND user_email = ?'
+            'UPDATE notes SET title = ?, body = ?, updated_at = now() WHERE id = ? AND user_subject = ?'
         );
-        $statement->execute([$title, $body, (int) $matches[1], $user['email']]);
+        $statement->execute([$title, $body, (int) $matches[1], $user['subject']]);
     }
     redirect('/notes/' . $matches[1]);
 }
 
 // Delete -------------------------------------------------------------------
 if (preg_match('#^/notes/(\d+)/delete$#', $path, $matches) && $method === 'POST') {
-    $statement = $pdo->prepare('DELETE FROM notes WHERE id = ? AND user_email = ?');
-    $statement->execute([(int) $matches[1], $user['email']]);
+    $statement = $pdo->prepare('DELETE FROM notes WHERE id = ? AND user_subject = ?');
+    $statement->execute([(int) $matches[1], $user['subject']]);
     redirect('/');
 }
 
 // Confirm deletion ---------------------------------------------------------
 if (preg_match('#^/notes/(\d+)/delete$#', $path, $matches) && $method === 'GET') {
-    $statement = $pdo->prepare('SELECT * FROM notes WHERE id = ? AND user_email = ?');
-    $statement->execute([(int) $matches[1], $user['email']]);
+    $statement = $pdo->prepare('SELECT * FROM notes WHERE id = ? AND user_subject = ?');
+    $statement->execute([(int) $matches[1], $user['subject']]);
     $note = $statement->fetch();
 
     if (!$note) {
@@ -479,8 +527,8 @@ if (preg_match('#^/notes/(\d+)/delete$#', $path, $matches) && $method === 'GET')
 
 // Edit ---------------------------------------------------------------------
 if (preg_match('#^/notes/(\d+)/edit$#', $path, $matches)) {
-    $statement = $pdo->prepare('SELECT * FROM notes WHERE id = ? AND user_email = ?');
-    $statement->execute([(int) $matches[1], $user['email']]);
+    $statement = $pdo->prepare('SELECT * FROM notes WHERE id = ? AND user_subject = ?');
+    $statement->execute([(int) $matches[1], $user['subject']]);
     $note = $statement->fetch();
 
     if (!$note) {
@@ -504,8 +552,8 @@ if (preg_match('#^/notes/(\d+)/edit$#', $path, $matches)) {
 
 // Show ---------------------------------------------------------------------
 if (preg_match('#^/notes/(\d+)$#', $path, $matches)) {
-    $statement = $pdo->prepare('SELECT * FROM notes WHERE id = ? AND user_email = ?');
-    $statement->execute([(int) $matches[1], $user['email']]);
+    $statement = $pdo->prepare('SELECT * FROM notes WHERE id = ? AND user_subject = ?');
+    $statement->execute([(int) $matches[1], $user['subject']]);
     $note = $statement->fetch();
 
     if (!$note) {
@@ -527,8 +575,8 @@ if (preg_match('#^/notes/(\d+)$#', $path, $matches)) {
 }
 
 // List ---------------------------------------------------------------------
-$statement = $pdo->prepare('SELECT * FROM notes WHERE user_email = ? ORDER BY updated_at DESC');
-$statement->execute([$user['email']]);
+$statement = $pdo->prepare('SELECT * FROM notes WHERE user_subject = ? ORDER BY updated_at DESC');
+$statement->execute([$user['subject']]);
 $notes = $statement->fetchAll();
 
 $items = '';

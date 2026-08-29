@@ -37,6 +37,21 @@ class Identity:
         self.permissions = list(self._payload.get("permissions") or [])
 
     @property
+    def subject(self):
+        """The stable name for this person, for keying rows by.
+
+        Not the email address. An address is how somebody signs in and can
+        change hands; this cannot. A module that keys its tables by email
+        orphans everything somebody made if they ever change it, and hands it
+        to the next person if the address is ever reused.
+
+        Not the id either: operators and app users are numbered separately by
+        the core, so id 7 is two different people. The prefix on this says
+        which kind it is and makes the two impossible to confuse.
+        """
+        return self.user.get("subject")
+
+    @property
     def email(self):
         return self.user.get("email")
 
