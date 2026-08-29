@@ -342,11 +342,6 @@ services:
   # It holds no engine socket and no admin token. It claims one build, receives
   # the plan for that build, and can ask this service nothing else.
   mobile-builder:
-    # Both lanes are the same image, named so compose builds it once and the
-    # second service reuses the tag. Two builds of a Dockerfile that unpacks
-    # the Android SDK is several gigabytes of disk for two copies of the same
-    # thing, on a box that has run out of it before.
-    image: siberian-mobile-builder:local
     # The box is a virtual machine on a host that can go down. Without this
     # nothing comes back, and the stack stays off until somebody notices.
     restart: unless-stopped
@@ -411,11 +406,14 @@ services:
   # sharing a workspace means the second one starting deletes the first one's
   # build out from under it.
   mobile-builder-web:
-    image: siberian-mobile-builder:local
+    # The image the native lane builds, run a second time. No build section on
+    # purpose: giving this one a tag of its own makes the daemon extract the
+    # whole Android SDK again for a second copy of identical layers, which
+    # filled the disk the first time it was tried. Compose builds every service
+    # that has a build section before it starts anything, so the image is there
+    # by the time this needs it.
+    image: siberian-mobile-builder
     restart: unless-stopped
-    build:
-      context: ..
-      dockerfile: core/mobile-builder/Dockerfile
     environment:
       SIBERIAN_MOBILE_URL: http://mobile:3000
       SIBERIAN_STORAGE_URL: http://storage:3000
