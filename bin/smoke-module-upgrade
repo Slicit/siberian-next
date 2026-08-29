@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Upgrading a module: the data survives, a same-version call says so, and a
+# version that does not come up leaves the working one running.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-module-upgrade.sh
