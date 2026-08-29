@@ -289,4 +289,21 @@ class AlertScanTest < ActiveSupport::TestCase
     assert_equal 3, AlertCondition.find_by(key: "disk.low").occurrences,
                  "the fourth time this week is a different sentence from this is happening"
   end
+
+  # The same bug as the opening side, found the same way: the closed key had no
+  # occurrence in it, so "disk.low recovered" was one string forever and only
+  # the first recovery in the life of the system was ever sent.
+  test "a condition recovering twice is reported twice" do
+    post = Post.new
+
+    2.times do
+      2.times { scan(free: 100, post: post).call }
+      scan(free: 50_000, post: post).call
+    end
+
+    resolutions = post.sent.select { |m| m[:text_body].include?("Resolved") }
+    assert_equal 2, resolutions.length
+    assert_equal 2, resolutions.map { |m| m[:idempotency_key] }.uniq.length,
+                 "the second recovery must not be deduplicated into the first"
+  end
 end

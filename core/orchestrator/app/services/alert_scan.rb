@@ -66,14 +66,14 @@ class AlertScan
     conditions.each do |key, detail|
       case AlertCondition.record(key, detail)
       when :opened then opened << AlertCondition.find_by(key: key)
-      when :closed then closed << key
+      when :closed then closed << AlertCondition.find_by(key: key)
       end
     end
 
     notified = false
     notified = announce(opened, closed) if notify && (opened.any? || closed.any?)
 
-    Result.new(opened: opened.map(&:key), closed: closed,
+    Result.new(opened: opened.map(&:key), closed: closed.map(&:key),
                firing: AlertCondition.firing.ordered.pluck(:key), notified: notified)
   end
 
@@ -208,7 +208,8 @@ class AlertScan
       # Worth sending. An alert with no end is one somebody has to go and check
       # by hand to find out whether it is still true.
       body << "Resolved:\n\n"
-      closed.each { |key| body << "  #{key}\n" }
+      closed.each { |condition| body << "  #{condition.key}
+" }
       body << "\n"
     end
 
@@ -231,7 +232,11 @@ class AlertScan
     # so a retry inside one is still deduplicated and a recurrence is not. A
     # timestamp was tried first and collided: two firings inside one second
     # share a second.
-    occurrence = opened.map { |c| "#{c.key}##{c.occurrences}" } + closed.map { |k| "clear:#{k}" }
+    # The occurrence number is on both sides. Without it on the closed side, the
+    # key for "disk.low recovered" was the same string every time, so only the
+    # first recovery in the life of the system was ever sent.
+    occurrence = opened.map { |c| "#{c.key}##{c.occurrences}" } +
+                 closed.map { |c| "clear:#{c.key}##{c.occurrences}" }
     stamp = Digest::SHA256.hexdigest(occurrence.sort.join("|"))[0, 16]
 
     recipients.each do |address|
