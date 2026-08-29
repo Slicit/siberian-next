@@ -25,12 +25,17 @@ class Message < ApplicationRecord
   BASE_BACKOFF = 60
   MAX_BACKOFF = 6 * 60 * 60
 
-  belongs_to :module_registration
+  # A message belongs to a sender, and a sender is either a module or a named
+  # core service. Optional here and enforced by a check constraint in the
+  # database, which is where "exactly one of these two" belongs: a message with
+  # no sender has nothing to be isolated by.
+  belongs_to :module_registration, optional: true
   has_many :delivery_attempts, dependent: :destroy
 
   validates :to, :subject, :domain, presence: true
   validates :state, inclusion: { in: STATES }
   validate :has_a_body
+  validate :has_exactly_one_sender
 
   scope :terminal, -> { where(state: TERMINAL) }
   scope :unacknowledged, -> { terminal.where(acknowledged_at: nil) }
@@ -149,9 +154,21 @@ class Message < ApplicationRecord
       text_body: text_body, html_body: html_body,
       headers: headers || {},
       domain: domain,
-      module_name: module_registration.module_name
+      # A transport is told who sent it, not which of the two kinds of sender
+      # that was. Kept as `module_name` because a transport module already
+      # reads that field, and renaming it to express a distinction no
+      # transport acts on would break every one that exists.
+      module_name: sender_name
     }
   end
+
+  # Who sent this, whichever kind of sender it was. One accessor, so nothing
+  # downstream has to branch.
+  def sender_name
+    core_sender.presence || module_registration&.module_name
+  end
+
+  def from_core? = core_sender.present?
 
   def summary
     {
@@ -188,5 +205,13 @@ class Message < ApplicationRecord
     return if text_body.present? || html_body.present?
 
     errors.add(:base, "a message needs a text_body or an html_body")
+  end
+
+  # The database says this too. Here as well, so a caller gets an error message
+  # rather than a constraint violation, which reads as the Mailer being broken.
+  def has_exactly_one_sender
+    return if module_registration_id.present? ^ core_sender.present?
+
+    errors.add(:base, "a message is sent by exactly one of a module or a core service")
   end
 end

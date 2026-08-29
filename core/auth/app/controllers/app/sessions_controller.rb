@@ -46,16 +46,32 @@ module App
 
     # POST /-/auth/sign-in
     def create
-      account = AppUser.on(current_domain).find_by(email: params[:email].to_s.strip.downcase)
+      email = params[:email].to_s.strip.downcase
+
+      # Before the password is checked, not after. bcrypt is deliberately slow,
+      # which makes an unthrottled sign-in a way to spend this box's CPU as well
+      # as a way to guess a password.
+      if AuthAttempt.exhausted?(kind: AuthAttempt::SIGN_IN, identifier: email,
+                                ip_address: request.remote_ip)
+        return render json: { error: "too many attempts, try again later" },
+                      status: :too_many_requests
+      end
+
+      account = AppUser.on(current_domain).find_by(email: email)
 
       # One message for both failures, and for a deactivated account. Telling a
       # caller which half was wrong turns a password guess into a way to find
       # out who has an account on this domain.
       unless account&.active? && account.authenticate(params[:password])
+        AuthAttempt.record!(kind: AuthAttempt::SIGN_IN, identifier: email,
+                            domain: current_domain, ip_address: request.remote_ip)
         return render json: { error: "that email and password do not match" },
                       status: :unauthorized
       end
 
+      # Cleared on success, so somebody who mistyped three times and then got it
+      # right is not most of the way to a lockout.
+      AuthAttempt.forget!(kind: AuthAttempt::SIGN_IN, identifier: email)
       issue(account)
     end
 

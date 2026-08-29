@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_19_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -33,6 +33,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_190000) do
     t.integer "attempts", default: 0, null: false
     t.string "bcc"
     t.string "cc"
+    t.string "core_sender"
     t.datetime "created_at", null: false
     t.string "domain", null: false
     t.string "from"
@@ -41,7 +42,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_190000) do
     t.string "idempotency_key"
     t.text "last_error"
     t.integer "max_attempts", default: 6, null: false
-    t.bigint "module_registration_id", null: false
+    t.bigint "module_registration_id"
     t.datetime "next_attempt_at"
     t.string "reply_to"
     t.datetime "sent_at"
@@ -51,11 +52,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_190000) do
     t.string "to", null: false
     t.string "transport"
     t.datetime "updated_at", null: false
+    t.index ["core_sender", "domain", "state"], name: "index_messages_on_core_sender_and_domain_and_state"
+    t.index ["core_sender", "idempotency_key"], name: "index_messages_on_core_sender_and_idempotency_key", unique: true, where: "((core_sender IS NOT NULL) AND (idempotency_key IS NOT NULL))"
     t.index ["module_registration_id", "acknowledged_at"], name: "index_messages_on_module_registration_id_and_acknowledged_at"
     t.index ["module_registration_id", "idempotency_key"], name: "index_messages_on_module_and_idempotency_key", unique: true, where: "(idempotency_key IS NOT NULL)"
     t.index ["module_registration_id", "state"], name: "index_messages_on_module_registration_id_and_state"
     t.index ["module_registration_id"], name: "index_messages_on_module_registration_id"
     t.index ["state", "next_attempt_at"], name: "index_messages_on_state_and_next_attempt_at"
+    t.check_constraint "module_registration_id IS NOT NULL AND core_sender IS NULL OR module_registration_id IS NULL AND core_sender IS NOT NULL", name: "messages_have_exactly_one_sender"
   end
 
   create_table "module_registrations", force: :cascade do |t|

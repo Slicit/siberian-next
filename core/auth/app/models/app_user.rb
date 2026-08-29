@@ -15,6 +15,7 @@ class AppUser < ApplicationRecord
   has_secure_password
 
   has_many :app_sessions, dependent: :destroy
+  has_many :app_password_resets, dependent: :destroy
 
   # What an app account may do, fixed rather than resolved.
   #

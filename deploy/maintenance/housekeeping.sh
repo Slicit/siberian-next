@@ -117,5 +117,20 @@ if [ "$building" = "0" ]; then
   fi
 fi
 
+
+# Sign-in and reset attempts.
+#
+# A counter rather than evidence: it exists so a limit can be enforced over a
+# window measured in minutes, and a row older than a day cannot influence any
+# answer. Left alone it is a table that only grows, and the thing it eventually
+# slows down is signing in.
+attempts=$(cd "$REPO" 2>/dev/null && docker compose --env-file .env -f deploy/compose.yml \
+  exec -T auth bin/rails runner 'puts AuthAttempt.sweep!' 2>/dev/null | tr -dc '0-9')
+if [ -n "$attempts" ]; then
+  say "swept $attempts stale sign-in attempt(s)"
+else
+  say "could not ask Auth to sweep its attempt counters"
+fi
+
 after=$(avail)
 say "finished, ${after} MB free, $(( after - before )) MB reclaimed"

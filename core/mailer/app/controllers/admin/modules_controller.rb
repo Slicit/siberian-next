@@ -49,7 +49,7 @@ module Admin
 
       render json: {
         messages: messages.limit([params.fetch(:limit, 100).to_i, 500].min).map do |message|
-          message.summary.merge(module_name: message.module_registration.module_name)
+          message.summary.merge(module_name: message.sender_name)
         end,
         counts: Message::STATES.index_with { |state| Message.where(state: state).count },
         unacknowledged: Message.unacknowledged.count,
