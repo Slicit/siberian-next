@@ -22,6 +22,10 @@ Rails.application.routes.draw do
   # nothing outside the core has a route to it.
   get "app/preview", to: "phone_app#preview", as: :preview_phone_app
   get "app/preview/*path", to: "phone_app#preview", format: false
+  # Previewing a theme is a query string the built app answers itself; keeping
+  # one is a save. Separate on purpose, so that trying three on does not commit
+  # to any of them.
+  patch "app/theme", to: "phone_app#update_theme", as: :phone_app_theme
 
   get "up", to: "rails/health#show", as: :rails_health_check
 end

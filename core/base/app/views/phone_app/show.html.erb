@@ -223,6 +223,21 @@
     </header>
 
     <% if @preview_build %>
+      <%# Trying a theme on costs a reload of the frame, not a rebuild: the app
+          carries every palette and picks one from its query string, so this is
+          a question the built app can already answer. Keeping one is the
+          separate button, because looking is not choosing. %>
+      <%= form_with url: phone_app_theme_path, method: :patch,
+                    class: "row wrap", style: "gap:.4rem; align-items:center" do %>
+        <span class="faint" style="font-size:.78rem">Theme</span>
+        <%= select_tag :theme,
+              options_for_select(Siberian::MobileThemes.all.map { |key, palette| [palette[:name], key] },
+                                 @app["theme"].presence || Siberian::MobileThemes::DEFAULT),
+              id: "theme-picker" %>
+        <%= submit_tag "Keep it", class: "button", name: nil %>
+        <span class="faint" style="font-size:.75rem">Saved for the next build.</span>
+      <% end %>
+
       <div style="display:flex; justify-content:center; padding:1rem 0">
         <div style="width:390px; max-width:100%; height:720px; border:10px solid #1c1c1e;
                     border-radius:34px; overflow:hidden; background:#000;
@@ -230,7 +245,8 @@
           <%# index.html by name, not the bare route: the export links its assets
               relatively so it can be served from any prefix, and a browser
               resolves those against the directory of the page it is on. %>
-          <iframe src="<%= preview_phone_app_path %>/index.html?theme=<%= @app["theme"].presence || Siberian::MobileThemes::DEFAULT %>"
+          <iframe id="app-preview" data-base="<%= preview_phone_app_path %>/index.html"
+                  src="<%= preview_phone_app_path %>/index.html?theme=<%= @app["theme"].presence || Siberian::MobileThemes::DEFAULT %>"
                   title="Phone app preview" loading="lazy"
                   style="width:100%; height:100%; border:0; display:block; background:#fff"></iframe>
         </div>
@@ -330,4 +346,23 @@
       form in by hand once a proposal has given you a starting point.
     </div>
   </div>
+<% end %>
+
+<% if @app %>
+  <%# The picker changes what is in the frame straight away, and changes nothing
+      that is saved until the button next to it is pressed. Written here rather
+      than in the shared script because nothing else on the product previews an
+      app. %>
+  <script>
+    (function () {
+      var frame = document.getElementById("app-preview");
+      var picker = document.getElementById("theme-picker");
+      if (!frame || !picker) return;
+
+      picker.addEventListener("change", function () {
+        frame.setAttribute("src",
+          frame.dataset.base + "?theme=" + encodeURIComponent(picker.value));
+      });
+    })();
+  </script>
 <% end %>

@@ -114,6 +114,15 @@ class PhoneAppController < ApplicationController
     end
   end
 
+  # Only the theme. Upsert keeps every field it is not given, so this cannot
+  # quietly rewrite the name or the bundle identifier on its way past.
+  def update_theme
+    result = mobile.save_app(current_domain, { theme: params[:theme] })
+    name = Siberian::MobileThemes.fetch(params[:theme])[:name]
+
+    redirect_to phone_app_path, notice: describe(result, "Now using #{name}.")
+  end
+
   # The exported web build, proxied from the Mobile service. The domain is the
   # one the Router put on this request, so an app owner cannot fetch another
   # domain's export by asking for it.
