@@ -30,6 +30,10 @@ Rails.application.routes.draw do
   # a different credential: this one runs third-party code.
   namespace :internal do
     post "builds/claim", to: "builds#claim"
+    # Handing one back. A worker that is given a build from a lane it does not
+    # take puts it down rather than doing it, and the right worker takes it
+    # seconds later instead of after the stale timeout.
+    post "builds/:id/release", to: "builds#release"
     patch "builds/:id", to: "builds#update"
     post "builds/:id/artifact", to: "builds#artifact"
     post "builds/:id/preview", to: "builds#preview"

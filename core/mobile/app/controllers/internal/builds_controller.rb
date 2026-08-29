@@ -25,7 +25,28 @@ module Internal
       # does not change a build already in the queue. Credentials are the one
       # exception: they are read now, because a key that was rotated after this
       # was queued is the key that works.
-      render json: { build_id: build.id, plan: with_current_secrets(build) }
+      # The lane travels with the build so the worker can check it took one it
+      # was meant to. It should be able to trust the answer, and once could not:
+      # during a rollout this service was still running code that did not know
+      # about lanes, handed the preview worker an Android build, and stalled the
+      # preview queue for twenty minutes behind exactly what the split exists to
+      # avoid.
+      render json: { build_id: build.id, lane: build.lane, plan: with_current_secrets(build) }
+    end
+
+    # POST /internal/builds/:id/release
+    #
+    # A worker putting a build back because it should never have had it. Not a
+    # failure: nothing was attempted, so it keeps its attempt count and goes
+    # back to the front of its own queue for the worker that does take that
+    # lane.
+    def release
+      build = Build.find_by(id: params[:id])
+      return head :not_found if build.nil?
+      return head :conflict unless build.building?
+
+      build.update!(state: Build::QUEUED, claimed_at: nil, started_at: nil)
+      head :no_content
     end
 
     # GET /internal/builds/:id/asset/:kind

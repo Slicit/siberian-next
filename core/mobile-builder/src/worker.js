@@ -51,6 +51,15 @@ async function claim() {
   return response.json();
 }
 
+
+// Putting a build back that this worker should never have been given.
+//
+// Not a failure: nothing was attempted, so it goes back to its own queue rather
+// than burning an attempt. The right worker takes it within a poll.
+async function release(id) {
+  await fetch(`${MOBILE}/internal/builds/${id}/release`, { method: "POST", headers: authorized() });
+}
+
 // Every command's output is kept, whole. A build that failed and cannot say
 // where is a build somebody reruns by hand to find out.
 function run(command, args, options) {
@@ -416,6 +425,18 @@ async function once() {
   if (!claimed) return false;
 
   console.log(`claimed build ${claimed.build_id} for ${claimed.plan.domain} (${claimed.plan.platform})`);
+
+  // A build from a lane this worker does not take. It should not be possible,
+  // and it happened: during a rollout the service was still running code that
+  // did not know about lanes, handed the preview worker an Android build, and
+  // stalled the preview queue for twenty minutes behind exactly the thing the
+  // split exists to avoid. It looked like a slow preview, which is why it is
+  // checked on both sides now: the cost of being wrong is the whole feature.
+  if (LANES.length > 0 && claimed.lane && !LANES.includes(claimed.lane)) {
+    console.error(`build ${claimed.build_id} is in the ${claimed.lane} lane and this worker takes ${LANES.join(", ")}; putting it back`);
+    await release(claimed.build_id);
+    return false;
+  }
 
   try {
     const result = await build(claimed);
