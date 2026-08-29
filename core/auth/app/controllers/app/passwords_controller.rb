@@ -79,7 +79,7 @@ module App
     private
 
     def send_reset(account)
-      reset, token = AppPasswordReset.start!(app_user: account, requested_ip: request.remote_ip)
+      reset, token = AppPasswordReset.start!(account, requested_ip: request.remote_ip)
 
       link = "https://#{current_domain}/-/auth/reset?token=#{token}"
 

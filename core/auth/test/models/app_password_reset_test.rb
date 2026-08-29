@@ -12,15 +12,15 @@ class AppPasswordResetTest < ActiveSupport::TestCase
   end
 
   test "the token is never stored in readable form" do
-    reset, token = AppPasswordReset.start!(app_user: @account)
+    reset, token = AppPasswordReset.start!(@account)
 
     assert token.present?
     refute_equal token, reset.token_digest
   end
 
   test "asking again kills the earlier link" do
-    _, first = AppPasswordReset.start!(app_user: @account)
-    _, second = AppPasswordReset.start!(app_user: @account)
+    _, first = AppPasswordReset.start!(@account)
+    _, second = AppPasswordReset.start!(@account)
 
     assert_equal :used, AppPasswordReset.claim(first).last,
                  "two live keys is one more than somebody asked for"
@@ -28,14 +28,14 @@ class AppPasswordResetTest < ActiveSupport::TestCase
   end
 
   test "a link works once" do
-    reset, token = AppPasswordReset.start!(app_user: @account)
+    reset, token = AppPasswordReset.start!(@account)
 
     assert reset.complete!("brand-new-pass-2")
     assert_equal :used, AppPasswordReset.claim(token).last
   end
 
   test "an expired link says so rather than saying it is not real" do
-    reset, token = AppPasswordReset.start!(app_user: @account)
+    reset, token = AppPasswordReset.start!(@account)
     reset.update!(expires_at: 1.minute.ago)
 
     assert_equal :expired, AppPasswordReset.claim(token).last,
@@ -48,7 +48,7 @@ class AppPasswordResetTest < ActiveSupport::TestCase
   end
 
   test "a link stops working when the account is deactivated" do
-    _, token = AppPasswordReset.start!(app_user: @account)
+    _, token = AppPasswordReset.start!(@account)
     @account.deactivate!
 
     assert_equal :unknown, AppPasswordReset.claim(token).last
@@ -57,7 +57,7 @@ class AppPasswordResetTest < ActiveSupport::TestCase
   test "completing a reset ends every device" do
     _, phone = AppSession.start!(app_user: @account, device_id: "phone")
     _, tablet = AppSession.start!(app_user: @account, device_id: "tablet")
-    reset, = AppPasswordReset.start!(app_user: @account)
+    reset, = AppPasswordReset.start!(@account)
 
     reset.complete!("brand-new-pass-2")
 
@@ -67,7 +67,7 @@ class AppPasswordResetTest < ActiveSupport::TestCase
   end
 
   test "completing a reset changes the password" do
-    reset, = AppPasswordReset.start!(app_user: @account)
+    reset, = AppPasswordReset.start!(@account)
     reset.complete!("brand-new-pass-2")
     @account.reload
 
@@ -76,7 +76,7 @@ class AppPasswordResetTest < ActiveSupport::TestCase
   end
 
   test "a password that fails validation leaves the link usable" do
-    reset, token = AppPasswordReset.start!(app_user: @account)
+    reset, token = AppPasswordReset.start!(@account)
 
     refute reset.complete!("short")
     assert_equal :ok, AppPasswordReset.claim(token).last,
