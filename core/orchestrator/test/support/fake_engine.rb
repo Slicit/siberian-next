@@ -213,10 +213,23 @@ class FakeProbe
   end
 
   def call
-    @manifest.system_capabilities.map do |capability|
-      ModuleProbe::Finding.new(what: "capability #{capability['interface']}",
-                               where: capability["endpoint"], status: @honest ? "200" : "404",
-                               ok: @honest)
+    findings = @manifest.system_capabilities.map do |capability|
+      finding("capability #{capability['interface']}", capability["endpoint"])
     end
+
+    # Health paths too, the same as the real one. Without these a manifest that
+    # declares only a health path could never be made to fail in a test, which
+    # is exactly the shape the upgrade tests need.
+    findings + @manifest.containers.filter_map do |container|
+      path = container.dig("health", "path")
+      finding("health for #{container['service']}", path) if path
+    end
+  end
+
+  private
+
+  def finding(what, where)
+    ModuleProbe::Finding.new(what: what, where: where,
+                             status: @honest ? "200" : "404", ok: @honest)
   end
 end
