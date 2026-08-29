@@ -6,13 +6,13 @@
 # module short name and never learns that a module answered.
 schema_version: 1
 name: example-relay
-version: 1.0.0
+version: 1.0.1
 title: Example Mail Relay
 description: Reference module implementing a core interface rather than a product feature.
 
 containers:
   - service: web
-    image: siberian/example-relay:1.0.0
+    image: siberian/example-relay:1.0.1
     role: http
     internal_port: 8080
     health:
@@ -28,8 +28,13 @@ permissions:
   # A transport keeps its own delivery log, so it owns a database. Nothing
   # else: it has no reason to read the configuration store or send mail
   # through the very service it is replacing.
+  #
+  # Named `primary` because that is what a module asking for its own database
+  # asks for. Declaring a prettier name means the SDK asks for `primary`, the
+  # service answers that nothing is provisioned, and the module reads as having
+  # no database at all.
   databases:
-    - name: deliveries
+    - name: primary
       access: owner
       scope: per_domain
 
