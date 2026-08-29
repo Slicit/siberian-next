@@ -1,0 +1,272 @@
+# One served domain: its product shell, its Backoffice, and its object store
+# door. Rendered by the Orchestrator into conf.d/modules/domains/<domain>.conf,
+# once per domain in the database, then nginx is reloaded.
+#
+# This used to live in 00-core.conf.template, rendered once at container start
+# from a single SIBERIAN_DOMAIN. That made the Router serve one domain while the
+# database held several: a second domain got module routes, because those are
+# already rendered per domain, and no shell or Backoffice at all. Its requests
+# fell through to whichever block matched first and were answered as the first
+# domain, which is a silent wrong answer rather than an error.
+#
+# Substitutions:
+#   ${SIBERIAN_DOMAIN}    the domain being served
+#   ${SIBERIAN_RESOLVER}  address of the container network's embedded DNS
+#   ${SIBERIAN_MAX_UPLOAD} ceiling on a body through the object store door
+#   ${SIBERIAN_OBJECT_STORE_ADDRESS} where the object store answers S3
+
+# The object store's own door, for signed URLs.
+#
+# Garage sits on a network no browser can reach, which is what makes a
+# presigned URL useless on its own: the URL names a host that does not resolve
+# outside the stack. This is the address that does resolve, and it forwards to
+# Garage unchanged.
+#
+# Unchanged is the whole requirement. An S3 signature covers the host and the
+# path, so rewriting either invalidates it. That is why this is a subdomain
+# rather than a path prefix on the product domain: the path arriving here is
+# already /<bucket>/<key>, which is exactly what Garage expects, and the Host
+# is what the URL was signed for.
+#
+# What this door can do is bounded by what the caller already holds. No Garage
+# credential is configured here, so nginx cannot sign anything: a request
+# without a valid signature is refused by Garage, and one with a valid
+# signature was issued by the Storage service to somebody it had already
+# decided to serve. The Router gains reachability, not authority.
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name s3.${SIBERIAN_DOMAIN};
+
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server-key.pem;
+
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+
+  # Signed URLs are minted with an expiry and a scope. Anything else here is a
+  # request Garage will refuse, so the ceiling is generous rather than tuned.
+  client_max_body_size ${SIBERIAN_MAX_UPLOAD};
+
+  location / {
+    # Where the object store answers S3, from inside the stack. A variable
+    # rather than a name, because which store that is belongs to the
+    # deployment: self hosted here, a managed bucket elsewhere, and this door
+    # is unnecessary altogether against a store the internet can already reach.
+    set $upstream_object_store "${SIBERIAN_OBJECT_STORE_ADDRESS}";
+    proxy_pass $upstream_object_store;
+
+    # Host is forwarded exactly as received because it is part of what was
+    # signed. The usual forwarded_headers.conf include would be wrong here: it
+    # adds X-Siberian-Domain, which means nothing to an object store, and this
+    # door must add as little as possible to a signed request.
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+
+    # Neither direction is buffered. An object served through here should cost
+    # this process a chunk at a time, which is the entire reason it exists.
+    proxy_buffering off;
+    proxy_request_buffering off;
+
+    # These bytes were written by a third-party module. They are already on
+    # their own origin, so an HTML file here runs as s3.<domain> and not as the
+    # product, but a browser guessing a type it was not given is worth refusing
+    # anyway. Set here rather than in Storage because Storage no longer sees
+    # the response: it hands out a URL and steps out of the way.
+    add_header X-Content-Type-Options nosniff always;
+    # Nothing here is ever a frame worth embedding.
+    add_header X-Frame-Options DENY always;
+  }
+}
+
+# Base App. The product shell that wraps installed modules in iframes.
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${SIBERIAN_DOMAIN};
+
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server-key.pem;
+
+  # Container names resolve through the network's embedded DNS. Its address
+  # differs by engine, so it is rendered rather than hardcoded.
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+
+  # The app's door into a module.
+  #
+  # An app has no origins. Every module's native code runs in one JavaScript
+  # context, in one process, so nothing on the device can stop one module's code
+  # from calling another's endpoint. The boundary therefore lives here: the
+  # module is the first path segment, this block sets the module identity from
+  # that segment rather than from anything the client sends, and the call is
+  # authorised as the user, against module.<name>.use, exactly as the browser
+  # path is.
+  #
+  # Two segments, deliberately. The Base App already serves /m/<capability-id>
+  # for a framed page, and that has no second segment, so it falls through to
+  # the location below. A regex location wins over a prefix one in nginx, which
+  # is what makes these two coexist without either knowing about the other.
+  location ~ "^/m/([a-z0-9][a-z0-9-]*)/(.*)$" {
+    set $module_name $1;
+    set $module_path $2;
+    # An unknown module maps to nothing. Answering 404 here is the difference
+    # between "no such module" and a 502 from proxying at a name that is not
+    # there.
+    if ($module_upstream = "") { return 404 "no such module\n"; }
+
+    set $upstream_module "http://$module_upstream";
+    proxy_pass $upstream_module/$module_path$is_args$args;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+
+    # Set here, never accepted from the client: a header a caller can write is
+    # not an identity.
+    proxy_set_header X-Siberian-Module $module_name;
+
+    # The preview runs on core.<domain> and calls modules here, which makes
+    # those calls cross-origin. One origin is allowed and it is named rather
+    # than reflected: a wildcard cannot carry credentials, and the session
+    # cookie is the whole point of the call.
+    #
+    # The cookie itself already travels, because Auth scopes it to .<domain>
+    # and issues it SameSite=None over TLS.
+    add_header Access-Control-Allow-Origin "https://core.${SIBERIAN_DOMAIN}" always;
+    add_header Access-Control-Allow-Credentials "true" always;
+    add_header Vary "Origin" always;
+
+    # A POST carrying JSON is not a simple request, so the browser asks first.
+    # Answered here rather than by every module: none of them should have to
+    # know the preview exists.
+    if ($request_method = OPTIONS) {
+      add_header Access-Control-Allow-Origin "https://core.${SIBERIAN_DOMAIN}" always;
+      add_header Access-Control-Allow-Credentials "true" always;
+      add_header Access-Control-Allow-Methods "GET, HEAD, POST, PATCH, PUT, DELETE, OPTIONS" always;
+      add_header Access-Control-Allow-Headers "Content-Type, Accept, X-Requested-With" always;
+      add_header Access-Control-Max-Age "600" always;
+      add_header Content-Length "0" always;
+      return 204;
+    }
+  }
+
+  # Public module media, straight from Storage.
+  #
+  # Without this a module serves its own images by fetching them from Storage
+  # and copying them out through its own process, so every image is read whole
+  # into a language runtime that has no reason to see it. The module hands out
+  # this URL instead and never touches the bytes.
+  #
+  # No token travels, and none is needed: this reaches the `public` space and
+  # nothing else, for a module that was granted that space at install. The
+  # domain comes from the Host header the same way it does everywhere else, so
+  # one domain cannot be used to read another's objects.
+  #
+  # A regex rather than a prefix location, so it wins over `location /` the way
+  # the /m/ rule does, and so the module name is a captured segment rather than
+  # something Storage has to parse out of a path.
+  location ~ "^/-/public/([a-z0-9][a-z0-9-]*)/(.+)$" {
+    set $public_module $1;
+    set $public_path $2;
+
+    set $upstream_public "http://storage:3000";
+    proxy_pass $upstream_public/public/$public_module/$public_path$is_args$args;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+
+    # Large objects stream through rather than being spooled to disk here
+    # first, which is the whole point of Storage having stopped buffering them.
+    proxy_buffering off;
+    proxy_request_buffering off;
+  }
+
+  # Sign in and out are served by Auth on the main domain, so the cookie it
+  # sets is scoped to the domain every module frame sits under. The Base App
+  # never sees a password.
+  location ~ ^/(login|logout)$ {
+    set $upstream_auth "http://auth:3000";
+    proxy_pass $upstream_auth;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+  }
+
+  location / {
+    set $upstream_base "http://base:3000";
+    proxy_pass $upstream_base;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+  }
+}
+
+# Orchestrator. Operator-facing, deliberately on its own origin so a compromised
+# module frame has no path to it.
+#
+# core.<domain> rather than a domain of its own: the session cookie is scoped to
+# .<domain>, so a Backoffice outside that scope would receive no session at all
+# and would need a login of its own.
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name core.${SIBERIAN_DOMAIN};
+
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server-key.pem;
+
+  resolver ${SIBERIAN_RESOLVER} valid=10s ipv6=off;
+
+  # The same public media path the product domain serves, because the preview
+  # renders here and a CMS block's image has one URL wherever it is shown.
+  #
+  # The domain is named rather than taken from the Host header: buckets belong
+  # to ${SIBERIAN_DOMAIN}, and $host here is core.${SIBERIAN_DOMAIN}, which owns
+  # no buckets at all. Reusing forwarded_headers.conf would send the wrong one
+  # and every image would 404 with nothing to say why.
+  location ~ "^/-/public/([a-z0-9][a-z0-9-]*)/(.+)$" {
+    set $public_module $1;
+    set $public_path $2;
+
+    set $upstream_public "http://storage:3000";
+    proxy_pass $upstream_public/public/$public_module/$public_path$is_args$args;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Siberian-Domain ${SIBERIAN_DOMAIN};
+    proxy_http_version 1.1;
+
+    proxy_buffering off;
+    proxy_request_buffering off;
+  }
+
+  # The app preview, which the Backoffice frames in a panel.
+  #
+  # Same origin as the page framing it, so 'self' rather than 'none'. The rule
+  # below still holds for every other page here: what is relaxed is one path
+  # that serves a static export, and only to the Backoffice itself.
+  #
+  # Matched exactly, and as a regex. A prefix location of /mobile/ made nginx
+  # answer /mobile with a 301 to /mobile/, which broke the phone apps page for
+  # anything that does not follow redirects, and it also relaxed the framing
+  # rule for every page under /mobile rather than for the one that needs it.
+  location ~ "^/mobile/[0-9]+/preview" {
+    set $upstream_admin "http://orchestrator:3000";
+    proxy_pass $upstream_admin;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+
+    # One header, not Rails's plus ours. SAMEORIGIN says the same thing as the
+    # policy beside it, and saying it twice is how they drift apart.
+    proxy_hide_header X-Frame-Options;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Content-Security-Policy "frame-ancestors 'self'" always;
+    add_header X-Content-Type-Options nosniff always;
+  }
+
+  location / {
+    set $upstream_admin "http://orchestrator:3000";
+    proxy_pass $upstream_admin;
+    include /etc/nginx/siberian/forwarded_headers.conf;
+
+    # The Backoffice is never framed, by anything.
+    #
+    # Rails sends SAMEORIGIN of its own, and add_header appends rather than
+    # replaces: two X-Frame-Options headers is undefined, and a browser may
+    # take the weaker one or ignore both. Hidden first so exactly one goes out.
+    proxy_hide_header X-Frame-Options;
+    add_header X-Frame-Options DENY always;
+    add_header Content-Security-Policy "frame-ancestors 'none'" always;
+  }
+}

@@ -26,6 +26,16 @@ class RouterConfig
   # the block and the Orchestrator owns only what goes in it.
   UPSTREAMS_DIR = "upstreams"
 
+  # The product shell, the Backoffice, and the object store door, one set per
+  # served domain. A directory of their own so a domain that is removed is one
+  # unlink, the same as a module.
+  DOMAINS_DIR = "domains"
+
+  DOMAIN_TEMPLATE_CANDIDATES = [
+    "lib/router/domain.conf.template",
+    "../../lib/router/domain.conf.template"
+  ].freeze
+
   def initialize(driver: Siberian::Engine.driver,
                  config_dir: ENV.fetch("SIBERIAN_ROUTER_CONFIG_DIR", "/var/lib/siberian/router"),
                  router_container: ENV.fetch("SIBERIAN_ROUTER_CONTAINER", "siberian-router-1"))
@@ -45,6 +55,32 @@ class RouterConfig
 
   def remove(installed_module)
     FileUtils.rm_f(path_for(installed_module))
+  end
+
+  # One file per served domain, rewritten whole from the domains that exist.
+  #
+  # Rewritten rather than appended to, and files for domains that are gone are
+  # removed, because a stale server block is worse than a missing one: nginx
+  # keeps answering for a domain nobody serves any more, and the answer looks
+  # correct.
+  #
+  # Returns the domains it wrote, so a caller can say what changed.
+  def write_domains(domains)
+    directory = File.join(@config_dir, DOMAINS_DIR)
+    FileUtils.mkdir_p(directory)
+
+    hostnames = Array(domains).map(&:to_s).reject(&:empty?).uniq
+    wanted = hostnames.map { |hostname| "#{hostname}.conf" }
+
+    Dir.glob(File.join(directory, "*.conf")).each do |existing|
+      FileUtils.rm_f(existing) unless wanted.include?(File.basename(existing))
+    end
+
+    hostnames.each do |hostname|
+      File.write(File.join(directory, "#{hostname}.conf"), render_domain(hostname))
+    end
+
+    hostnames
   end
 
   # A module's containers sit on their own network, and the Router sits on the
@@ -142,6 +178,53 @@ class RouterConfig
 
     substitutions.reduce(strip_template_header(template)) do |body, (key, value)|
       body.gsub("${#{key}}", value)
+    end
+  end
+
+  def render_domain(hostname)
+    substitutions = {
+      "SIBERIAN_DOMAIN" => hostname,
+      "SIBERIAN_RESOLVER" => ENV.fetch("SIBERIAN_RESOLVER", "127.0.0.11"),
+      # The same defaults compose gives the Router, because this file is
+      # rendered here and read there: a placeholder left unsubstituted is a
+      # config nginx refuses to load, which takes every domain down and not
+      # just this one.
+      "SIBERIAN_MAX_UPLOAD" => ENV.fetch("SIBERIAN_MAX_UPLOAD", "1024m"),
+      # Asked of the driver rather than hardcoded, so this file names no
+      # object store backend and the door follows the deployment's choice.
+      "SIBERIAN_OBJECT_STORE_ADDRESS" => object_store_address
+    }
+
+    substitutions.reduce(strip_template_header(domain_template)) do |body, (key, value)|
+      body.gsub("${#{key}}", value)
+    end
+  end
+
+  # Where the object store answers S3 from inside the stack, for the door the
+  # per-domain template opens at s3.<domain>.
+  #
+  # An explicit setting wins, so a deployment can put the door somewhere other
+  # than the store's own address. Otherwise the driver is asked, which is the
+  # one place that knows.
+  def object_store_address
+    configured = ENV["SIBERIAN_OBJECT_STORE_ADDRESS"].presence
+    return configured if configured
+
+    Siberian::ObjectStore.driver.endpoint
+  rescue StandardError => e
+    # A door that cannot be addressed is one block of one domain. Failing the
+    # whole render would take every domain's shell down with it, so this is the
+    # rare case where carrying on is right, and it is said out loud.
+    Rails.logger.warn("could not determine the object store address: #{e.message}")
+    ""
+  end
+
+  def domain_template
+    @domain_template ||= begin
+      path = DOMAIN_TEMPLATE_CANDIDATES.map { |candidate| Rails.root.join(candidate) }.find(&:exist?)
+      raise "domain template not found in #{DOMAIN_TEMPLATE_CANDIDATES.join(', ')}" if path.nil?
+
+      File.read(path)
     end
   end
 

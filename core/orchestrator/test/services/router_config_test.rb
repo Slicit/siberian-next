@@ -78,4 +78,68 @@ class RouterConfigTest < ActiveSupport::TestCase
 
     assert_raises(RouterConfig::ReloadFailed) { router.reload }
   end
+
+  # --- per-domain core blocks -------------------------------------------------
+  #
+  # These used to be rendered once at Router start from a single environment
+  # variable, so the Router served one domain while the database held several.
+  # The domains it missed were not refused: they fell through to the first
+  # matching server block and were answered as the wrong domain.
+
+  def domain_file(hostname) = File.join(@dir, RouterConfig::DOMAINS_DIR, "#{hostname}.conf")
+
+  test "every served domain gets its own core blocks" do
+    @router.write_domains(%w[first.test second.test])
+
+    %w[first.test second.test].each do |hostname|
+      body = File.read(domain_file(hostname))
+      assert_match(/server_name #{Regexp.escape(hostname)};/, body,
+                   "#{hostname} has no product shell")
+      assert_match(/server_name core\.#{Regexp.escape(hostname)};/, body,
+                   "#{hostname} has no Backoffice")
+    end
+  end
+
+  test "a domain's blocks name that domain and no other" do
+    @router.write_domains(%w[first.test second.test])
+
+    assert_no_match(/second\.test/, File.read(domain_file("first.test")),
+                    "one domain's file naming another is how a request reaches the wrong shell")
+  end
+
+  test "the rendered domain config carries no unsubstituted placeholders" do
+    @router.write_domains(["first.test"])
+
+    body = File.read(domain_file("first.test"))
+    assert_no_match(/\$\{[A-Z_]+\}/, body,
+                    "an unsubstituted placeholder is a config nginx refuses, which takes every domain down")
+  end
+
+  # Rewritten whole rather than added to. A server block for a domain nobody
+  # serves keeps answering, and the answer looks correct.
+  test "a domain that is no longer served loses its file" do
+    @router.write_domains(%w[first.test second.test])
+    assert File.exist?(domain_file("second.test"))
+
+    @router.write_domains(["first.test"])
+
+    assert File.exist?(domain_file("first.test"))
+    refute File.exist?(domain_file("second.test")), "a withdrawn domain must stop being served"
+  end
+
+  test "writing the same domains twice changes nothing" do
+    @router.write_domains(["first.test"])
+    before = File.read(domain_file("first.test"))
+
+    @router.write_domains(["first.test"])
+
+    assert_equal before, File.read(domain_file("first.test"))
+  end
+
+  test "the template's own explanation does not travel into the domain config" do
+    @router.write_domains(["first.test"])
+
+    refute File.read(domain_file("first.test")).start_with?("#"),
+           "the header explains placeholders that no longer exist once rendered"
+  end
 end

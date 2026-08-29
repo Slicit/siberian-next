@@ -4,6 +4,11 @@
 Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 -->
 
+## 2026-08-29
+
+- `bin/generate-certs` takes one domain, so a second served domain has no certificate. Routing, host authorisation and reconciliation no longer assume a single domain; TLS still does, and a real second domain needs its own SAN entry before a browser will load it. (trigger: gap, source: feat-multi-domain Intent 2026-08-29, agent: claude-code)
+- `SIBERIAN_DOMAINS` is read at boot, so a domain added in the Backoffice does not answer until every core service restarts. The reconciler reports the gap by name rather than repairing it, because restarting the core is not a decision a reconcile should take. Closing it properly means the applications learning their allowed hosts at request time rather than at boot. (trigger: gap, source: feat-multi-domain decision 2026-08-29, agent: claude-code)
+
 ## 2026-08-22
 
 - The smokes keep working files at fixed paths in /tmp, so two users running them on one box collide: a root run leaves root owned files and the next run by a person cannot overwrite them, which reports as a failure in the thing being tested. Removed as a live problem by running the nightly sweep as the checkout owner and refusing root, but fourteen scripts still share the hazard and `mktemp` would end it. (trigger: gap, source: feat-resource-limits decision 2026-08-22, agent: claude-code)
@@ -16,7 +21,6 @@ Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 - iOS binaries, through a macOS runner or EAS Build. The builder produces the configured Xcode project today, which is what either of those takes as input. (trigger: out-of-scope, source: feat-mobile-apps Intent 2026-08-19, agent: claude-code)
 - Over the air updates for a phone app that is already installed, and store submission. Both are a different mechanism from producing an artifact. (trigger: out-of-scope, source: feat-mobile-apps Intent 2026-08-19, agent: claude-code)
 - Reviewing a module's native code at install. Approving a native screen means running a third party's JavaScript inside the app binary, and the review screen currently shows what it asks for rather than what it is. (trigger: gap, source: feat-mobile-apps composition decision 2026-08-19, agent: claude-code)
-- The Router renders core server blocks from a single `SIBERIAN_DOMAIN`, so a second served domain gets module routes from the reconciler and no server block for the product shell or the Backoffice. Its requests fall through to the default server, which answers as the first domain. Rendering the core template per domain would move ownership of that file to the Orchestrator, which is the decision. (trigger: gap, source: feat-domain-naming Intent 2026-08-19, agent: claude-code)
 - `bin/smoke-quotas` does not clean up after itself. Every run leaves objects in the same bucket on the same domain, so the domain pool it caps at 2 MB fills over time and step 7, which expects a write to succeed once the bucket is raised, starts failing on the domain instead. The smoke reports a real refusal for the wrong reason. (trigger: gap, source: feat-domain-storage-limits verification 2026-08-19, agent: claude-code)
 - Evaluate Podman as a second engine driver backend, for rootless isolation of untrusted third-party modules. (trigger: alternative, source: LOGBOOK bootstrap engine decision 2026-08-19, agent: claude-code)
 - Server-side fragment composition, where modules expose fragments the Base App renders into its own layout, as a path to a more seamless product feel than iframes allow. (trigger: alternative, source: LOGBOOK bootstrap composition decision 2026-08-19, agent: claude-code)

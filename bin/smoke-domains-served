@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Checks that every domain in the database is actually served, on all three
+# core doors, rather than only the first one.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-domains-served.sh

@@ -11,7 +11,7 @@
 # So this exists, it is idempotent, and it is cheap enough to run whenever
 # anything looks wrong.
 class RouteReconciler
-  Result = Struct.new(:joined, :written, :reloaded, :errors, keyword_init: true) do
+  Result = Struct.new(:joined, :written, :domains, :reloaded, :errors, keyword_init: true) do
     def ok? = errors.empty?
   end
 
@@ -46,6 +46,32 @@ class RouteReconciler
     # part of routing being right, not a separate thing to remember.
     @router.refresh_upstreams!(InstalledModule.live)
 
+    # The product shell and the Backoffice, one set per domain.
+    #
+    # Here rather than in the Router's own start-time template because how many
+    # domains exist is a question only this database can answer. Rendered from
+    # an environment variable, it served one domain while several were
+    # configured, and the ones it missed were answered by the first domain's
+    # blocks rather than refused: a wrong answer that looks like a right one.
+    written_domains = begin
+      @router.write_domains(domains.map(&:hostname))
+    rescue StandardError => e
+      errors << "domains: #{e.message}"
+      []
+    end
+
+    # A domain the Router serves that the applications will refuse.
+    #
+    # Rails checks the Host header against a list read from the environment at
+    # boot, so a domain added here answers with a routing error until the
+    # services are restarted with it. Reported rather than repaired: restarting
+    # every core service is not something a reconcile should decide to do.
+    unallowed = written_domains - allowed_domains
+    if unallowed.any?
+      errors << "not in SIBERIAN_DOMAINS, so the applications will refuse them " \
+                "until the core services restart: #{unallowed.join(', ')}"
+    end
+
     reloaded = begin
       @router.reload
       true
@@ -56,12 +82,22 @@ class RouteReconciler
 
     Activity.record("routes.reconciled", outcome: errors.empty? ? "succeeded" : "failed",
                                          joined: joined.length, written: written.length,
+                                         domains: written_domains.length,
                                          detail: errors.join("; ").presence)
 
-    Result.new(joined: joined, written: written, reloaded: reloaded, errors: errors)
+    Result.new(joined: joined, written: written, domains: written_domains,
+               reloaded: reloaded, errors: errors)
   end
 
   private
+
+  # What the applications were told to accept, which is not necessarily what the
+  # database says is served.
+  def allowed_domains
+    list = ENV["SIBERIAN_DOMAINS"].to_s.split(",").map(&:strip)
+    list << ENV["SIBERIAN_DOMAIN"].to_s.strip
+    list.reject(&:empty?).uniq
+  end
 
   # The data cluster loses its attachments for the same reason the Router does.
   def attach_data_cluster(installed)
