@@ -231,6 +231,21 @@ a broken module rather than as a missing door.
 they are separate containers. `docker compose ... logs mailer-worker` shows the
 claim query and every delivery.
 
+**A build succeeded and the app did not change.** The builder mounts
+`core/mobile-builder`, so an edit is visible inside the container at once and
+`grep` there will confirm it, but Node had already loaded the module and kept
+building from the code it started with. The worker now hashes its own source
+between builds and exits when it differs, and Compose restarts it, so the log
+says `builder source changed ... restarting`. If it does not, check the worker
+is actually up.
+
+**The app preview is a blank frame.** Look at what the page asks for. An export
+whose asset paths are root-absolute sends the browser to the Backoffice root
+rather than to `/mobile/:id/preview/`, and the only symptom is a 404 in the
+browser console. The export now makes those paths relative and fails the build
+if it names a file it did not produce, so this should surface as a failed build
+rather than an empty phone.
+
 **A permission change has not taken effect.** It is cached for 30 seconds per
 session. Wait, or use the endpoint that never caches.
 
