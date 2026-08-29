@@ -31,6 +31,14 @@ class BuildPlan
         # does not burn one and two artifacts can never share one.
         build_number: @app.build_number + 1,
         primary_color: @app.primary_color,
+        # The chosen theme, and every theme.
+        #
+        # All of them travel because the preview switches between them
+        # without rebuilding: a palette is data the shell reads at render
+        # time, so trying one on costs a query parameter rather than a
+        # ten minute build.
+        theme: @app.theme,
+        themes: Siberian::MobileThemes.all,
         icon_path: @app.icon_path
       },
       # What it shows before it has drawn anything. The bytes are not here: the

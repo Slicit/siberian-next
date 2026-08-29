@@ -21,6 +21,7 @@ from flask import Flask, g, jsonify, redirect, request, url_for
 from markupsafe import escape
 
 from siberian import Module
+from siberian.theme import bridge as theme_bridge
 
 app = Flask(__name__)
 
@@ -366,8 +367,17 @@ button.danger { color:var(--danger); border-color:var(--danger); }
 """
 
 
+# This module names its text variable --text rather than the SDK reference
+# --fg, so the mapping is spelled out here rather than renaming a stylesheet to
+# suit a default.
+THEME_VARIABLES = {"--bg": "background", "--surface": "surface", "--text": "text",
+                   "--muted": "muted", "--line": "line", "--accent": "accent",
+                   "--danger": "danger"}
+
+
 def render(body, title="Notifications"):
-    return SHELL.replace("__TITLE__", escape(title)).replace("__STYLE__", STYLE).replace("__BODY__", body)
+    style = STYLE + theme_bridge(siberian.theme, THEME_VARIABLES)
+    return SHELL.replace("__TITLE__", escape(title)).replace("__STYLE__", style).replace("__BODY__", body)
 
 
 def signed_out():

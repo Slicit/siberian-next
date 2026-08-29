@@ -106,3 +106,36 @@ repository root as their context, so:
 COPY sdk/python/siberian /app/siberian
 RUN pip install --no-cache-dir "psycopg[binary]==3.2.1" "psycopg_pool==3.2.2"
 ```
+
+## The app's colours
+
+A module has two faces. The native one is drawn by the app and inherits its
+palette. The web one is HTML you render, and inside a WebView it is the one part
+of the app that would ignore the theme, which is exactly where it shows.
+
+The shell puts the palette in the query string. One line adopts it:
+
+```python
+from siberian.theme import bridge as theme_bridge
+
+style = MY_STYLESHEET + theme_bridge(siberian.theme)
+```
+
+`bridge` emits nothing when no app asked, so a page opened directly in a browser
+keeps its own styling and its own dark mode. When an app did ask, it defines
+`--theme-*` variables and points your own variable names at them.
+
+If your stylesheet does not use the reference names (`--bg`, `--fg`, `--muted`,
+`--line`, `--accent`, `--danger`, `--surface`), pass your own mapping:
+
+```python
+theme_bridge(siberian.theme, {"--paper": "background", "--ink": "text"})
+```
+
+`siberian.theme.scheme` is `light` or `dark`, and `bridge` already sets
+`color-scheme` from it, so form controls match rather than being white boxes on
+a dark page.
+
+Values arriving from the query string are filtered to things that can only be a
+colour. They land inside a stylesheet, so a value that could close a declaration
+could open a rule.

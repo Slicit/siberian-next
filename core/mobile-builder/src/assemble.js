@@ -165,7 +165,16 @@ export async function assemble(plan, workspace, assets = {}) {
   await writeFile(
     path.join(workspace, "siberian.config.js"),
     `export default ${JSON.stringify(
-      { domain: plan.domain, api: plan.api, capabilities: plan.capabilities.map((c) => c.id) },
+      {
+        domain: plan.domain,
+        api: plan.api,
+        capabilities: plan.capabilities.map((c) => c.id),
+        // The chosen palette, and all of them. The shell renders from
+        // whichever the query string asks for and falls back to this one,
+        // which is what lets the preview try a theme on without a build.
+        theme: plan.app.theme || "daylight",
+        themes: plan.app.themes || {}
+      },
       null,
       2
     )};\n`

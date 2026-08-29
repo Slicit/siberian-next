@@ -16,6 +16,7 @@ from flask import Flask, g, jsonify, redirect, request, url_for
 from markupsafe import escape
 
 from siberian import Module, Refused
+from siberian.theme import bridge as theme_bridge
 
 app = Flask(__name__)
 
@@ -395,7 +396,10 @@ button.danger { color:var(--danger); border-color:var(--danger); background:tran
 
 
 def render(body, title="Pages"):
-    return SHELL.replace("__TITLE__", escape(title)).replace("__STYLE__", STYLE).replace("__BODY__", body)
+    # The app's palette when an app is framing this, and nothing otherwise,
+    # so a page opened in a browser keeps its own light and dark styling.
+    style = STYLE + theme_bridge(siberian.theme)
+    return SHELL.replace("__TITLE__", escape(title)).replace("__STYLE__", style).replace("__BODY__", body)
 
 
 def signed_out():

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_19_230000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -76,6 +76,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_230000) do
     t.string "splash_animation_path"
     t.string "splash_background"
     t.string "splash_image_path"
+    t.string "theme", default: "daylight", null: false
     t.datetime "updated_at", null: false
     t.string "version", default: "1.0.0", null: false
     t.index ["bundle_identifier"], name: "index_mobile_apps_on_bundle_identifier", unique: true

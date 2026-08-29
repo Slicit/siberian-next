@@ -26,6 +26,7 @@ from flask import Flask, jsonify, request, redirect, url_for, Response
 from markupsafe import escape
 
 from siberian import Module, Refused
+from siberian.theme import bridge as theme_bridge
 
 app = Flask(__name__)
 
@@ -153,7 +154,22 @@ a{color:var(--accent)}
 
 
 def render(body, title="Tasks"):
-    return Response(PAGE.format(style=STYLE, body=body, title=title), mimetype="text/html")
+    # The app's palette, when an app is asking. Appended after this module's
+    # own rules so it wins, and empty otherwise so a browser still gets the
+    # module's own light and dark styling.
+    style = STYLE + theme_bridge(siberian.theme)
+    return Response(PAGE.format(style=style, body=body, title=title), mimetype="text/html")
+
+
+def wants_json():
+    """Whether the caller is the native screen rather than the browser.
+
+    A phone asks with Accept: application/json or by posting JSON. It gets
+    the row back; the browser gets the redirect it expects. Both faces do the
+    same thing to the same table, and neither has to know the other exists.
+    """
+    return (request.is_json
+            or "application/json" in (request.headers.get("Accept") or ""))
 
 
 def signed_out():
@@ -339,6 +355,12 @@ def toggle(task_id):
                 "UPDATE tasks SET done = NOT done WHERE id = %s AND user_email = %s",
                 (task_id, user["email"])
             )
+    if wants_json():
+        with db() as connection:
+            task = owned_task(connection, task_id, user["email"])
+        # The new state, so the screen can draw it without asking again.
+        return jsonify({"id": task_id, "done": bool(task and task[2])})
+
     return redirect(request.referrer or url_for("index"))
 
 
@@ -364,6 +386,9 @@ def set_archived(task_id, archived):
                 "UPDATE tasks SET archived = %s WHERE id = %s AND user_email = %s",
                 (archived, task_id, user["email"]),
             )
+
+    if wants_json():
+        return jsonify({"id": task_id, "archived": bool(archived)})
 
     return redirect(url_for("index", archived="1" if not archived else None))
 
@@ -421,6 +446,8 @@ def destroy(task_id):
         task = owned_task(connection, task_id, user["email"])
 
         if not task:
+            if wants_json():
+                return jsonify({"error": "no task of yours by that id"}), 404
             return redirect(url_for("index"))
 
         _, _, _, _, attachment = task
@@ -438,6 +465,9 @@ def destroy(task_id):
         with connection.cursor() as cursor:
             cursor.execute("DELETE FROM tasks WHERE id = %s AND user_email = %s",
                            (task_id, user["email"]))
+
+    if wants_json():
+        return jsonify({"id": task_id, "deleted": True})
 
     return redirect(url_for("index"))
 
@@ -477,6 +507,9 @@ def attach(task_id):
                 "UPDATE tasks SET attachment = %s WHERE id = %s AND user_email = %s",
                 (name, task_id, user["email"]),
             )
+
+    if wants_json():
+        return jsonify({"id": task_id, "attachment": name})
 
     return redirect(request.referrer or url_for("index"))
 

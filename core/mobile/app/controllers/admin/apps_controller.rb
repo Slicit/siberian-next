@@ -34,6 +34,7 @@ module Admin
                               MobileApp.bundle_identifier_for(params[:domain])
       app.version = params[:version].presence || app.version || "1.0.0"
       app.primary_color = params[:primary_color] if params.key?(:primary_color)
+      app.theme = params[:theme] if params.key?(:theme)
       app.icon_path = params[:icon_path] if params.key?(:icon_path)
 
       if app.save
@@ -216,6 +217,7 @@ module Admin
         version: app.version,
         build_number: app.build_number,
         primary_color: app.primary_color,
+        theme: app.theme,
         icon_path: app.icon_path,
         splash: {
           image: app.splash_image?,
