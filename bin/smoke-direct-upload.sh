@@ -30,6 +30,9 @@ TOKEN=$(printf '%s' "$register" | sed 's/.*"token":"//; s/".*//')
 [ -n "$TOKEN" ] || fail "the module did not register: $register"
 echo "1. module registered"
 
+# Revoked however this script ends, not only on the happy path at the bottom.
+trap 'inside "curl -s -o /dev/null -X DELETE '"'"'$S/admin/modules/$NAME'"'"' -H '"'"'$A'"'"'"' EXIT INT TERM
+
 inside "curl -s -o /dev/null -X POST '$S/admin/modules/$NAME/buckets' -H '$A' \
   -H 'Content-Type: application/json' -d '{\"domain\":\"$DOMAIN\"}'"
 echo "2. bucket provisioned"

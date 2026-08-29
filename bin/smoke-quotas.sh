@@ -35,6 +35,11 @@ echo "   $(head -c 150 /tmp/qb)"
 
 echo "3. a module asking for 500 MB gets the default"
 q -X POST "$S/admin/modules" -H "$A" -H "Content-Type: application/json" -d "{\"module_name\":\"$NAME\",\"module_uuid\":\"q1\",\"spaces\":[\"files\"],\"quota_mb\":500}" >/dev/null
+
+# Revoked however this script ends. Every abandoned run used to leave an
+# active credential behind: twenty-four of them had accumulated by the time
+# anybody counted.
+trap 'curl -s -o /dev/null -X DELETE "$S/admin/modules/$NAME" -H "$A"' EXIT INT TERM
 T="Authorization: Bearer $(sed 's/.*"token":"//; s/".*//' /tmp/qb)"
 q -X POST "$S/admin/modules/$NAME/buckets" -H "$A" -H "Content-Type: application/json" -d "{\"domain\":\"$DOMAIN\"}" >/dev/null
 q "$S/admin/quotas" -H "$A" >/dev/null
