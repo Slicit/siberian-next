@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# Drives the mail queue: enqueue, deduplicate, deliver, acknowledge, and watch a
-# permanent rejection stop rather than retry six times.
+# Drives the mail queue: enqueue, deduplicate, deliver through whichever module
+# answers mail.transport.v1, acknowledge, and stay out of another module's mail.
+#
+# From inside the core network, because these endpoints are not published: the
+# Mailer is reachable by service name and by nothing else.
+#
+# The whole bin directory is mounted rather than the one script, so the shared
+# assertion helper comes with it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec docker run --rm --network siberian_core -v "$PWD/bin/smoke-mail.sh:/s.sh:ro" curlimages/curl:latest sh /s.sh
+exec docker run --rm --network siberian_core -v "$PWD/bin:/smoke:ro" \
+  curlimages/curl:latest sh /smoke/smoke-mail.sh

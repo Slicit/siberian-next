@@ -16,18 +16,10 @@ DOMAIN="${SIBERIAN_QUOTA_SMOKE_DOMAIN:-quota-smoke.test}"
 D="X-Siberian-Domain: $DOMAIN"
 q() { curl -s -o /tmp/qb -w "%{http_code}" "$@"; }
 
-# Prints and checks. These steps used to print "(expect 507)" beside whatever
-# they got and exit zero regardless, so the run where the domain pool had
-# silently filled reported a refusal for the wrong reason and still passed. A
-# check that narrates is not a check.
-expect() { # expect <label> <got> <wanted>
-  if [ "$2" = "$3" ]; then
-    echo "$1 -> $2"
-  else
-    echo "$1 -> $2   FAIL, wanted $3"
-    exit 1
-  fi
-}
+# The shared helper. This script had the first version of it, written when a
+# run where the domain pool had silently filled reported a refusal for the
+# wrong reason and still passed.
+. "$(dirname "$0")/smoke-lib.sh"
 
 NAME="quota-$(date +%s)"
 
@@ -91,3 +83,5 @@ done
 echo "13. objects removed          -> $(q "$S/v1/files" -H "$T" -H "$D"; grep -o '"objects":\[\]' /tmp/qb >/dev/null && echo "the space is empty" || echo "still holding: $(head -c 80 /tmp/qb)")"
 
 expect "14. module revoked          " "$(q -X DELETE "$S/admin/modules/$NAME" -H "$A")" 204
+
+finish "quotas"
