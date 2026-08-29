@@ -1,6 +1,6 @@
 # Feature index
 
-_Generated: 2026-08-20, by hand. Seventeen features, all shipped._
+_Generated: 2026-08-30, by hand. Twenty nine features, all shipped._
 
 ## Active
 
@@ -42,6 +42,7 @@ None.
 | [Module upgrade](feat-module-upgrade.md) | One action, data kept, and the working version put back when the new one fails | `bin/smoke-module-upgrade` |
 | [Product surface](feat-product-surface.md) | The app follows the phone's light or dark setting, the theme contract is written down, and the phone can attach a file | `bin/smoke-appearance` |
 | [App preview](feat-app-preview.md) | The app rendered through React Native for Web in a phone-shaped panel, and a shell with a bottom bar | `bin/smoke-mobile` |
+| [Owner app view](feat-owner-app-view.md) | The app owner sees their own builds, their place in line, and the app running, on the domain they built it for | `bin/smoke-owner-app` |
 
 ## Abandoned
 

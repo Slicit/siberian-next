@@ -62,14 +62,24 @@ module Siberian
       request(Net::HTTP::Delete, "/admin/apps/#{CGI.escape(domain)}/splash?kind=#{CGI.escape(kind)}")
     end
 
+    # A domain is optional here because an operator legitimately wants every
+    # domain's builds. Whether a given caller is allowed the answer without one
+    # is the Mobile service's decision, not this client's: it refuses a caller
+    # that speaks for a single domain and asks for all of them.
     def builds(domain: nil)
       path = domain ? "/admin/builds?domain=#{CGI.escape(domain)}" : "/admin/builds"
       request(Net::HTTP::Get, path)
     end
 
-    def build(id) = request(Net::HTTP::Get, "/admin/builds/#{id}")
+    # The domain travels with the id for the same reason. Knowing a build number
+    # is not the same as being entitled to it, and the service checks the two
+    # against each other.
+    def build(id, domain: nil) = request(Net::HTTP::Get, with_domain("/admin/builds/#{id}", domain))
     def queue_build(attributes) = request(Net::HTTP::Post, "/admin/builds", attributes)
-    def cancel_build(id) = request(Net::HTTP::Post, "/admin/builds/#{id}/cancel", {})
+
+    def cancel_build(id, domain: nil)
+      request(Net::HTTP::Post, with_domain("/admin/builds/#{id}/cancel", domain), {})
+    end
 
     # The exported preview, as bytes. Raw rather than parsed: it is a website,
     # and every other call here is JSON.
@@ -93,6 +103,10 @@ module Siberian
     def reachable? = !apps.nil?
 
     private
+
+    def with_domain(path, domain)
+      domain ? "#{path}?domain=#{CGI.escape(domain)}" : path
+    end
 
     # The assistant takes as long as it takes, which is why the timeout is a
     # parameter: three seconds is right for reading a page and wrong for asking

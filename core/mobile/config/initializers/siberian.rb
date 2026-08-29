@@ -15,7 +15,6 @@ if shared_lib
   require "service_identity"
   require "service_authentication"
   require "served_domains"
-  require "mobile_themes"
 else
   Rails.logger&.warn("Shared lib/ not found. Manifest parsing and the engine driver are unavailable.")
 end

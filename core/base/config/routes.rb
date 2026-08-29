@@ -16,5 +16,16 @@ Rails.application.routes.draw do
   delete "app/splash", to: "phone_app#remove_splash"
   post "app/build", to: "phone_app#build", as: :build_phone_app
 
+  # The exported web build, served from this domain so the app owner can look
+  # at what they are about to ship without leaving the page they built it on.
+  # Proxied rather than linked: the export lives inside the Mobile service and
+  # nothing outside the core has a route to it.
+  get "app/preview", to: "phone_app#preview", as: :preview_phone_app
+  get "app/preview/*path", to: "phone_app#preview", format: false
+  # Previewing a theme is a query string the built app answers itself; keeping
+  # one is a save. Separate on purpose, so that trying three on does not commit
+  # to any of them.
+  patch "app/theme", to: "phone_app#update_theme", as: :phone_app_theme
+
   get "up", to: "rails/health#show", as: :rails_health_check
 end
