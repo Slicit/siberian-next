@@ -6,17 +6,17 @@
 # module short name and never learns that a module answered.
 schema_version: 1
 name: example-relay
-version: 0.1.0
+version: 1.0.0
 title: Example Mail Relay
 description: Reference module implementing a core interface rather than a product feature.
 
 containers:
   - service: web
-    image: nginx:1.27-alpine
+    image: siberian/example-relay:1.0.0
     role: http
-    internal_port: 80
+    internal_port: 8080
     health:
-      path: /
+      path: /up
       interval_seconds: 30
 
 routes:
