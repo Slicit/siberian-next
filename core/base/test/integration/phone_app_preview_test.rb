@@ -14,7 +14,7 @@ class PhoneAppPreviewTest < ShellTest
       get "/app", headers: headers
     end
 
-    assert_match "app-preview", response.body
+    assert_match "<iframe", response.body
     assert_match "Rebuild preview", response.body
   end
 
@@ -45,7 +45,7 @@ class PhoneAppPreviewTest < ShellTest
     end
 
     assert_match "The preview is building", response.body
-    assert_no_match "app-preview", response.body
+    assert_no_match "<iframe", response.body
   end
 
   test "and with no web build at all it says so rather than showing an empty frame" do
@@ -54,7 +54,7 @@ class PhoneAppPreviewTest < ShellTest
     end
 
     assert_match "No preview built yet", response.body
-    assert_no_match "app-preview", response.body
+    assert_no_match "<iframe", response.body
   end
 
   test "the preview serves what the Mobile service returned" do
