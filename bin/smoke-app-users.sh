@@ -75,7 +75,11 @@ op -o /dev/null -X POST \
   "https://core.$DOMAIN/app-users/$ID"
 
 op -o /tmp/appuser_page "https://core.$DOMAIN/app-users/$ID"
-[ "$(grep -c "$RIDER" /tmp/appuser_page)" -ge 1 ] \n  && check "the account is listed for this domain" "listed" "listed" \n  || check "the account is listed for this domain" "absent" "listed"
+if [ "$(grep -c "$RIDER" /tmp/appuser_page)" -ge 1 ]; then
+  check "the account is listed for this domain" "listed" "listed"
+else
+  check "the account is listed for this domain" "absent" "listed"
+fi
 
 echo
 echo "3. one account, two devices, one identity"
@@ -90,7 +94,9 @@ check "both sign-ins are the same person" "$PHONE_USER" "$TABLET_USER"
 [ "$PHONE" != "$TABLET" ] && check "each device holds its own token" "different" "different" \
   || check "each device holds its own token" "same" "different"
 
-DEVICES=$(a -H "Authorization: Bearer $PHONE" "https://$DOMAIN/-/auth/devices" | grep -c '"platform"')
+# Counted with -o rather than -c: the whole answer is one line, so a line
+# count of a JSON array is always 1 and would pass with one device.
+DEVICES=$(a -H "Authorization: Bearer $PHONE" "https://$DOMAIN/-/auth/devices" | grep -o '"platform"' | wc -l | tr -d ' ')
 check "both devices are listed" "$DEVICES" "2"
 
 echo
