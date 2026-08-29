@@ -90,5 +90,32 @@ else
     || say "no builder to clear workspaces in"
 fi
 
+# Superseded build artifacts.
+#
+# Each finished build leaves an APK of sixty megabytes and nothing removed one,
+# so forty-one builds of the same app held two gigabytes. Only the newest per
+# app and platform is kept: a superseded build of an app that has been built
+# eleven times since is not something anybody is going to install.
+#
+# The build rows stay. They are the log, the duration and the outcome, they cost
+# bytes rather than megabytes, and losing the history to reclaim space nobody
+# was short of would be a bad trade.
+#
+# Guarded by the same in-flight check as the workspaces above: deleting an
+# artifact while its build is running would race the upload.
+if [ "$building" = "0" ]; then
+  # One line on purpose: a continuation here was eaten once, which split the
+  # command in two and reported docker's usage text as the number of
+  # artifacts removed.
+  retention_ruby='r = ArtifactRetention.new.call; puts [r.removed, r.megabytes, r.kept].join(" ")'
+  artifacts=$(cd "$REPO" 2>/dev/null && docker compose --env-file .env -f deploy/compose.yml exec -T mobile bin/rails runner "$retention_ruby" 2>/dev/null | tr -d "")
+  set -- $artifacts
+  if [ -n "$1" ]; then
+    say "removed $1 superseded artifact(s), $2 MB, keeping $3"
+  else
+    say "could not ask the Mobile service to expire artifacts"
+  fi
+fi
+
 after=$(avail)
 say "finished, ${after} MB free, $(( after - before )) MB reclaimed"
