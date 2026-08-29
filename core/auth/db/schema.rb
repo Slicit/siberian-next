@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_29_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_30_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -58,6 +58,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_190000) do
     t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "deactivated_at"
+    t.datetime "deleted_at"
     t.string "domain", null: false
     t.string "email", null: false
     t.datetime "last_seen_at"
@@ -68,6 +69,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_190000) do
     t.datetime "verified_at"
     t.index "domain, lower((email)::text)", name: "index_app_users_on_domain_and_email", unique: true
     t.index ["domain", "active"], name: "index_app_users_on_domain_and_active"
+    t.index ["domain", "deleted_at"], name: "index_app_users_on_domain_and_deleted_at"
     t.index ["verification_digest"], name: "index_app_users_on_verification_digest", unique: true
   end
 
