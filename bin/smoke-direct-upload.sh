@@ -50,9 +50,16 @@ case "$URL" in
   *) fail "no signed URL in: $MINT" ;;
 esac
 
-# The write itself. Straight to the object store, with no Storage in the path.
-code=$(inside "curl -s -o /dev/null -w '%{http_code}' -X PUT '$URL' \
-  -H 'Content-Type: text/plain' --data-binary 'twenty four bytes here!!'")
+# The write itself, from outside the stack.
+#
+# Deliberately not from inside the Storage container. The minted URL names the
+# object store's public address, which is the Router's s3 door, and the whole
+# point is that whoever holds the bytes writes there without Storage in the
+# path. A caller inside the core network cannot even resolve that name, which
+# is the first version of this check answering 000 and being right to.
+code=$(curl -s --cacert "${SIBERIAN_CA:-deploy/certs/ca.pem}" \
+  -o /dev/null -w '%{http_code}' -X PUT "$URL" \
+  -H 'Content-Type: text/plain' --data-binary 'twenty four bytes here!!')
 expect "5. written to the store direct" "$code" 200
 
 # Before confirming, Storage does not know. That is the honest state: the file
