@@ -139,3 +139,22 @@ a dark page.
 Values arriving from the query string are filtered to things that can only be a
 colour. They land inside a stylesheet, so a value that could close a declaration
 could open a rule.
+
+### Keeping it across pages
+
+The shell puts the palette on one URL. Every link, form and redirect after that
+is the module's own, so the palette has to be carried rather than re-sent:
+
+```python
+@app.after_request
+def remember_theme(response):
+    return siberian.theme.remember(response)
+```
+
+Without it the first screen is themed and everything reached from it is not,
+and going back changes the colours again, which reads as the theme being broken
+rather than as the link having dropped it.
+
+The palette is left in a session cookie scoped to the module's own path, so one
+module's theme is not another's. A module reached without a palette sets none
+and reads none, which is what keeps an ordinary browser visit unthemed.
