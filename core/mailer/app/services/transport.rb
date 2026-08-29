@@ -104,7 +104,7 @@ module Transport
     def record(message)
       Rails.logger.info(
         "[mail] would send to=#{message.to} subject=#{message.subject.inspect} " \
-        "module=#{message.module_registration.module_name} domain=#{message.domain}"
+        "sender=#{message.sender_name} domain=#{message.domain}"
       )
       Transport::Result.new(outcome: "delivered", detail: "recorded, no SMTP configured")
     end
