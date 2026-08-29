@@ -84,6 +84,59 @@ measured and bought. It is the right thing to give up, and it is recorded there
 rather than by editing reasoning that was correct when one builder did
 everything.
 
+
+### 2026-08-30: the split leaked once, during its own rollout
+
+The preview worker took an Android build and spent twenty minutes on it while
+two previews waited. Exactly the failure the split exists to prevent, and it
+looked like a preview that was taking a while.
+
+The cause was version skew of my own making: the builders and the Mobile service
+were deployed separately, so for a few minutes a builder that sent `lanes` was
+talking to a service that ignored it. The design already handled the opposite
+skew, where an old builder sends nothing and gets anything, and that is the one
+that was thought about.
+
+So the lane travels with the build now and the worker checks it too. A mismatch
+is put back through a new `release` endpoint rather than failed, so it keeps its
+attempts and the right worker takes it within a poll rather than after the stale
+timeout. Belt and braces, because the cost of one wrong claim is the whole
+feature for as long as the build lasts.
+
+### 2026-08-30: the stale timeout was sized for the slow lane
+
+Ninety minutes is a sensible ceiling for a Gradle build and an absurd one for an
+export that takes sixty seconds. There had only ever been one number to pick and
+it had to suit the slow case.
+
+That was invisible until the lanes existed, and then it was not: a preview
+abandoned by a worker restarted underneath it blocked its own queue for an hour
+and a half. Ten minutes for the preview lane, ninety for the native one.
+
+`bin/reload` learned the second builder in the same change. Naming only the
+first made it a maintenance command that quietly half worked, leaving the lane
+somebody is actually watching on the old code, which is how the leak above
+lasted as long as it did.
+
+
+### 2026-08-30: the misroute left three and a half gigabytes behind
+
+The preview lane's cache volume held 3.5 GB of `.gradle`, put there by the one
+Android build it should never have had. It will never use it again, so it was
+removed by hand and the volume went back to the 412 MB of npm cache the lane
+actually needs.
+
+Worth writing down as a second cost of the leak that was not obvious: a
+misrouted build does not only block a queue for its duration, it leaves the
+wrong lane carrying the other lane's cache for good.
+
+The disk alert did fire during all of this, at 90 MB free against a 3000 MB
+floor, and has since cleared. It caught the fill after the fact rather than
+before it, which is what a scan every quarter of an hour can do about something
+that happens in ninety seconds. That is a limit worth knowing rather than a bug
+worth chasing: scanning often enough to catch it would be scanning often enough
+to be noise.
+
 ## Outcome
 
 A preview takes about a minute whether or not an Android build is running, down
