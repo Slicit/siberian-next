@@ -162,6 +162,15 @@ class FakeRouter
     reload
   end
 
+  # The per-domain core blocks, rewritten whole from the domains that exist.
+  # Recorded as hostnames so a test can assert which domains the Router was
+  # told to serve, which is the thing that was silently wrong.
+  def write_domains(domains)
+    @domains = Array(domains).map(&:to_s)
+  end
+
+  def domains = @domains ||= []
+
   # The map from module name to upstream, rewritten whole on every install,
   # uninstall, and reconcile.
   #
