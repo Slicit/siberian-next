@@ -118,6 +118,25 @@ first made it a maintenance command that quietly half worked, leaving the lane
 somebody is actually watching on the old code, which is how the leak above
 lasted as long as it did.
 
+
+### 2026-08-30: the misroute left three and a half gigabytes behind
+
+The preview lane's cache volume held 3.5 GB of `.gradle`, put there by the one
+Android build it should never have had. It will never use it again, so it was
+removed by hand and the volume went back to the 412 MB of npm cache the lane
+actually needs.
+
+Worth writing down as a second cost of the leak that was not obvious: a
+misrouted build does not only block a queue for its duration, it leaves the
+wrong lane carrying the other lane's cache for good.
+
+The disk alert did fire during all of this, at 90 MB free against a 3000 MB
+floor, and has since cleared. It caught the fill after the fact rather than
+before it, which is what a scan every quarter of an hour can do about something
+that happens in ninety seconds. That is a limit worth knowing rather than a bug
+worth chasing: scanning often enough to catch it would be scanning often enough
+to be noise.
+
 ## Outcome
 
 A preview takes about a minute whether or not an Android build is running, down
