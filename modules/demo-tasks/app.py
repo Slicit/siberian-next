@@ -22,7 +22,7 @@ HTTP round trip to Auth for every mention of the current user.
 
 import os
 
-from flask import Flask, request, redirect, url_for, Response
+from flask import Flask, jsonify, request, redirect, url_for, Response
 from markupsafe import escape
 
 from siberian import Module, Refused
@@ -168,6 +168,42 @@ def up():
     return {"ok": True}
 
 
+# --- the API the native screen reads ---------------------------------------
+#
+# The phone renders tasks as native components rather than as this module's
+# HTML, so it needs the same rows as data. The web face below and this one
+# read the same table through the same ownership rule: a task belongs to the
+# person it was created by, in the WHERE clause and not only in the INSERT.
+#
+# This was missing. The native screen shipped calling `tasks.json` and the
+# module never served it, so every phone and every preview showed "the module
+# answered 404" from the day it was written. Nothing caught it because the
+# mobile smoke checks that an app builds, not that its screens can load.
+@app.get("/tasks.json")
+def tasks_json():
+    user = current_user()
+    if not user:
+        # 401 rather than a redirect: the caller is a phone, and an HTML login
+        # page parsed as JSON is a worse error message than the status code.
+        return jsonify({"error": "not signed in"}), 401
+
+    showing_archived = request.args.get("archived") == "1"
+
+    with db() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, title, done, attachment FROM tasks "
+                "WHERE user_email = %s AND archived = %s ORDER BY done, id DESC",
+                (user["email"], showing_archived),
+            )
+            rows = cursor.fetchall()
+
+    return jsonify([
+        {"id": row[0], "title": row[1], "done": row[2], "attachment": row[3]}
+        for row in rows
+    ])
+
+
 @app.get("/")
 def index():
     user = current_user()
@@ -267,12 +303,26 @@ def create():
     if not user:
         return signed_out()
 
-    title = (request.form.get("title") or "").strip()
+    # Form from the browser, JSON from the phone. The native screen posts
+    # JSON and the web page posts a form, and both mean the same thing, so
+    # this reads whichever arrived rather than making the caller care.
+    payload = request.get_json(silent=True) or {}
+    title = (payload.get("title") or request.form.get("title") or "").strip()
+    created = None
     if title:
         with db() as connection:
             with connection.cursor() as cursor:
-                cursor.execute("INSERT INTO tasks (user_email, title) VALUES (%s, %s)",
-                               (user["email"], title))
+                cursor.execute(
+                    "INSERT INTO tasks (user_email, title) VALUES (%s, %s) RETURNING id",
+                    (user["email"], title),
+                )
+                created = cursor.fetchone()[0]
+
+    # Answered in the shape it was asked in. A phone that posted JSON and got
+    # a redirect to an HTML page has to follow it to find out nothing went
+    # wrong, and the page it lands on is not one it can render.
+    if payload:
+        return jsonify({"id": created, "title": title, "done": False}), 201
 
     return redirect(url_for("index"))
 
