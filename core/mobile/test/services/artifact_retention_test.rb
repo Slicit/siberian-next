@@ -155,4 +155,41 @@ class ArtifactRetentionTest < ActiveSupport::TestCase
     assert_equal "gradle said things", old.reload.log
     assert_equal Build::SUCCEEDED, old.state
   end
+
+  # A web build records the sentinel "preview" rather than a path, because every
+  # web build writes the same place and a superseded one was overwritten the
+  # moment the next finished. There is nothing to delete, and the sweep used to
+  # ask Storage for it anyway, get a 404, record an error, and try again the
+  # next night forever.
+  def preview_for(mobile_app)
+    Build.create!(
+      mobile_app: mobile_app, domain: mobile_app.domain, platform: "web",
+      state: Build::SUCCEEDED, artifact_path: "preview", artifact_bytes: 0
+    )
+  end
+
+  test "a superseded preview is forgotten rather than deleted" do
+    application = app
+    old = preview_for(application)
+    newest = preview_for(application)
+
+    storage = FakeStorage.new
+    result = ArtifactRetention.new(storage: storage).call
+
+    assert_empty result.errors, "asking Storage to delete a preview is asking for a 404"
+    assert_empty storage.removed, "there is nothing per build to remove"
+    assert_nil old.reload.artifact_path, "the row stopped claiming a binary it does not have"
+    assert_equal "preview", newest.reload.artifact_path, "the current one still points at itself"
+  end
+
+  test "a preview is not counted as an artifact that was reclaimed" do
+    application = app
+    preview_for(application)
+    preview_for(application)
+
+    result = ArtifactRetention.new(storage: FakeStorage.new).call
+
+    assert_equal 0, result.removed,
+                 "reporting megabytes reclaimed from something that occupied none is a lie"
+  end
 end

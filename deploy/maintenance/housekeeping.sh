@@ -101,20 +101,26 @@ fi
 # bytes rather than megabytes, and losing the history to reclaim space nobody
 # was short of would be a bad trade.
 #
-# Guarded by the same in-flight check as the workspaces above: deleting an
-# artifact while its build is running would race the upload.
-if [ "$building" = "0" ]; then
-  # One line on purpose: a continuation here was eaten once, which split the
-  # command in two and reported docker's usage text as the number of
-  # artifacts removed.
-  retention_ruby='r = ArtifactRetention.new.call; puts [r.removed, r.megabytes, r.kept].join(" ")'
-  artifacts=$(cd "$REPO" 2>/dev/null && docker compose --env-file .env -f deploy/compose.yml exec -T mobile bin/rails runner "$retention_ruby" 2>/dev/null | tr -d "")
-  set -- $artifacts
-  if [ -n "$1" ]; then
-    say "removed $1 superseded artifact(s), $2 MB, keeping $3"
-  else
-    say "could not ask the Mobile service to expire artifacts"
-  fi
+# Not guarded by the in-flight check, unlike the workspaces above, and that was
+# a real bug rather than a nicety. A build in flight has uploaded nothing yet,
+# so it holds no artifact and cannot be selected; and if it finishes mid sweep
+# it becomes the newest, which is the one thing that is always kept. The race
+# the guard was written for belongs to the workspaces and not to this.
+#
+# The cost of having them share it: on a box where the queue is rarely empty,
+# this never ran at all. Thirteen superseded APKs and seven hundred megabytes
+# had accumulated by the time anybody looked, on a disk at ninety six percent.
+#
+# One line on purpose: a continuation here was eaten once, which split the
+# command in two and reported docker's usage text as the number of artifacts
+# removed.
+retention_ruby='r = ArtifactRetention.new.call; puts [r.removed, r.megabytes, r.kept].join(" ")'
+artifacts=$(cd "$REPO" 2>/dev/null && docker compose --env-file .env -f deploy/compose.yml exec -T mobile bin/rails runner "$retention_ruby" 2>/dev/null | tr -d "")
+set -- $artifacts
+if [ -n "$1" ]; then
+  say "removed $1 superseded artifact(s), $2 MB, keeping $3"
+else
+  say "could not ask the Mobile service to expire artifacts"
 fi
 
 
