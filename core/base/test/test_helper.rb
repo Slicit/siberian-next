@@ -21,6 +21,25 @@ end
 class ShellTest < ActionDispatch::IntegrationTest
   DOMAIN = "owner.test"
 
+  # A saved app, as the Mobile service reports one. Shared rather than repeated
+  # so that a field changing shape breaks every test that depends on it at once
+  # rather than one at a time.
+  APP = {
+    "ok" => true, "domain" => DOMAIN, "name" => "The App",
+    "bundle_identifier" => "test.the.app", "version" => "1.0.0", "build_number" => 3,
+    "theme" => "midnight", "primary_color" => "#334455", "capabilities" => []
+  }.freeze
+
+  def queue(builds: [], queued: 0, building: 0)
+    { "ok" => true, "queued" => queued, "building" => building, "builds" => builds }
+  end
+
+  def a_build(state: "succeeded", platform: "web", **rest)
+    { "id" => 7, "domain" => DOMAIN, "platform" => platform, "state" => state,
+      "created_at" => "2026-08-30T10:00:00Z", "finished_at" => "2026-08-30T10:01:00Z",
+      "artifact_path" => "preview", "artifact_bytes" => 1024 }.merge(rest)
+  end
+
   # The Router puts the domain on every request. Sending it here rather than
   # relying on a fallback is the point: several of these tests are about the
   # Base App using this and never a parameter.

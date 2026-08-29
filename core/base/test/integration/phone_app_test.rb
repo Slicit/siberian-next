@@ -9,21 +9,6 @@ require "test_helper"
 # tests that matter here are not "does it answer" but "what does it say", and
 # "what did it ask for".
 class PhoneAppTest < ShellTest
-  APP = {
-    "ok" => true, "domain" => DOMAIN, "name" => "The App",
-    "bundle_identifier" => "test.the.app", "version" => "1.0.0", "build_number" => 3,
-    "theme" => "midnight", "primary_color" => "#334455", "capabilities" => []
-  }.freeze
-
-  def queue(builds: [], queued: 0, building: 0)
-    { "ok" => true, "queued" => queued, "building" => building, "builds" => builds }
-  end
-
-  def build(state: "succeeded", platform: "web", **rest)
-    { "id" => 7, "domain" => DOMAIN, "platform" => platform, "state" => state,
-      "created_at" => "2026-08-30T10:00:00Z", "finished_at" => "2026-08-30T10:01:00Z",
-      "artifact_path" => "preview", "artifact_bytes" => 1024 }.merge(rest)
-  end
 
   # Configuring the app is not using the product. Somebody who can open the
   # modules still cannot decide what the app may do to a phone.
@@ -64,7 +49,7 @@ class PhoneAppTest < ShellTest
   end
 
   test "the builds it lists are the ones the queue gave it" do
-    as_owner(mobile: FakeMobile.new(app: APP, builds: queue(builds: [build(platform: "android")]))) do
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue(builds: [a_build(platform: "android")]))) do
       get "/app", headers: headers
     end
 
@@ -103,7 +88,7 @@ class PhoneAppTest < ShellTest
   end
 
   test "a waiting build is told where it is in line" do
-    waiting = build(state: "queued", platform: "android", "position" => 3)
+    waiting = a_build(state: "queued", platform: "android", "position" => 3)
 
     as_owner(mobile: FakeMobile.new(app: APP, builds: queue(builds: [waiting], queued: 3))) do
       get "/app", headers: headers

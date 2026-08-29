@@ -4,17 +4,13 @@ require "test_helper"
 
 # The preview, the theme, and what happens when the Mobile service says no.
 class PhoneAppPreviewTest < ShellTest
-  APP = PhoneAppTest::APP
-
-  def queue(builds) = { "ok" => true, "queued" => 0, "building" => 0, "builds" => builds }
-
   def web_build(state: "succeeded")
     { "id" => 9, "domain" => DOMAIN, "platform" => "web", "state" => state,
       "created_at" => "2026-08-30T10:00:00Z", "finished_at" => "2026-08-30T10:01:00Z" }
   end
 
   test "the frame is offered once a web build has finished" do
-    as_owner(mobile: FakeMobile.new(app: APP, builds: queue([web_build]))) do
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue(builds: [web_build]))) do
       get "/app", headers: headers
     end
 
@@ -27,7 +23,7 @@ class PhoneAppPreviewTest < ShellTest
   # those against the directory it believes it is in: at /app/preview it asks
   # for /app/_expo/... and gets nothing. A blank white phone, and no error.
   test "the frame names index.html so the export's own assets resolve" do
-    as_owner(mobile: FakeMobile.new(app: APP, builds: queue([web_build]))) do
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue(builds: [web_build]))) do
       get "/app", headers: headers
     end
 
@@ -35,7 +31,7 @@ class PhoneAppPreviewTest < ShellTest
   end
 
   test "it opens on the theme that is saved" do
-    as_owner(mobile: FakeMobile.new(app: APP, builds: queue([web_build]))) do
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue(builds: [web_build]))) do
       get "/app", headers: headers
     end
 
@@ -44,7 +40,7 @@ class PhoneAppPreviewTest < ShellTest
   end
 
   test "a web build still running does not pretend to be a preview" do
-    as_owner(mobile: FakeMobile.new(app: APP, builds: queue([web_build(state: "building")]))) do
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue(builds: [web_build(state: "building")]))) do
       get "/app", headers: headers
     end
 
@@ -53,7 +49,7 @@ class PhoneAppPreviewTest < ShellTest
   end
 
   test "and with no web build at all it says so rather than showing an empty frame" do
-    as_owner(mobile: FakeMobile.new(app: APP, builds: queue([]))) do
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue)) do
       get "/app", headers: headers
     end
 
@@ -100,7 +96,7 @@ class PhoneAppPreviewTest < ShellTest
   end
 
   test "keeping a theme sends only the theme" do
-    as_owner(mobile: FakeMobile.new(app: APP, builds: queue([]))) do |mobile|
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue)) do |mobile|
       patch "/app/theme", params: { theme: "meadow" }, headers: headers
 
       saved = mobile.asked.find { |call| call.first == :save_app }
@@ -115,7 +111,7 @@ class PhoneAppPreviewTest < ShellTest
   # A theme that no longer exists renders in the default rather than failing, so
   # the sentence has to come from the same lookup the app uses.
   test "a theme nobody has heard of does not take the page down" do
-    as_owner(mobile: FakeMobile.new(app: APP, builds: queue([]))) do
+    as_owner(mobile: FakeMobile.new(app: APP, builds: queue)) do
       patch "/app/theme", params: { theme: "chartreuse" }, headers: headers
     end
 
