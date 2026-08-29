@@ -1,0 +1,70 @@
+<% content_for :title, "Database audit" %>
+
+<div class="spread" style="margin-bottom:1.2rem">
+  <div>
+    <h1>Database audit</h1>
+    <p class="muted" style="margin:0">
+      A module reading a table it does not own goes through the Database
+      service, table by table, against a grant an operator approved with a
+      stated reason. That is the only reason this trail can exist: a direct
+      connection would be unobservable.
+    </p>
+  </div>
+</div>
+
+<% if @report.nil? %>
+  <div class="alert">
+    The Database service did not answer. Nothing has been lost; this page just
+    cannot show it.
+  </div>
+<% else %>
+  <div class="card">
+    <header>
+      <h2>Filter</h2>
+    </header>
+    <div class="row wrap" style="gap:.4rem">
+      <%= link_to "Everything", audit_path, class: "button#{' on' unless @refusals || @module_name}" %>
+      <%# Refusals are usually the interesting ones: a grant somebody expected
+          to have, or one somebody expected not to. %>
+      <%= link_to "Refusals only", audit_path(refusals: true), class: "button#{' on' if @refusals}" %>
+    </div>
+  </div>
+
+  <div class="card">
+    <header>
+      <h2>Events</h2>
+    </header>
+
+    <% if @events.any? %>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>When</th><th>Module</th><th>Domain</th><th>Action</th><th>Subject</th><th>Detail</th></tr>
+          </thead>
+          <tbody>
+            <% @events.each do |event| %>
+              <tr>
+                <td class="muted small">
+                  <%= event["at"] || event["created_at"] %>
+                </td>
+                <td class="mono"><%= event["module_name"] %></td>
+                <td class="muted small"><%= event["domain"] %></td>
+                <td>
+                  <span class="badge<%= ' danger' if event['action'].to_s.include?('refus') %>">
+                    <%= event["action"] %>
+                  </span>
+                </td>
+                <td class="mono small"><%= event["subject"] %></td>
+                <td class="muted small"><%= truncate(event["detail"].to_s, length: 100) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <div class="empty">
+        Nothing recorded<%= " matching that" if @refusals || @module_name %>.
+      </div>
+    <% end %>
+  </div>
+<% end %>

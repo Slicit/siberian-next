@@ -71,6 +71,13 @@ Rails.application.routes.draw do
   delete "app-users/:id/accounts/:account_id/devices/:device_id", to: "app_users#revoke_device",
          as: :app_user_device
 
+  # What the system has been doing, for the two services whose work is
+  # invisible until somebody asks: mail that did not arrive, and a module
+  # reading somebody else's tables.
+  get "queue", to: "queue#index", as: :queue
+  post "queue/:id/retry", to: "queue#retry_message", as: :retry_message
+  get "audit-trail", to: "queue#audit", as: :audit
+
   get "interfaces", to: "interfaces#index", as: :interfaces
   get "activity", to: "activities#index", as: :activity
 

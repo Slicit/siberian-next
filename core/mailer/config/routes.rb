@@ -25,6 +25,13 @@ Rails.application.routes.draw do
     post "modules", to: "modules#create"
     delete "modules/:module_name", to: "modules#destroy"
     get "queue", to: "modules#queue"
+
+    # Putting a dead message back, from the Backoffice.
+    #
+    # The module-facing retry needs the sending module's token. An operator
+    # looking at a stuck queue does not have one and should not: this is the
+    # same operation reached through the door the Orchestrator already uses.
+    post "queue/:id/retry", to: "modules#retry_message"
   end
 
   get "up", to: "rails/health#show", as: :rails_health_check

@@ -57,6 +57,21 @@ module Admin
       }
     end
 
+
+    # POST /admin/queue/:id/retry
+    def retry_message
+      message = Message.find_by(id: params[:id])
+      return render json: { error: "no such message" }, status: :not_found if message.nil?
+
+      unless message.dead? || message.cancelled?
+        return render json: {
+          error: "only a dead or cancelled message can be retried", state: message.state
+        }, status: :conflict
+      end
+
+      message.revive!
+      render json: message.summary.merge(module_name: message.sender_name)
+    end
     # DELETE /admin/modules/:module_name
     def destroy
       registration = ModuleRegistration.find_by!(module_name: params[:module_name])

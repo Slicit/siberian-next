@@ -44,6 +44,10 @@ module Siberian
           { label: "Storage", route: :storage_path, permission: "core.modules.read", controller: "storage" },
           { label: "Phone apps", route: :mobile_path, permission: "core.modules.read", controller: "mobile" },
           { label: "Interfaces", route: :interfaces_path, permission: "core.modules.read", controller: "interfaces" },
+          { label: "Mail queue", route: :queue_path, permission: "core.modules.read",
+            controller: "queue" },
+          { label: "Database audit", route: :audit_path, permission: "core.audit.read",
+            controller: "queue" },
           { label: "Activity", route: :activity_path, permission: "core.audit.read", controller: "activities" }
         ]
       }
