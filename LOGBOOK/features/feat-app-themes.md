@@ -135,20 +135,26 @@ the Backoffice root for the bundle and got a 404 and a blank frame. Rewritten in
 the export rather than in the page that frames it, so the directory works
 wherever it is put down.
 
-### 2026-08-29: the CPU cap made Android builds roughly three times slower
+### 2026-08-29: the CPU cap slows Android builds, and by less than was claimed
 
 Not a decision so much as a measured consequence, recorded because it is the
 kind of trade that is easy to forget having made.
 
-The builder is capped at one core of two so a build cannot starve Postgres. An
-Android build that took about ten minutes now takes over thirty five, at 99
-percent of its single core and 2.5 GB of its 3 GB ceiling.
+The builder is capped at one core of two so a build cannot starve Postgres.
 
-The cap is doing exactly what it was set to do. Whether one core is the right
-number is a different question from whether a cap was right, and it wants a
-measurement rather than a guess: raising it to 1.5 would leave half a core for
-everything else, which may well be enough, and that is worth testing on a box
-with more disk to spare.
+**Corrected on 2026-08-30.** This entry originally said an Android build took
+"over thirty five" minutes under the cap. It does not, and never did. The
+recorded durations of the last twelve successful Android builds are 18 to 25
+minutes, taken from `build_attempts.duration_ms` rather than from watching a
+clock and remembering. The original figure came from noticing a build still
+running some time after it started and assuming the rest.
+
+The number mattered, because it was the argument for raising the cap. It is
+recorded here rather than quietly fixed, because a measurement that turns out to
+be a guess is worth knowing about in the same place the guess was written down.
+
+The cap is doing what it was set to do. Whether one core is right is a separate
+question and is answered in `feat-builder-cap.md`.
 
 ## Outcome
 
