@@ -54,7 +54,20 @@ class DomainQuota < ApplicationRecord
 
   # Counters drift. Nothing here is clever enough to guarantee they cannot, so
   # recomputing is a button rather than a hope.
-  def recalculate!
+  # The pool, counted from what the object store actually holds.
+  #
+  # Each bucket is recounted first. Summing the columns alone only re-derived
+  # the domain total from numbers that could themselves be wrong, so a drifted
+  # bucket produced a drifted domain and a report saying `drift: 0`: the one
+  # thing named recalculate could not see the thing it was reconciling against.
+  #
+  # `deep:` exists because the cheap version is still worth having. After a
+  # write or a delete the columns are correct by construction and only the
+  # domain total needs re-deriving; it is only a bucket touched outside this
+  # service that needs the walk.
+  def recalculate!(deep: true)
+    Bucket.where(domain: domain).find_each(&:recalculate!) if deep
+
     total = Bucket.where(domain: domain).sum(:bytes_used)
     update!(bytes_used: total, recalculated_at: Time.current)
     total
