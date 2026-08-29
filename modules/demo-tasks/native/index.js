@@ -11,11 +11,15 @@
 // It reads the same rows the browser does and offers the same actions. A screen
 // that can show a task as done but cannot mark one is not a smaller version of
 // the feature, it is a picture of one: the phone is where most people will use
-// this, so parity is the requirement rather than the ambition. What is missing
-// is attaching a file, which needs a document picker, and it is absent rather
-// than half present.
+// this, so parity is the requirement rather than the ambition.
+//
+// Attaching a file included, which is why this screen declares document_picker
+// as a requirement. Unapproved, the whole screen falls back to the WebView,
+// which already has attachments: an operator declining the picker costs the
+// native rendering and nothing a person can do.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
 
 // Everything this screen sends is JSON, so the module answers in kind rather
 // than redirecting to a page a phone cannot render.
@@ -90,6 +94,39 @@ export function TaskList({ siberian }) {
   const setArchived = (task, archived) =>
     act(task.id, `tasks/${task.id}/${archived ? "archive" : "unarchive"}`);
 
+
+  // Attaching a file.
+  //
+  // Multipart rather than JSON, because the module's endpoint is the same one
+  // the browser form posts to and there is no reason for two. `Accept: json` is
+  // what makes it answer with the row instead of a redirect a phone cannot
+  // follow, and the content type is left to fetch: setting it by hand loses the
+  // multipart boundary, and the failure reads as a corrupt upload.
+  const attach = async (task) => {
+    let picked;
+    try {
+      picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+    } catch (problem) {
+      return setError(`the file picker would not open: ${problem.message}`);
+    }
+
+    if (picked.canceled) return;
+
+    const file = picked.assets && picked.assets[0];
+    if (!file) return;
+
+    const body = new FormData();
+    body.append("file", {
+      uri: file.uri,
+      name: file.name || "attachment",
+      type: file.mimeType || "application/octet-stream"
+    });
+
+    await act(task.id, `tasks/${task.id}/attach`, {
+      headers: { Accept: "application/json" },
+      body
+    });
+  };
   const remove = (task) => {
     if (confirming !== task.id) return setConfirming(task.id);
     setConfirming(null);
@@ -148,6 +185,14 @@ export function TaskList({ siberian }) {
                 {item.attachment ? <Text style={styles.meta}>{item.attachment}</Text> : null}
               </View>
             </Pressable>
+
+            {/* Not offered on an archived task: the browser does not offer it
+                there either, and parity is the point of this screen. */}
+            {!showArchived ? (
+              <Pressable onPress={() => attach(item)} style={styles.action}>
+                <Text style={styles.actionLabel}>{item.attachment ? "Replace" : "Attach"}</Text>
+              </Pressable>
+            ) : null}
 
             <Pressable
               onPress={() => setArchived(item, !showArchived)}

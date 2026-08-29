@@ -92,6 +92,41 @@ class MobileThemesTest < Minitest::Test
     refute parameters.key?("theme_name"), "prose does not travel"
   end
 
+
+  # Following the phone's light or dark setting. A theme is a palette rather
+  # than a light-or-dark decision, so the operator's choice has to survive
+  # whenever it can: that is what makes this something they can leave on.
+  def test_a_matching_theme_is_kept_rather_than_replaced
+    assert_equal "meadow", themes.for_scheme("light", preferred: "meadow")
+    assert_equal "daylight", themes.for_scheme("light", preferred: "daylight")
+    assert_equal "midnight", themes.for_scheme("dark", preferred: "midnight")
+  end
+
+  def test_a_phone_asking_for_dark_gets_a_dark_theme
+    themes.keys.each do |key|
+      chosen = themes.for_scheme("dark", preferred: key)
+
+      assert_equal "dark", themes.fetch(chosen)[:scheme],
+                   "#{key} on a dark phone resolved to #{chosen}, which is not dark"
+    end
+  end
+
+  def test_a_phone_asking_for_light_gets_a_light_theme
+    themes.keys.each do |key|
+      chosen = themes.for_scheme("light", preferred: key)
+
+      assert_equal "light", themes.fetch(chosen)[:scheme],
+                   "#{key} on a light phone resolved to #{chosen}, which is not light"
+    end
+  end
+
+  # Anything that is not the word dark is light, including nil, because a device
+  # that has not said is not a device asking for dark.
+  def test_an_unknown_scheme_is_treated_as_light
+    [nil, "", "sepia"].each do |scheme|
+      assert_equal "light", themes.fetch(themes.for_scheme(scheme, preferred: "midnight"))[:scheme]
+    end
+  end
   private
 
   # Straight line distance in RGB. Crude, and enough to catch a palette where

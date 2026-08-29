@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# The palette an operator chose, the light or dark setting on the phone, and the
+# capability behind attaching a file.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-appearance.sh

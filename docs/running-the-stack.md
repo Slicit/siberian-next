@@ -261,6 +261,12 @@ so a bare `bin/rails test` runs against the development database: it fails on
 other people's data and writes to it. `bin/test-service` sets the test database
 the way CI does.
 
+**A module renders unthemed inside the app.** The palette arrives as query
+parameters and has to be carried past the first page in a cookie, or the first
+screen is themed and everything reached from it is not.
+[`docs/theming-a-module.md`](theming-a-module.md) has the whole contract;
+`modules/example-notes` implements it in PHP with no SDK.
+
 **A permission change has not taken effect.** It is cached for 30 seconds per
 session. Wait, or use the endpoint that never caches.
 

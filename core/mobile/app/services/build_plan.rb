@@ -39,6 +39,10 @@ class BuildPlan
         # ten minute build.
         theme: @app.theme,
         themes: Siberian::MobileThemes.all,
+        # Whether the phone's own light or dark setting may pick a different
+        # one. The palette an operator chose is still used whenever its scheme
+        # matches, so this only changes what happens when it does not.
+        follow_device_scheme: @app.follow_device_scheme,
         icon_path: @app.icon_path
       },
       # What it shows before it has drawn anything. The bytes are not here: the
