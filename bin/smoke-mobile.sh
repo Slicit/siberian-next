@@ -62,6 +62,20 @@ echo "   /m/demo-tasks/      -> $(c -o /dev/null -w '%{http_code}' "https://$DOM
 echo "   /m/no-such-module/x -> $(c -o /dev/null -w '%{http_code}' "https://$DOMAIN/m/no-such-module/x")   (expect 404, not a 502 at a name that is not there)"
 echo "   /m/<capability-id>  -> $(c -o /dev/null -w '%{http_code}' "https://$DOMAIN/m/demo_tasks-task-list")   (expect 200, still the Base App frame)"
 
+# The screen's own data, not just the door it comes through.
+#
+# The native screen shipped calling tasks.json and the module never served
+# it, so every phone and every preview showed "the module answered 404" from
+# the day it was written. Everything above passed the whole time: a door that
+# opens is not a screen that loads.
+screen=$(c -o /tmp/mob_screen -w '%{http_code}' "https://$DOMAIN/m/demo-tasks/tasks.json")
+echo "   the screen's own data -> $screen   (expect 200)"
+if [ "$screen" != "200" ]; then
+  echo "   FAIL: the native screen calls this and would show the error it prints"
+  exit 1
+fi
+grep -qF '[' /tmp/mob_screen || { echo "   FAIL: not a JSON list: $(head -c 80 /tmp/mob_screen)"; exit 1; }
+
 echo
 echo "8. the product side, where somebody configures their own domain's app"
 J=/tmp/mob_user_jar.txt
