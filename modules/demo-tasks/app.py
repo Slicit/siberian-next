@@ -156,6 +156,17 @@ def render(body, title="Tasks"):
     return Response(PAGE.format(style=STYLE, body=body, title=title), mimetype="text/html")
 
 
+def wants_json():
+    """Whether the caller is the native screen rather than the browser.
+
+    A phone asks with Accept: application/json or by posting JSON. It gets
+    the row back; the browser gets the redirect it expects. Both faces do the
+    same thing to the same table, and neither has to know the other exists.
+    """
+    return (request.is_json
+            or "application/json" in (request.headers.get("Accept") or ""))
+
+
 def signed_out():
     return render(
         "<h1>Not signed in</h1><p class='muted'>This module could not identify you. "
@@ -339,6 +350,12 @@ def toggle(task_id):
                 "UPDATE tasks SET done = NOT done WHERE id = %s AND user_email = %s",
                 (task_id, user["email"])
             )
+    if wants_json():
+        with db() as connection:
+            task = owned_task(connection, task_id, user["email"])
+        # The new state, so the screen can draw it without asking again.
+        return jsonify({"id": task_id, "done": bool(task and task[2])})
+
     return redirect(request.referrer or url_for("index"))
 
 
@@ -364,6 +381,9 @@ def set_archived(task_id, archived):
                 "UPDATE tasks SET archived = %s WHERE id = %s AND user_email = %s",
                 (archived, task_id, user["email"]),
             )
+
+    if wants_json():
+        return jsonify({"id": task_id, "archived": bool(archived)})
 
     return redirect(url_for("index", archived="1" if not archived else None))
 
@@ -477,6 +497,9 @@ def attach(task_id):
                 "UPDATE tasks SET attachment = %s WHERE id = %s AND user_email = %s",
                 (name, task_id, user["email"]),
             )
+
+    if wants_json():
+        return jsonify({"id": task_id, "attachment": name})
 
     return redirect(request.referrer or url_for("index"))
 
