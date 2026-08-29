@@ -429,15 +429,16 @@ services:
       - ../modules:/modules:ro
       - preview_workspace:/workspace
       - preview_cache:/home/builder
-    # Lower than the native lane deliberately. This container exists to be
-    # quick, not to be big: an Expo export is mostly Metro bundling, which does
-    # not use what it is given the way Gradle does. The number that matters is
-    # what is left for the product while both lanes are busy, and on a two core
-    # box that is the whole argument for keeping this one small.
+    # The same as the native lane, which is the whole point rather than an
+    # oversight. Measured on this box, with an Android build running next to
+    # it: a preview took 298 seconds at 0.75 against a native lane of 1.5, and
+    # 60 seconds once both were 1.0. Oversubscribing two cores did not make
+    # the preview a little slower, it made it five times slower, and a preview
+    # is the one build somebody is sitting and watching.
     deploy:
       resources:
         limits:
-          cpus: "${SIBERIAN_PREVIEW_CPUS:-0.75}"
+          cpus: "${SIBERIAN_PREVIEW_CPUS:-1.0}"
           memory: ${SIBERIAN_PREVIEW_MEMORY:-2G}
     depends_on:
       mobile:
