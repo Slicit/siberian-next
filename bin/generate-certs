@@ -36,10 +36,25 @@ if [ -f "$OUT/ca.pem" ] && [ -f "$OUT/server.pem" ] && [ "${FORCE:-}" != "true" 
   exit 0
 fi
 
-echo "Generating a development CA..."
-openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-  -keyout "$OUT/ca-key.pem" -out "$OUT/ca.pem" \
-  -subj "/CN=Siberian Development CA/O=Siberian" 2>/dev/null
+# The CA outlives the server certificate, deliberately.
+#
+# Adding a domain means reissuing the leaf with a longer SAN list, and that is a
+# routine thing to do. Reissuing the CA is not: every machine that trusted the
+# old one stops trusting anything, including browsers on other people's
+# laptops, and the failure looks like the site being broken rather than like a
+# certificate being replaced.
+#
+# So FORCE reissues the leaf and keeps the CA. Removing deploy/certs/ca.pem is
+# the deliberate act that makes a new one, and it is deliberate because it costs
+# everybody a re-trust.
+if [ -f "$OUT/ca.pem" ] && [ -f "$OUT/ca-key.pem" ]; then
+  echo "Keeping the existing development CA. Delete $OUT/ca.pem to make a new one."
+else
+  echo "Generating a development CA..."
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+    -keyout "$OUT/ca-key.pem" -out "$OUT/ca.pem" \
+    -subj "/CN=Siberian Development CA/O=Siberian" 2>/dev/null
+fi
 
 # Three names per domain: the domain itself, one label under it for core and
 # for anything else the core serves, and one label under apps for the module

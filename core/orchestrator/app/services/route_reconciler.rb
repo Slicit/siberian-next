@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "openssl"
+
 # Puts routing back the way the database says it should be.
 #
 # The Router holds two pieces of state the engine owns rather than we do: which
@@ -60,16 +62,27 @@ class RouteReconciler
       []
     end
 
-    # A domain the Router serves that the applications will refuse.
+    # Published for every other service, which cannot read this database and
+    # would otherwise refuse a Host it had not been told about at boot.
+    begin
+      Siberian::ServedDomains.write!(written_domains)
+    rescue StandardError => e
+      errors << "domains file: #{e.message}"
+    end
+
+    # A domain that is served but not in the certificate.
     #
-    # Rails checks the Host header against a list read from the environment at
-    # boot, so a domain added here answers with a routing error until the
-    # services are restarted with it. Reported rather than repaired: restarting
-    # every core service is not something a reconcile should decide to do.
-    unallowed = written_domains - allowed_domains
-    if unallowed.any?
-      errors << "not in SIBERIAN_DOMAINS, so the applications will refuse them " \
-                "until the core services restart: #{unallowed.join(', ')}"
+    # Reported rather than repaired, and the distinction matters: reissuing a
+    # certificate is `bin/generate-certs`, which needs the CA key and belongs to
+    # whoever runs the box, not to a reconcile that a page load can trigger.
+    #
+    # Without this the failure arrives as a browser warning on one domain while
+    # everything else looks healthy, which reads as a browser problem.
+    uncertified = written_domains - certified_domains
+    if uncertified.any?
+      errors << "not in the certificate, so a browser will refuse them: " \
+                "#{uncertified.join(', ')}. Reissue with " \
+                "SIBERIAN_DOMAINS=#{written_domains.join(',')} FORCE=true bin/generate-certs"
     end
 
     reloaded = begin
@@ -91,12 +104,36 @@ class RouteReconciler
 
   private
 
-  # What the applications were told to accept, which is not necessarily what the
-  # database says is served.
-  def allowed_domains
-    list = ENV["SIBERIAN_DOMAINS"].to_s.split(",").map(&:strip)
-    list << ENV["SIBERIAN_DOMAIN"].to_s.strip
-    list.reject(&:empty?).uniq
+  # The domains the Router's certificate actually covers, read from the
+  # certificate rather than from whatever it was generated with: the file on
+  # disk is what a browser will be shown.
+  #
+  # A wildcard entry certifies the domain it wildcards, because `*.example.test`
+  # is what makes `core.example.test` work, and that is what a served domain
+  # needs.
+  def certified_domains
+    path = ENV.fetch("SIBERIAN_CERT_PATH", "/var/lib/siberian/certs/server.pem")
+    return [] unless File.exist?(path)
+
+    san = OpenSSL::X509::Certificate.new(File.read(path))
+                                    .extensions
+                                    .find { |extension| extension.oid == "subjectAltName" }
+    return [] if san.nil?
+
+    # DNS entries only. The SAN list also carries `IP Address:127.0.0.1`, and a
+    # filter that merely strips a prefix keeps whatever it failed to strip.
+    san.value.to_s.split(",").filter_map do |entry|
+      entry = entry.strip
+      next unless entry.start_with?("DNS:")
+
+      entry.delete_prefix("DNS:").sub(/\A\*\./, "")
+    end.uniq
+  rescue StandardError => e
+    # An unreadable certificate is not a reason to fail a reconcile, and saying
+    # nothing about coverage is better than claiming a domain is uncovered
+    # because the file could not be parsed.
+    Rails.logger.warn("could not read the certificate at #{path}: #{e.message}")
+    []
   end
 
   # The data cluster loses its attachments for the same reason the Router does.

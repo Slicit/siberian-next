@@ -6,8 +6,7 @@ Agent-surfaced candidates awaiting human triage. See LOGBOOK spec §12.
 
 ## 2026-08-29
 
-- `bin/generate-certs` takes one domain, so a second served domain has no certificate. Routing, host authorisation and reconciliation no longer assume a single domain; TLS still does, and a real second domain needs its own SAN entry before a browser will load it. (trigger: gap, source: feat-multi-domain Intent 2026-08-29, agent: claude-code)
-- `SIBERIAN_DOMAINS` is read at boot, so a domain added in the Backoffice does not answer until every core service restarts. The reconciler reports the gap by name rather than repairing it, because restarting the core is not a decision a reconcile should take. Closing it properly means the applications learning their allowed hosts at request time rather than at boot. (trigger: gap, source: feat-multi-domain decision 2026-08-29, agent: claude-code)
+- The certificate is reissued by hand. The reconciler names the served domains it does not cover and the exact command, but adding a domain still needs somebody to run `bin/generate-certs` and reload the Router. Automating it means the Orchestrator holding the CA key, which is a larger decision than the convenience. (trigger: gap, source: feat-domain-gaps Outcome 2026-08-29, agent: claude-code)
 
 ## 2026-08-22
 
