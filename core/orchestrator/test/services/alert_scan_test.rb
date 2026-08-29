@@ -248,4 +248,33 @@ class AlertScanTest < ActiveSupport::TestCase
     assert_empty post.sent,
                  "twenty nine deaths from last week is history, not an incident"
   end
+
+  # Found by the smoke running the same scenario twice. The key hashed the
+  # message text, so the same sentence could never be sent again: a disk that
+  # filled to the same number next month would be deduplicated into an email
+  # somebody had already read and acted on.
+  test "the same condition recurring is emailed again" do
+    post = Post.new
+    2.times { scan(free: 100, post: post).call }
+    assert_equal 1, post.sent.length
+
+    scan(free: 50_000, post: post).call
+    2.times { scan(free: 100, post: post).call }
+
+    keys = post.sent.map { |m| m[:idempotency_key] }
+    assert_equal keys.uniq.length, keys.length,
+                 "a second occurrence must not be deduplicated into the first"
+  end
+
+  test "but a retry inside one occurrence is not" do
+    post = Post.new
+    2.times { scan(free: 100, post: post).call }
+    first = post.sent.first[:idempotency_key]
+
+    AlertCondition.find_by(key: "disk.low").update!(state: AlertCondition::PENDING)
+    scan(free: 100, post: post).call
+
+    assert_equal first, post.sent.last[:idempotency_key],
+                 "the same occurrence reported twice is one email, which is what the key is for"
+  end
 end

@@ -91,8 +91,13 @@ echo "$code   (expect 403)"
 [ "$code" = "403" ] || fail "a signature for a public object reached a private one"
 
 echo -n "9. tampered signature refused  -> "
+# Replaced wholesale rather than by editing one character. Changing the first
+# character to a zero does nothing at all when it is already a zero, which is
+# one signature in sixteen, and the check then passed a genuinely unsigned
+# request and reported it as a failure. An intermittent security check is worse
+# than none: it gets rerun until it is green and then believed.
 code=$(curl -s --cacert "$CA" -o /dev/null -w "%{http_code}" \
-  "$(echo "$SIGNED" | sed 's/X-Amz-Signature=./X-Amz-Signature=0/')")
+  "$(echo "$SIGNED" | sed 's/X-Amz-Signature=[0-9a-f]*/X-Amz-Signature=0000000000000000000000000000000000000000000000000000000000000000/')")
 echo "$code   (expect 403)"
 [ "$code" = "403" ] || fail "a tampered signature was accepted"
 

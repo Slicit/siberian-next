@@ -220,11 +220,22 @@ class AlertScan
                 "Resolved on #{primary_domain}"
               end
 
+    # Keyed on this occurrence, not on the words.
+    #
+    # Hashing the body meant the same sentence could never be sent twice, ever:
+    # a disk that filled to the same number again next month would be silently
+    # deduplicated into an email somebody read and dealt with weeks earlier. The
+    # smoke caught it by running the same scenario twice.
+    #
+    # `firing_since` is what makes one occurrence different from the next, so a
+    # retry inside an occurrence is still deduplicated and a recurrence is not.
+    occurrence = opened.map { |c| "#{c.key}@#{c.firing_since.to_i}" } + closed.map { |k| "clear:#{k}" }
+    stamp = Digest::SHA256.hexdigest(occurrence.sort.join("|"))[0, 16]
+
     recipients.each do |address|
       @post.deliver(
         domain: primary_domain, to: address, subject: subject, text_body: body,
-        # Keyed on what changed, so two scans racing cannot send it twice.
-        idempotency_key: "alert-#{Digest::SHA256.hexdigest(subject + body)[0, 16]}-#{address}"
+        idempotency_key: "alert-#{stamp}-#{address}"
       )
     end
 
