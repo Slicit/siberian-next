@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Installs a module that declares an endpoint it does not serve, and asserts the
+# refusal. Then installs an honest one, because a probe that refuses everything
+# would pass the first half and be worse than no probe.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-honest-manifest.sh

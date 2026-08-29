@@ -1,0 +1,43 @@
+# A module that declares something it does not serve.
+#
+# It exists to be refused. Every other reference module demonstrates the
+# contract working; this one demonstrates the contract being enforced, which was
+# untestable while nothing enforced it.
+#
+# The failure it stands for is real. example-relay declared mail.transport.v1 at
+# an endpoint its stock nginx image could not serve, the core believed the
+# manifest, and every message in the system died on its first attempt for weeks
+# with nothing reporting anything wrong.
+#
+# Not in the catalogue by accident: `bin/smoke-honest-manifest` installs it on
+# purpose and asserts the refusal.
+schema_version: 1
+name: example-liar
+version: 1.0.0
+title: Example Dishonest Module
+description: Declares an endpoint it does not serve, so the install refuses it.
+
+containers:
+  - service: web
+    image: nginx:1.27-alpine
+    role: http
+    internal_port: 80
+    health:
+      path: /
+      interval_seconds: 30
+
+routes:
+  base: /example-liar
+  entry: web
+  origin: example-liar
+
+capabilities:
+  system:
+    # nginx serves static files from /usr/share/nginx/html and nothing else.
+    # There is no /internal/mail and there never was.
+    - id: example_liar.mail.transport
+      interface: mail.transport.v1
+      endpoint: /internal/mail
+      title: A transport that is not there
+      priority: 9000
+      exclusive: false

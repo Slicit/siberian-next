@@ -8,7 +8,7 @@ class ModuleUninstallerTest < ActiveSupport::TestCase
     @engine = FakeEngine.new
     @router = FakeRouter.new
     @domain = Domain.create!(hostname: "example.test", primary: true)
-    @installed = ModuleInstaller.new(manifest, driver: @engine, router: @router, domains: [@domain])
+    @installed = ModuleInstaller.new(manifest, driver: @engine, router: @router, domains: [@domain], probe: FakeProbe)
                                .call.installed_module
   end
 
