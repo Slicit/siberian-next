@@ -446,6 +446,8 @@ def destroy(task_id):
         task = owned_task(connection, task_id, user["email"])
 
         if not task:
+            if wants_json():
+                return jsonify({"error": "no task of yours by that id"}), 404
             return redirect(url_for("index"))
 
         _, _, _, _, attachment = task
@@ -463,6 +465,9 @@ def destroy(task_id):
         with connection.cursor() as cursor:
             cursor.execute("DELETE FROM tasks WHERE id = %s AND user_email = %s",
                            (task_id, user["email"]))
+
+    if wants_json():
+        return jsonify({"id": task_id, "deleted": True})
 
     return redirect(url_for("index"))
 

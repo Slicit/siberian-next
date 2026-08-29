@@ -226,18 +226,39 @@ async function relativiseExport(directory) {
     .map((entry) => path.join(directory, entry.name));
 
   let changed = 0;
+  const referenced = new Set();
 
   for (const page of pages) {
     const before = await readFile(page, "utf8");
     const after = before.replace(/(src|href)="\/(_expo\/|assets\/|favicon)/g, '$1="$2');
 
-    if (after === before) continue;
+    for (const [, , reference] of after.matchAll(/(src|href)="([^"?#:]+)["?#]/g)) {
+      if (reference.startsWith("/") || reference.length === 0) continue;
+      referenced.add(reference);
+    }
 
-    await writeFile(page, after);
-    changed += 1;
+    if (after !== before) {
+      await writeFile(page, after);
+      changed += 1;
+    }
   }
 
-  return `made asset paths relative in ${changed} page(s) of ${pages.length}`;
+  // Every path the page names has to be a file in the directory that is about
+  // to be uploaded. Getting this wrong does not fail anything: the export
+  // succeeds, the upload succeeds, the build reports success, and the preview
+  // is a blank frame whose only symptom is in a browser console nobody is
+  // watching. So it fails here instead, where there is a log.
+  const missing = [];
+
+  for (const reference of referenced) {
+    await access(path.join(directory, reference)).catch(() => missing.push(reference));
+  }
+
+  if (missing.length > 0) {
+    throw new BuildFailed(`the export names ${missing.length} file(s) it does not contain: ${missing.join(", ")}`);
+  }
+
+  return `made asset paths relative in ${changed} page(s) of ${pages.length}, ${referenced.size} reference(s) checked`;
 }
 // The preview, file by file.
 //
