@@ -8,23 +8,23 @@
 # with an answer, including the answers nothing else exercises: a service that
 # refuses, and a service that is not there at all.
 
-# Somebody signed in, and what they may do.
-class FakePerson
-  attr_reader :email, :permissions
-
-  def initialize(email: "owner@example.test", permissions: %w[app.use core.mobile.manage])
-    @email = email
-    @permissions = permissions
+# Somebody signed in, built from the real Identity rather than a hand-rolled
+# double. A stand-in that invents its own shape drifts from the thing it stands
+# for, and the first symptom is a test passing against a page that would fail.
+module FakePerson
+  def self.new(email: "owner@example.test", name: "The Owner",
+               permissions: %w[app.use core.mobile.manage])
+    Siberian::AuthClient::Identity.new(
+      id: 1, email: email, name: name, active: true, operator: false,
+      permissions: Siberian::Permissions::Set.new(permissions)
+    )
   end
-
-  def allow?(permission) = @permissions.include?(permission.to_s)
 end
 
 class FakeAuth
   def initialize(person) = @person = person
   def identify(_token) = @person
 end
-
 # Records what it was asked, because the point of several of these tests is not
 # the answer but the question: the Base App must never pass a domain it was
 # handed, only the one the Router put on the request.
