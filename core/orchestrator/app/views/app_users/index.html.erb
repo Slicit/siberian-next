@@ -1,0 +1,45 @@
+<% content_for :title, "App users" %>
+
+<div class="spread" style="margin-bottom:1.2rem">
+  <div>
+    <h1>App users</h1>
+    <p class="muted" style="margin:0">
+      The people a domain's app is for. Not the accounts that run this
+      Backoffice: an app account belongs to one domain, cannot reach anything
+      here, and the same email address on another domain is somebody else.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <header>
+    <h2>Domains</h2>
+    <p class="muted" style="margin:.2rem 0 0; font-size:.85rem">
+      One list of accounts per domain, because that is the boundary they exist
+      inside.
+    </p>
+  </header>
+
+  <% if @domains.any? %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Domain</th><th></th></tr></thead>
+        <tbody>
+          <% @domains.each do |domain| %>
+            <tr>
+              <td>
+                <span class="mono"><%= domain.hostname %></span>
+                <% if domain.primary? %><span class="badge accent" style="margin-left:.4rem">primary</span><% end %>
+              </td>
+              <td class="right">
+                <%= link_to "Accounts", domain_app_users_path(domain), class: "button" %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="empty">No domains yet. Add one before anybody can sign in to its app.</div>
+  <% end %>
+</div>

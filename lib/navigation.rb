@@ -32,6 +32,8 @@ module Siberian
         label: "Access",
         entries: [
           { label: "People", route: :people_path, permission: "core.users.read", controller: "people" },
+          { label: "App users", route: :app_users_path, permission: "core.modules.read",
+            controller: "app_users" },
           { label: "Roles", route: :roles_path, permission: "core.roles.manage", controller: "roles" }
         ]
       },
