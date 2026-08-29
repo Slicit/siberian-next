@@ -62,4 +62,16 @@ COPY core/mobile-builder/template /builder/template
 RUN chown -R builder /builder
 USER builder
 
+
+# A JSX parser, for bin/check-native.
+#
+# Last, so changing it rebuilds one small layer rather than the Android SDK
+# above it. In this image because this is the image that already knows what a
+# native screen is, and because a check that needs the network to run is a check
+# that fails when the network does.
+USER root
+RUN npm install --prefix /opt/checktools --no-audit --no-fund @babel/parser@7.24.7 \
+ && chown -R builder /opt/checktools
+USER builder
+
 CMD ["node", "src/worker.js"]
