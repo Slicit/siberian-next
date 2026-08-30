@@ -114,11 +114,22 @@ module Transport
 
       body = build_rfc822(message)
 
+      # Authentication only when there is something to authenticate with.
+      # Passing an auth type with no user name makes Net::SMTP raise
+      # "SMTP-AUTH requested but missing user name" before it opens a
+      # connection, so the core could not send to any relay that does not
+      # demand a password. Nothing caught it: the only transport installed
+      # anywhere records what it is handed and sends nothing onward, and with
+      # no SMTP_ADDRESS at all the built-in writes a log line and calls it
+      # delivered.
+      user = ENV["SMTP_USERNAME"].presence
+
       Net::SMTP.start(
         ENV.fetch("SMTP_ADDRESS"), ENV.fetch("SMTP_PORT", 587).to_i,
         ENV.fetch("SMTP_DOMAIN", message.domain),
-        ENV["SMTP_USERNAME"], ENV["SMTP_PASSWORD"],
-        ENV.fetch("SMTP_AUTH", "plain").to_sym
+        user,
+        (ENV["SMTP_PASSWORD"] if user),
+        (ENV.fetch("SMTP_AUTH", "plain").to_sym if user)
       ) do |smtp|
         smtp.send_message(body, sender_for(message), message.to)
       end

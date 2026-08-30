@@ -293,6 +293,11 @@ Deliberate, not forgotten:
 - **No `tmp` sweeper in Storage**, and no Router rule for `/-/public/<path>`.
   No module has needed either, and building them first would be guessing.
 - **No templates in the Mailer**, no inbound mail, no bounce handling.
+- **No real mail transport.** `example-relay` records what it is handed and
+  sends nothing onward, and the built-in speaks SMTP to whatever
+  `SMTP_ADDRESS` names. In development that is a mailpit container, which is
+  a sink with an API rather than a relay. A deployment that wants mail to
+  arrive points that at its own host or installs a transport module.
 - **No per-space storage quotas.** A module's `public` and `files` share one
   allowance.
 - **No OAuth, SSO, or 2FA.** Auth is password sessions.
