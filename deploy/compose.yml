@@ -252,6 +252,19 @@ services:
         auth=${SIBERIAN_TOKEN_AUTH_MAILER:-dev_auth_to_mailer}
       # Asks the Orchestrator which module answers mail.transport.v1.
       SIBERIAN_CALLEES: orchestrator=${SIBERIAN_TOKEN_MAILER_ORCHESTRATOR:-dev_mailer_to_orchestrator}
+      # Where mail actually goes.
+      #
+      # Without these the built-in transport writes a log line and reports the
+      # message delivered, which is a success that is not one: every mail smoke
+      # passed for the life of this project against a sender that sent nothing.
+      # A dev sink is not a real relay, but it is the difference between proving
+      # a message left the building and assuming it.
+      #
+      # A real deployment points these at its own relay, or installs a module
+      # implementing mail.transport.v1, which takes precedence over all of this.
+      SMTP_ADDRESS: ${SMTP_ADDRESS:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@siberian.test}
     volumes:
       - ../core/mailer:/app
       - ../lib:/app/lib
@@ -266,6 +279,33 @@ services:
   # Same image as the mailer, different command. The API and the worker are
   # separate processes so a delivery that hangs cannot take the queue endpoints
   # down with it, and so they restart and scale separately.
+  # Somewhere for mail to actually go, in development.
+  #
+  # The built-in transport with no SMTP_ADDRESS writes "would send" to a log and
+  # reports the message delivered. Every mail smoke passed against that for the
+  # life of this project: the queue, the retries, the dead letters and the
+  # acknowledgements were all exercised, and whether anything left the building
+  # was never once checked. That is the same shape as the transport that 404ed
+  # for weeks and the retention job that never ran.
+  #
+  # Mailpit accepts SMTP on 1025, keeps what it is given in memory, and hands it
+  # back over an HTTP API, so a smoke can assert that a reset link arrived and
+  # what was in it rather than that the queue said "sent".
+  #
+  # Not for production. A real deployment points SMTP_ADDRESS at its own relay,
+  # or installs a module implementing mail.transport.v1, which takes precedence
+  # over the built-in transport entirely.
+  mailpit:
+    restart: unless-stopped
+    image: axllent/mailpit:latest
+    environment:
+      # Held in memory and dropped on restart. This is a test fixture with a
+      # web page, not a mailbox anybody should come to rely on.
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    networks: [core]
+
   mailer-worker:
     # The box is a virtual machine on a host that can go down. Without this
     # nothing comes back, and the stack stays off until somebody notices.
@@ -285,6 +325,19 @@ services:
         orchestrator=${SIBERIAN_TOKEN_ORCHESTRATOR_MAILER:-dev_orchestrator_to_mailer},
         auth=${SIBERIAN_TOKEN_AUTH_MAILER:-dev_auth_to_mailer}
       SIBERIAN_CALLEES: orchestrator=${SIBERIAN_TOKEN_MAILER_ORCHESTRATOR:-dev_mailer_to_orchestrator}
+      # Where mail actually goes.
+      #
+      # Without these the built-in transport writes a log line and reports the
+      # message delivered, which is a success that is not one: every mail smoke
+      # passed for the life of this project against a sender that sent nothing.
+      # A dev sink is not a real relay, but it is the difference between proving
+      # a message left the building and assuming it.
+      #
+      # A real deployment points these at its own relay, or installs a module
+      # implementing mail.transport.v1, which takes precedence over all of this.
+      SMTP_ADDRESS: ${SMTP_ADDRESS:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@siberian.test}
       MAILER_POLL_INTERVAL: "${MAILER_POLL_INTERVAL:-5}"
     volumes:
       - ../core/mailer:/app

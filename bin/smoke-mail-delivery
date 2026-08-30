@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Whether a message actually leaves the building, against a dev SMTP sink.
+# Everything else about mail was covered; none of it touched a transport that
+# sends.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec sh bin/smoke-mail-delivery.sh
