@@ -14,18 +14,9 @@ COMPOSE="docker compose --env-file .env -f deploy/compose.yml"
 
 STAMP=$(date +%s)
 RIDER="recover-$STAMP@example.test"
-FAILURES=0
+. "$(dirname "$0")/smoke-lib.sh"
 
 a() { curl -s --cacert "$CA" -H "Content-Type: application/json" "$@"; }
-
-check() {
-  if [ "$2" = "$3" ]; then
-    printf '   ok    %s\n' "$1"
-  else
-    printf '   FAIL  %s (wanted %s, got %s)\n' "$1" "$3" "$2"
-    FAILURES=$((FAILURES + 1))
-  fi
-}
 
 # The throttle is real and this script trips it deliberately, so it starts from
 # a clean count. Without this a second run inside the window fails on the limit
@@ -53,19 +44,37 @@ UNKNOWN=$(a -X POST -d "{\"email\":\"nobody-$STAMP@example.test\"}" "https://$DO
 check "an unknown address gets the same answer as a known one" "$UNKNOWN" "$KNOWN"
 
 echo
-echo "2. the mail was queued, delivered, and the transport kept it"
+echo
+echo "2. the mail was queued, sent, and arrived"
 sleep 8
 STATE=$($COMPOSE exec -T mailer bin/rails runner \
   "puts Message.where(core_sender: 'core-auth', to: '$RIDER').order(:id).last&.state" </dev/null 2>/dev/null | tail -1 | tr -d '\r')
 check "the message reached the transport" "$STATE" "sent"
 
-LINK=$($COMPOSE exec -T mailer bin/rails runner \
-  "puts Message.where(core_sender: 'core-auth', to: '$RIDER').order(:id).last&.text_body.to_s[/https:\S+/]" \
-  </dev/null 2>/dev/null | tail -1 | tr -d '\r')
-TOKEN=$(printf '%s' "$LINK" | sed 's/.*token=//')
-[ -n "$TOKEN" ] && check "the email carried a link" "carried" "carried" \
-  || check "the email carried a link" "none" "carried"
+# Read out of the delivered mail rather than out of the queue's own row.
+#
+# The row proves the message was composed with a link in it, which is not the
+# same fact and was the only one ever checked: for the life of this project the
+# transport either wrote a log line or recorded the message and sent nothing, so
+# a reset link had never once been read back from anywhere a person could have
+# received it.
+INBOX=$($COMPOSE exec -T mailer sh -c \
+  "curl -s 'http://mailpit:8025/api/v1/search?query=to%3A$RIDER'" </dev/null 2>/dev/null | tr -d '\r')
+contains "it arrived at the address that asked" "$INBOX" "$RIDER"
 
+# The newest, not the oldest. A greedy match took the last "ID" in the list,
+# which is the account verification mail sent when this account was created a
+# few lines above, and its link is a verify link that no reset endpoint knows.
+MAIL_ID=$(printf '%s' "$INBOX" | grep -o '"ID":"[^"]*"' | head -1 | sed 's/.*:"//; s/"//')
+present "the delivered message has an id" "$MAIL_ID"
+
+DELIVERED=$($COMPOSE exec -T mailer sh -c \
+  "curl -s http://mailpit:8025/api/v1/message/$MAIL_ID" </dev/null 2>/dev/null | tr -d '\r')
+# The reset link specifically. Two mails reach this address and both carry a
+# token, so matching any link at all is a check that can pass on the wrong one.
+LINK=$(printf '%s' "$DELIVERED" | grep -oE 'https://[^" ]+/-/auth/reset[?]token=[A-Za-z0-9_-]+' | head -1)
+TOKEN=$(printf '%s' "$LINK" | sed 's/.*token=//')
+present "the delivered email carried a link" "$TOKEN"
 echo
 echo "3. the link works once"
 check "it says it is valid before anybody types a password" \
@@ -111,10 +120,4 @@ done
 check "the fourth reset request is refused" \
   "$(a -o /dev/null -w '%{http_code}' -X POST -d "{\"email\":\"$ASKER\"}" "https://$DOMAIN/-/auth/forgot")" "429"
 
-echo
-if [ "$FAILURES" -eq 0 ]; then
-  echo "account recovery: every check passed"
-else
-  echo "account recovery: $FAILURES check(s) FAILED"
-  exit 1
-fi
+finish "account recovery"

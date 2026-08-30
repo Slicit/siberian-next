@@ -68,7 +68,7 @@ module Transport
       end
 
       code = response.code.to_i
-      return Transport::Result.new(outcome: "delivered", detail: "HTTP #{code}") if code.between?(200, 299)
+      return delivered(code, response.body) if code.between?(200, 299)
 
       # A 4xx from a transport is it telling us the message is wrong, which
       # another attempt will not fix. A 5xx is it having a bad day.
@@ -79,6 +79,31 @@ module Transport
     rescue StandardError => e
       Transport::Result.new(outcome: "error", detail: e.message, permanent: false)
     end
+
+    private
+
+    # A transport can accept a message without sending it, and one of them
+    # says so: example-relay answers 2xx with "sent": false, because a
+    # transport that discards mail and reports success is a bug in a nicer
+    # disguise. That honesty was thrown away here, which put the bug back:
+    # the answer was read as HTTP 200 and the message recorded as delivered
+    # with nothing anywhere saying it had gone nowhere.
+    #
+    # The message is still delivered as far as the queue is concerned. The
+    # transport accepted it and asking again would only produce another copy
+    # of the same non-delivery. What changes is that the fact is written down
+    # where somebody can see it, and the nightly scan reads it.
+    def delivered(code, body)
+      answer = JSON.parse(body.to_s) rescue {}
+
+      if answer.key?("sent") && answer["sent"] == false
+        return Transport::Result.new(outcome: "delivered",
+                                     detail: "HTTP #{code}, accepted but not sent onward")
+      end
+
+      Transport::Result.new(outcome: "delivered", detail: "HTTP #{code}")
+    end
+
   end
 
   # What the core ships with.

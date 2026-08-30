@@ -70,8 +70,13 @@ contains "it names what recovered" \
 
 echo "7. a healthy system adds nothing to the list"
 BEFORE_ROWS=$(runner 'puts AlertCondition.count')
+BEFORE_FIRING=$(runner 'puts AlertCondition.firing.count')
 runner 'AlertScan.new(free_megabytes: 50_000).call' >/dev/null
 check "no new row for a healthy thing" "$(runner 'puts AlertCondition.count')" "$BEFORE_ROWS"
-check "and nothing is firing" "$(runner 'puts AlertCondition.firing.count')" "0"
+# Nothing NEW is firing, rather than nothing at all. A condition that is
+# genuinely true when this runs, from something that really happened before
+# it, is not this check's business: asserting a globally clean board makes a
+# smoke that fails because the system is honest about a real problem.
+check "and nothing new is firing" "$(runner 'puts AlertCondition.firing.count')" "$BEFORE_FIRING"
 
 finish "alerts"

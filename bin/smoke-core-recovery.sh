@@ -40,14 +40,26 @@ c -o /dev/null -X POST \
   --data-urlencode "authenticity_token=$(token_from /tmp/cr_forgot)" \
   --data-urlencode "email=$CORE" "https://$DOMAIN/forgot"
 
-echo "2. the email arrives through the queue"
+echo "2. the email arrives through the queue, and arrives"
 sleep 9
 check "it was sent" \
   "$(runner mailer "puts Message.where(core_sender: 'core-auth', to: '$CORE').order(:id).last&.state")" "sent"
-LINK=$(runner mailer "puts Message.where(core_sender: 'core-auth', to: '$CORE').order(:id).last&.text_body.to_s[/https:\S+/]")
+
+# Out of the delivered mail rather than the queue's own row. The row proves the
+# message was composed with a link in it, which is a different fact: the
+# transport used to write a log line or record the message and send nothing, so
+# no reset link had ever been read back from anywhere a person could receive it.
+mailpit() { $COMPOSE exec -T mailer sh -c "curl -s http://mailpit:8025/api/v1/$1" </dev/null 2>/dev/null | tr -d '\r'; }
+
+INBOX=$(mailpit "search?query=to%3A$CORE")
+contains "it arrived at the address that asked" "$INBOX" "$CORE"
+# The newest, because the same address also received a verification mail and its
+# link is a verify link no reset endpoint knows.
+MAIL_ID=$(printf '%s' "$INBOX" | grep -o '"ID":"[^"]*"' | head -1 | sed 's/.*:"//; s/"//')
+DELIVERED=$(mailpit "message/$MAIL_ID")
+LINK=$(printf '%s' "$DELIVERED" | grep -oE 'https://[^" ]+/reset[?]token=[A-Za-z0-9_-]+' | head -1)
 TOKEN=$(printf '%s' "$LINK" | sed 's/.*token=//')
 present "it carried a link" "$TOKEN"
-
 echo "3. the link opens a page that sets a password"
 check "the page opens" "$(c -o /tmp/cr_reset -w '%{http_code}' "https://$DOMAIN/reset?token=$TOKEN")" "200"
 # Said before they commit rather than after: somebody who does not want to be

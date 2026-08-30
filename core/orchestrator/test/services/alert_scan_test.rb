@@ -74,6 +74,51 @@ class AlertScanTest < ActiveSupport::TestCase
                   storage: Storage.new(storage), checks: checks, free_megabytes: free)
   end
 
+
+  # The failure that looks like health. A transport can accept a message and not
+  # send it, honestly and by design, and the queue then reports sent for a
+  # message that went nowhere: green counts, working system, no mail.
+  SILENT_QUEUE = {
+    "counts" => { "sent" => 100, "dead" => 0 }, "stalled" => 0,
+    "recent" => { "window_minutes" => 60, "sent" => 20, "dead" => 0, "recorded_not_sent" => 20 }
+  }.freeze
+
+  test "a transport that takes mail and does not send it is reported" do
+    scanner = scan(mailer: SILENT_QUEUE)
+    scanner.call(notify: false)
+
+    assert_includes scanner.call(notify: false).opened, "mail.transport.silent"
+  end
+
+  test "and the sentence says which way round it is" do
+    scanner = scan(mailer: SILENT_QUEUE)
+    2.times { scanner.call(notify: false) }
+
+    assert_match "nothing is arriving", AlertCondition.find_by(key: "mail.transport.silent").detail
+  end
+
+  # It has to be separate from the transport refusing everything. A transport
+  # that says no is loud: messages die and somebody notices. This one is quiet,
+  # and telling them apart is the difference between "mail is broken" and "mail
+  # looks fine and is not being sent".
+  test "a healthy transport that actually sends says nothing" do
+    scanner = scan
+    2.times { scanner.call(notify: false) }
+
+    assert_nil AlertCondition.find_by(key: "mail.transport.silent")
+  end
+
+  test "a queue with no such number at all is not treated as a silent transport" do
+    older = {
+      "counts" => { "sent" => 5, "dead" => 0 }, "stalled" => 0,
+      "recent" => { "window_minutes" => 60, "sent" => 5, "dead" => 0 }
+    }
+    scanner = scan(mailer: older)
+    2.times { scanner.call(notify: false) }
+
+    assert_nil AlertCondition.find_by(key: "mail.transport.silent")
+  end
+
   test "a healthy system says nothing at all" do
     post = Post.new
     result = scan(post: post).call

@@ -76,4 +76,22 @@ puts "removed"
 check "the liar is gone" \
   "$(runner 'puts InstalledModule.where(name: "example-liar").count' | tail -1)" "0"
 
+
+# And the relay, which belongs in this section rather than being an
+# afterthought. It implements mail.transport.v1 by recording what it is handed
+# and answering "sent": false, honestly and by design. Left installed it becomes
+# the live transport for the whole product, which silently switches mail off:
+# the queue stays green and nothing arrives.
+#
+# This smoke installs it to prove the probe accepts an honest manifest. That is
+# a test, not a configuration, and leaving it behind meant every later run of
+# every other smoke happened on a system whose mail went nowhere.
+runner '
+m = InstalledModule.find_by(name: "example-relay")
+ModuleUninstaller.new(m, registrar: ServiceRegistrar.new).call if m
+puts "removed"
+' >/dev/null
+check "and the relay is not left as the live mail transport" \
+  "$(runner 'puts InstalledModule.where(name: "example-relay").count' | tail -1)" "0"
+
 finish "honest manifest"

@@ -62,8 +62,61 @@ and it is the code that had never run.
 Reverting the auth fix fails five of its checks, which is the test that was run
 before trusting it.
 
+
+### 2026-08-30: the transport's own honesty was being thrown away
+
+`example-relay` answers 2xx with `"sent": false`, deliberately, because its
+author wrote that a transport which discards mail and reports success is a bug
+in a nicer disguise. The core read that answer as `HTTP 200` and discarded the
+rest, which put the bug straight back one layer up.
+
+The message is still delivered as far as the queue is concerned, and should be:
+the transport accepted it, and asking again would only produce another copy of
+the same non-delivery. What changed is that the fact is written down, counted,
+and read by the nightly scan.
+
+`mail.transport.silent` is the alert, and it is deliberately separate from
+`mail.transport.failing`. A transport that refuses everything is loud: messages
+die and somebody notices. A transport that accepts and drops is quiet, and quiet
+is the one worth waking somebody for.
+
+### 2026-08-30: a smoke was leaving the product's mail switched off
+
+`smoke-honest-manifest` installs `example-relay` to prove the probe accepts an
+honest manifest, and left it installed. Installing it makes it the live
+transport for the whole product, so every run of that smoke silently switched
+off mail for everything afterwards, and every later run of every other smoke
+happened on a system where nothing could arrive.
+
+It uninstalls it now. The install is a test, not a configuration.
+
+### 2026-08-30: the reset link is read out of the delivered mail
+
+Both recovery smokes read the link out of the Mailer's own row. That proves the
+message was composed with a link in it, which is a different fact from a person
+receiving one, and for the life of the project it was the only fact available.
+
+They read it out of mailpit now. The first attempt read the wrong message: a
+greedy match took the last id in the list, which was the account verification
+mail sent moments earlier, and its link is a verify link no reset endpoint
+knows. Worth recording because the failure looked like a broken token rather
+than a test reading the wrong mail.
+
+### 2026-08-30: two checks that passed alone and failed in a sweep
+
+`mailpit has exactly one message` is true when nothing else is happening and
+false whenever the worker drains the queue alongside it. Counted by subject now.
+
+`nothing is firing` asserted a globally clean alert board, next to a check that
+was already incremental. A condition that is genuinely true, from something that
+really happened, is not that check's business: it now asserts nothing new fired.
+
 ## Outcome
 
 A message is sent over SMTP, arrives, and is read back: sender, recipient,
-subject and body. `build_rfc822` assembles a message by hand and nothing had
-ever read the result; now something does.
+subject and body. Both password reset flows now take their link out of the
+delivered mail rather than out of the queue, so what is proved is that a
+person could have received it and used it.
+
+`build_rfc822` assembles a message by hand and nothing had ever read the
+result; now three smokes do.

@@ -70,7 +70,20 @@ module Admin
         recent: {
           window_minutes: RECENT_WINDOW / 60,
           sent: Message.where(state: Message::SENT).where(updated_at: RECENT_WINDOW.seconds.ago..).count,
-          dead: Message.where(state: Message::DEAD).where(updated_at: RECENT_WINDOW.seconds.ago..).count
+          dead: Message.where(state: Message::DEAD).where(updated_at: RECENT_WINDOW.seconds.ago..).count,
+          # Messages a transport took and said it would not send onward.
+          #
+          # A transport can honestly answer 2xx with "sent": false, and the one
+          # in the catalogue does. The queue counts those as sent, correctly: it
+          # did its job, and asking again would only produce another
+          # non-delivery. But an operator looking at a green queue then has no
+          # way to know that nothing has left the building, which is the whole
+          # failure. So the number is reported rather than folded away.
+          recorded_not_sent: Message.joins(:delivery_attempts)
+                                    .where(state: Message::SENT)
+                                    .where(updated_at: RECENT_WINDOW.seconds.ago..)
+                                    .where("delivery_attempts.detail LIKE ?", "%not sent onward%")
+                                    .distinct.count
         },
         unacknowledged: Message.unacknowledged.count,
         modules: ModuleRegistration.active.pluck(:module_name)

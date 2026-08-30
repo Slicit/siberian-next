@@ -92,6 +92,7 @@ class AlertScan
     checks["disk.low"] = disk_low
     checks["mail.worker.stalled"] = mail_stalled
     checks["mail.transport.failing"] = mail_transport_failing
+    checks["mail.transport.silent"] = mail_transport_silent
 
     storage_conditions.each { |key, detail| checks[key] = detail }
     module_conditions.each { |key, detail| checks[key] = detail }
@@ -164,6 +165,34 @@ class AlertScan
     "#{dead} messages died in the last #{recent['window_minutes'] || 60} minutes and none were " \
       "delivered; the transport is refusing everything"
   end
+
+  # A transport that takes the mail and does not send it.
+  #
+  # Distinct from the check above, which is about a transport refusing
+  # everything. This one is worse to find out about late, because nothing looks
+  # wrong at all: the queue is green, the messages say sent, the operator sees a
+  # working mail system, and no message has left the building.
+  #
+  # It is a real configuration, not a hypothetical. The reference transport in
+  # the catalogue records what it is handed and answers 2xx with "sent": false,
+  # honestly and by design, and installing it silently switches off mail for the
+  # whole product.
+  #
+  # Worth saying once and then never again while it stays true, which is what
+  # AlertCondition already does with everything here.
+  def mail_transport_silent
+    report = @mailer.queue(limit: 1)
+    return nil if report.nil?
+
+    recent = report["recent"] || {}
+    quiet = recent["recorded_not_sent"].to_i
+
+    return nil if quiet.zero?
+
+    "#{quiet} message(s) in the last #{recent['window_minutes'] || 60} minutes were accepted by " \
+      "the mail transport and not sent onward; the queue is healthy and nothing is arriving"
+  end
+
   def storage_conditions
     report = @storage.quotas
     return {} if report.nil?

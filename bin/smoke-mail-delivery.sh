@@ -46,7 +46,12 @@ echo "2. and something arrived"
 # ever observable.
 sleep 1
 BOX=$(inside "curl -s $MAILPIT/messages")
-contains "mailpit has exactly one message" "$BOX" '"messages_count":1'
+# Counted by subject rather than by total. The worker is draining the queue
+# the whole time this runs, so anything else the stack sent in the same second
+# lands in the same sink: asserting the sink holds exactly one message is a
+# check that passes alone and fails in a sweep.
+check "mailpit has the message that was just sent" \
+  "$(printf '%s' "$BOX" | grep -c "$SUBJECT")" "1"
 contains "with the subject that was sent" "$BOX" "$SUBJECT"
 contains "addressed to the recipient" "$BOX" "proof-$STAMP@example.test"
 contains "from the configured sender" "$BOX" "no-reply@siberian.test"
